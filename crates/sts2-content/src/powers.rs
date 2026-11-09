@@ -805,17 +805,32 @@ fn reacting_powers() -> Vec<PowerDefinition> {
                             // The bot arrives carrying one stock less than
                             // the power is worth, which it puts on itself as
                             // it lands.
-                            then: vec![Command::Power(PowerCmd::Apply {
-                                power: id("POWER.STOCK_POWER"),
-                                target: CreatureSelector::Target,
-                                applier: None,
-                                amount: Amount::Scaled {
-                                    base: -1,
-                                    per: 1,
-                                    count: Count::ListeningPowerAmount,
-                                },
-                                marks: None,
-                            })],
+                            then: vec![
+                                // Its HP range is the bot's own, raised ten
+                                // for every time the bot has been replaced:
+                                // the two the room's bot carries, less what
+                                // the new one holds. Raising both ends of the
+                                // range moves the roll by as much.
+                                Command::Creature(CreatureCmd::GainMaxHp {
+                                    target: CreatureSelector::Target,
+                                    amount: Amount::Scaled {
+                                        base: 30,
+                                        per: -10,
+                                        count: Count::ListeningPowerAmount,
+                                    },
+                                }),
+                                Command::Power(PowerCmd::Apply {
+                                    power: id("POWER.STOCK_POWER"),
+                                    target: CreatureSelector::Target,
+                                    applier: None,
+                                    amount: Amount::Scaled {
+                                        base: -1,
+                                        per: 1,
+                                        count: Count::ListeningPowerAmount,
+                                    },
+                                    marks: None,
+                                }),
+                            ],
                         })],
                     }],
                 )
@@ -2837,25 +2852,6 @@ pub fn item_powers() -> Vec<PowerDefinition> {
                 })],
             )],
             ..single("POWER.CONFUSED_POWER", PowerType::Debuff)
-        },
-        // A diamond diadem halves what reaches its owner, and comes off at the
-        // end of the enemy's turn.
-        PowerDefinition {
-            hooks: vec![
-                modifies(
-                    HookEvent::ModifyDamageMultiplicative,
-                    HookCondition::OwnerTakesPoweredDamage,
-                    vec![Command::Modify(ModifierCmd::Scale(Amount::Fixed(50)))],
-                ),
-                ModifierHook::every_turn(
-                    HookEvent::AfterSideTurnEnd,
-                    vec![Command::Power(PowerCmd::Remove {
-                        power: PowerRef::listening(),
-                    })],
-                )
-                .when(HookCondition::EnemySideTurn),
-            ],
-            ..single("POWER.DIAMOND_DIADEM_POWER", PowerType::Buff)
         },
         // Clarity is a bigger hand for each of the next few turns, one stack
         // spent per turn it paid for.

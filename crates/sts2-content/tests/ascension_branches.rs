@@ -86,7 +86,7 @@ fn the_earlier_monsters_roll_their_ascended_sizes() {
         ("MONSTER.LEAF_SLIME_M", (32, 35), (33, 36)),
         ("MONSTER.TWIG_SLIME_M", (26, 28), (27, 29)),
         ("MONSTER.THIEVING_HOPPER", (79, 79), (84, 84)),
-        ("MONSTER.EXOSKELETON", (24, 28), (25, 29)),
+        ("MONSTER.EXOSKELETON", (24, 28), (26, 30)),
         ("MONSTER.HUNTER_KILLER", (121, 121), (126, 126)),
         ("MONSTER.CHOMPER", (60, 64), (63, 67)),
         ("MONSTER.BOWLBUG_SILK", (40, 43), (41, 44)),
@@ -237,6 +237,140 @@ fn the_earlier_monsters_buff_and_guard_for_their_ascended_amounts() {
             creature(&slicing, CombatSide::Enemy).block,
             block,
             "the nibbit's slice at ascension {ascension}"
+        );
+    }
+}
+
+/// The monsters v0.111.0 changed, at the baseline and at Deadly Enemies.
+#[test]
+fn the_reworked_monsters_hit_for_their_new_damage() {
+    let blows = [
+        ("MONSTER.AEONGLASS", "EBB_MOVE", 22, 26),
+        ("MONSTER.AXEBOT", "HAMMER_UPPERCUT_MOVE", 14, 18),
+        ("MONSTER.AXEBOT", "ONE_TWO_MOVE", 20, 22),
+        ("MONSTER.MECHA_KNIGHT", "FLAMETHROWER_MOVE", 8, 12),
+        ("MONSTER.SOUL_FYSH", "DE_GAS_MOVE", 16, 18),
+        ("MONSTER.TORCH_HEAD_AMALGAM", "STRONG_TACKLE_MOVE", 26, 32),
+        ("MONSTER.TORCH_HEAD_AMALGAM", "TACKLE_2_MOVE", 18, 22),
+        ("MONSTER.TORCH_HEAD_AMALGAM", "TACKLE_3_MOVE", 14, 16),
+        ("MONSTER.TORCH_HEAD_AMALGAM", "TACKLE_4_MOVE", 14, 16),
+    ];
+    for (model, move_state, base, deadly) in blows {
+        for (ascension, expected) in [(0, base), (9, deadly)] {
+            let mut fighting = fight(model, move_state, ascension);
+            assert_eq!(
+                damage_of_one_turn(&mut fighting),
+                expected,
+                "{model} {move_state} at ascension {ascension}"
+            );
+        }
+    }
+    let content = content_at(0);
+    let torch_head = content
+        .monster(&id("MONSTER.TORCH_HEAD_AMALGAM"))
+        .expect("the monster is content");
+    assert_eq!(torch_head.initial_state, "STRONG_TACKLE_MOVE");
+}
+
+/// The strength the reworked monsters work in, and the galvanic charge a globe
+/// head stands up with.
+#[test]
+fn the_reworked_monsters_buff_for_their_new_amounts() {
+    for (model, move_state, power, base, deadly) in [
+        (
+            "MONSTER.AEONGLASS",
+            "INCREASING_INTENSITY_MOVE",
+            "POWER.STRENGTH_POWER",
+            3,
+            4,
+        ),
+        (
+            "MONSTER.LOUSE_PROGENITOR",
+            "CURL_AND_GROW_MOVE",
+            "POWER.STRENGTH_POWER",
+            5,
+            7,
+        ),
+    ] {
+        for (ascension, expected) in [(0, base), (9, deadly)] {
+            let mut fighting = fight(model, move_state, ascension);
+            let _ = damage_of_one_turn(&mut fighting);
+            assert_eq!(
+                creature(&fighting, CombatSide::Enemy).power_amount(power),
+                expected,
+                "{model} {move_state} at ascension {ascension}"
+            );
+        }
+    }
+    // A scenario stands its enemies up without their arrival, so the charge
+    // is read off what the globe head does as it joins.
+    for (ascension, expected) in [(0, 6), (9, 8)] {
+        let content = content_at(ascension);
+        let globe_head = content
+            .monster(&id("MONSTER.GLOBE_HEAD"))
+            .expect("the monster is content");
+        assert_eq!(
+            globe_head.on_added,
+            vec![sts2_engine::Command::Power(sts2_engine::PowerCmd::Apply {
+                marks: None,
+                power: id("POWER.GALVANIC_POWER"),
+                target: sts2_engine::CreatureSelector::Owner,
+                applier: Some(sts2_engine::CreatureSelector::Owner),
+                amount: sts2_engine::Amount::Fixed(expected),
+            })],
+            "the globe head's charge at ascension {ascension}"
+        );
+    }
+}
+
+/// Each Axebot that replaces a fallen one stands ten maximum HP taller for
+/// every time the bot has been replaced: the two the room's bot carries, less
+/// the stock the new one holds.
+#[test]
+fn an_axebot_replacement_stands_taller_each_time() {
+    for (stock, ascension, low, high) in [(2, 0, 80, 88), (1, 0, 90, 98), (2, 9, 86, 96)] {
+        let mut fighting = ScenarioBuilder::new("AXEBOTTEST", id("ENCOUNTER.NIBBITS_WEAK"))
+            .player_hp(400, 400)
+            .energy(3, 3)
+            .turn(1, 1)
+            .rng_counter(RunStream::MonsterAi, 0)
+            .relics(&[id("RELIC.BURNING_BLOOD")])
+            .enemy(1, id("MONSTER.AXEBOT"), 1, 1, "ONE_TWO_MOVE")
+            .power(
+                1,
+                id("POWER.STOCK_POWER"),
+                stock,
+                sts2_engine::PowerType::Buff,
+            )
+            .card(PileName::Hand, 0, card("CARD.STRIKE_IRONCLAD"), 1)
+            .build(content_at(ascension))
+            .unwrap();
+        let strike = fighting
+            .legal_actions()
+            .iter()
+            .find(|action| matches!(action, Action::PlayCard { .. }))
+            .cloned()
+            .unwrap();
+        fighting.step(strike).unwrap();
+        let replacement = fighting
+            .state()
+            .combat
+            .as_ref()
+            .unwrap()
+            .creatures
+            .iter()
+            .find(|creature| creature.side == CombatSide::Enemy && creature.current_hp > 0)
+            .expect("a replacement stands in the slot");
+        assert!(
+            (low..=high).contains(&replacement.max_hp),
+            "stock {stock} at ascension {ascension}: {}",
+            replacement.max_hp
+        );
+        assert_eq!(replacement.current_hp, replacement.max_hp);
+        assert_eq!(
+            replacement.power_amount("POWER.STOCK_POWER"),
+            stock - 1,
+            "and it carries one stock less"
         );
     }
 }

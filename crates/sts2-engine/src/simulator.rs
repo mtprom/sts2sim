@@ -4023,10 +4023,7 @@ impl Simulator {
             .ok_or_else(|| EngineError::new(ErrorCode::WrongDecisionContext))?
             .current_act;
         let mut options = Vec::new();
-        for group in groups
-            .iter()
-            .filter(|group| group.only_in_act.is_none_or(|only| only == act))
-        {
+        for group in groups.iter().filter(|group| group.acts.includes(act)) {
             let Some(relic) = rng
                 .next_item(&group.relics)
                 .map_err(|error| {
@@ -9224,7 +9221,7 @@ impl Simulator {
         Ok(())
     }
 
-    /// The cook: two cards leave the deck and the maximum rises by nine. Backing
+    /// The cook: two cards leave the deck and the maximum rises by five. Backing
     /// out refuses the option the way the smith does.
     fn rest_cook(&mut self, index: usize) -> Result<(), EngineError> {
         let prefs = SelectorPrefs::exactly(2).cancelable().confirmed();
@@ -9249,7 +9246,7 @@ impl Simulator {
     }
 
     /// The commands after the cook's screen: each chosen card leaves the deck,
-    /// and then the maximum goes up by nine.
+    /// and then the maximum goes up by five.
     fn finish_rest_cook(&mut self, chosen: &[ChosenCard]) {
         let mut indexes: Vec<usize> = chosen.iter().filter_map(ChosenCard::deck_index).collect();
         // Removing from the front would move what stands behind it.
@@ -9257,7 +9254,7 @@ impl Simulator {
         for index in indexes.into_iter().rev() {
             self.take_deck_card(index);
         }
-        self.gain_max_hp_out_of_combat(9);
+        self.gain_max_hp_out_of_combat(5);
     }
 
     /// Gaining maximum HP outside a fight: the maximum rises and the same amount
@@ -28778,7 +28775,10 @@ impl Simulator {
 }
 
 /// Rolls one card rarity. `offset` shifts the rare threshold for sources that
-/// track the run's drifting odds.
+/// track the run's drifting odds. Either way the uncommon band starts where
+/// the rare one ends, so the uncommon threshold is the two odds added
+/// together; before v0.110 the base-odds path compared against the uncommon
+/// odds alone.
 fn roll_card_rarity(
     rng: &mut Rng,
     odds: crate::RarityOdds,
@@ -28803,7 +28803,7 @@ fn roll_card_rarity(
         None => {
             if roll < base_rare {
                 crate::CardRarity::Rare
-            } else if roll < base_uncommon {
+            } else if roll < base_uncommon + base_rare {
                 crate::CardRarity::Uncommon
             } else {
                 crate::CardRarity::Common

@@ -321,8 +321,10 @@ pub fn registry_at(character: &ModelId, ascension: u8) -> Arc<ContentRegistry> {
         encounters::lagavulin_matriarch_boss(),
         encounters::fake_merchant_event_encounter(),
         encounters::punch_off_event_encounter(),
-        encounters::battleworn_dummy_event_encounter(),
     ] {
+        content.add_encounter(definition);
+    }
+    for definition in encounters::battleworn_dummy_event_encounters() {
         content.add_encounter(definition);
     }
 

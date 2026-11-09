@@ -490,29 +490,29 @@ fn the_punch_off_wears_both_constructs_down_before_the_fight() {
     assert!(wounds.len() > 1, "the roll is a roll");
 }
 
-/// The battleworn dummy's room fields one of three, and which one is the event's
-/// to say: nothing on the map can generate it, and it pays out nothing of its
-/// own.
+/// The battleworn dummy's rooms are three, one for each setting of the event,
+/// and each fields its own dummy. Nothing on the map can generate them, and
+/// they pay out nothing of their own.
 #[test]
-fn the_battleworn_dummys_room_is_the_events_to_settle() {
+fn the_battleworn_dummys_rooms_are_one_per_setting() {
     let registry = sts2_content::standard_registry();
-    let encounter = registry
-        .encounter(&id("ENCOUNTER.BATTLEWORN_DUMMY_EVENT_ENCOUNTER"))
-        .expect("the room is content");
-    assert!(
-        encounter.rewards.is_none(),
-        "the encounter gives no rewards: the event pays out instead"
-    );
-    assert_eq!(
-        encounter.generation,
-        sts2_engine::MonsterGeneration::ChosenByTheEvent {
-            options: vec![
-                id("MONSTER.BATTLE_FRIEND_V1"),
-                id("MONSTER.BATTLE_FRIEND_V2"),
-                id("MONSTER.BATTLE_FRIEND_V3"),
-            ],
-        }
-    );
+    for version in 1..=3 {
+        let encounter = registry
+            .encounter(&id(&format!(
+                "ENCOUNTER.BATTLEWORN_DUMMY_EVENT_V{version}_ENCOUNTER"
+            )))
+            .expect("the room is content");
+        assert!(
+            encounter.rewards.is_none() && !encounter.gives_rewards,
+            "the encounter gives no rewards: the event pays out instead"
+        );
+        assert_eq!(
+            encounter.generation,
+            sts2_engine::MonsterGeneration::Fixed(vec![id(&format!(
+                "MONSTER.BATTLE_FRIEND_V{version}"
+            ))])
+        );
+    }
 }
 
 /// The powers standing on a creature as the fight opens, by model and amount.

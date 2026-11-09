@@ -558,7 +558,7 @@ pub fn regent_relics() -> Vec<RelicDefinition> {
             is_stackable: true,
             ..obtained_only("RELIC.DEPRECATED_RELIC", RelicRarity::None)
         },
-        // A divine destiny is the other starter: six stars on the first turn of
+        // A divine destiny is the other starter: seven stars on the first turn of
         // every fight rather than three as the room opens. No pool holds it —
         // it is what a touch of orobas refines a divine right into.
         RelicDefinition {
@@ -566,7 +566,7 @@ pub fn regent_relics() -> Vec<RelicDefinition> {
                 ModifierHook::every_turn(
                     HookEvent::AfterSideTurnStart,
                     vec![Command::Player(sts2_engine::PlayerCmd::GainStars(
-                        Amount::Fixed(6),
+                        Amount::Fixed(7),
                     ))],
                 )
                 .when(HookCondition::OwnerIsParticipant)
@@ -690,15 +690,36 @@ pub fn regent_relics() -> Vec<RelicDefinition> {
             ],
             ..obtained_only("RELIC.ORANGE_DOUGH", RelicRarity::Rare)
         },
-        // A regalite pays two block for every card its owner has conjured into
-        // the fight, and nothing scales it.
+        // A regalite pays four block for the first card its owner conjures
+        // into the fight each turn, and nothing scales it. Its counter is the
+        // flag that the turn's block is paid.
         RelicDefinition {
             hooks: vec![
                 ModifierHook::every_turn(
                     HookEvent::AfterCardGeneratedForCombat,
-                    vec![own_block(2)],
+                    vec![Command::When {
+                        otherwise: Vec::new(),
+                        condition: Condition::ListeningRelicCounterIs(0),
+                        then: vec![
+                            Command::Relic(RelicCmd::SetListeningCounter(Amount::Fixed(1))),
+                            own_block(4),
+                        ],
+                    }],
                 )
                 .when(HookCondition::OwnerConjuredTheCard),
+                ModifierHook::every_turn(
+                    HookEvent::BeforeSideTurnStart,
+                    vec![Command::Relic(RelicCmd::SetListeningCounter(
+                        Amount::Fixed(0),
+                    ))],
+                )
+                .when(HookCondition::OwnerIsParticipant),
+                ModifierHook::every_turn(
+                    HookEvent::AfterCombatEnd,
+                    vec![Command::Relic(RelicCmd::SetListeningCounter(
+                        Amount::Fixed(0),
+                    ))],
+                ),
             ],
             ..obtained_only("RELIC.REGALITE", RelicRarity::Uncommon)
         },
@@ -4452,11 +4473,11 @@ fn ancient_relics() -> Vec<RelicDefinition> {
     relics.extend(potion_relics());
     relics.extend(counting_relics());
     relics.extend(cost_relics());
-    // A fur coat marks seven of the act's combats as it is taken, and every
+    // A fur coat marks eight of the act's combats as it is taken, and every
     // enemy of a marked room stands on one HP: whoever is there as the fight
     // opens, and whoever joins it afterwards.
     relics.push(RelicDefinition {
-        map_rule: Some(sts2_engine::RelicMapRule::MarksCombatRooms { count: 7 }),
+        map_rule: Some(sts2_engine::RelicMapRule::MarksCombatRooms { count: 8 }),
         hooks: vec![
             ModifierHook::every_turn(
                 HookEvent::BeforeCombatStart,
@@ -4794,15 +4815,16 @@ fn ancient_relics() -> Vec<RelicDefinition> {
             grants_free_travel: true,
             ..obtained_only("RELIC.WINGED_BOOTS", RelicRarity::Ancient)
         },
-        // A toy box hands over four relics off the front of its owner's own
+        // A toy box hands over five relics off the front of its owner's own
         // bag, each marked wax, and melts one of them again at the end of every
         // third fight. It is used up once every wax relic has melted, which is
-        // twelve fights: four wax relics, one melted every three.
+        // fifteen fights: five wax relics, one melted every three.
         upon_pickup(RelicDefinition {
             counter_property: Some("CombatsSeen".to_owned()),
             counter_kind: Some(sts2_engine::CounterKind::Ledger),
-            used_up: Some(sts2_engine::UsedUp::CounterAtLeast(12)),
+            used_up: Some(sts2_engine::UsedUp::CounterAtLeast(15)),
             on_obtained: vec![
+                Command::Rewards(RewardsCmd::AddWaxRelic),
                 Command::Rewards(RewardsCmd::AddWaxRelic),
                 Command::Rewards(RewardsCmd::AddWaxRelic),
                 Command::Rewards(RewardsCmd::AddWaxRelic),
@@ -4880,7 +4902,7 @@ fn given_relics() -> Vec<RelicDefinition> {
             ..obtained_only("RELIC.GOLDEN_PEARL", RelicRarity::Ancient)
         }),
         RelicDefinition {
-            on_obtained: vec![Command::Player(PlayerCmd::GainGold(Amount::Fixed(999)))],
+            on_obtained: vec![Command::Player(PlayerCmd::GainGold(Amount::Fixed(888)))],
             ..obtained_only("RELIC.SIGNET_RING", RelicRarity::Ancient)
         },
         // Eleven more maximum HP, and the HP to go with it.
@@ -4919,12 +4941,13 @@ fn given_relics() -> Vec<RelicDefinition> {
             hooks: vec![pays_an_energy(1)],
             ..obtained_only("RELIC.BLOOD_SOAKED_ROSE", RelicRarity::Ancient)
         }),
-        // Nine maximum HP for three apparitions.
+        // Two curses for three apparitions. The curses are two different
+        // ones, rolled on the niche stream.
         upon_pickup(RelicDefinition {
             on_obtained: vec![
-                Command::Creature(CreatureCmd::LoseMaxHp {
-                    target: CreatureSelector::Owner,
-                    amount: Amount::Fixed(9),
+                Command::CardPile(CardPileCmd::AddCursesToDeck {
+                    pool: id("CARD_POOL.CURSE_CARD_POOL"),
+                    count: 2,
                 }),
                 joins_the_deck("CARD.APPARITION"),
                 joins_the_deck("CARD.APPARITION"),
@@ -5135,36 +5158,23 @@ fn cost_relics() -> Vec<RelicDefinition> {
             )],
             ..obtained_only("RELIC.FIDDLE", RelicRarity::Ancient)
         },
-        // A diamond diadem answers a quiet turn: two cards or fewer played, and
-        // the halving power lands as the turn ends.
+        // A diamond diadem opens the fight behind twenty block nothing scales,
+        // and a blur keeps it standing into the second turn.
         RelicDefinition {
             hooks: vec![
                 ModifierHook::every_turn(
-                    HookEvent::AfterCardPlayed,
-                    vec![Command::Relic(RelicCmd::ModifyListeningCounter(
-                        Amount::Fixed(1),
-                    ))],
-                ),
-                ModifierHook::every_turn(
-                    HookEvent::BeforeSideTurnEnd,
+                    HookEvent::AfterSideTurnStart,
                     vec![
-                        Command::When {
-                            otherwise: Vec::new(),
-                            condition: Condition::Not(Box::new(
-                                Condition::ListeningRelicCounterAtLeast(3),
-                            )),
-                            then: vec![own_power("POWER.DIAMOND_DIADEM_POWER", Amount::Fixed(1))],
-                        },
-                        Command::Relic(RelicCmd::SetListeningCounter(Amount::Fixed(0))),
+                        Command::Creature(CreatureCmd::GainBlock {
+                            target: CreatureSelector::Owner,
+                            amount: Amount::Fixed(20),
+                            props: ValueProps::UNPOWERED,
+                        }),
+                        own_power("POWER.BLUR_POWER", Amount::Fixed(1)),
                     ],
                 )
-                .when(HookCondition::OwnerIsParticipant),
-                ModifierHook::every_turn(
-                    HookEvent::AfterCombatEnd,
-                    vec![Command::Relic(RelicCmd::SetListeningCounter(
-                        Amount::Fixed(0),
-                    ))],
-                ),
+                .when(HookCondition::OwnerIsParticipant)
+                .timed(HookTiming::FirstTurnOnly),
             ],
             ..obtained_only("RELIC.DIAMOND_DIADEM", RelicRarity::Ancient)
         },
@@ -5608,18 +5618,18 @@ fn ancient_combat_relics() -> Vec<RelicDefinition> {
             ],
             ..obtained_only("RELIC.VERY_HOT_COCOA", RelicRarity::Ancient)
         },
-        // Five gold buys an energy as every turn opens, while there is gold to
-        // spend.
+        // Three gold buys an energy as every turn opens, while there is gold
+        // to spend.
         RelicDefinition {
             hooks: vec![
                 ModifierHook::every_turn(
                     HookEvent::AfterSideTurnStart,
                     vec![Command::When {
                         otherwise: Vec::new(),
-                        condition: Condition::PlayerGoldAtLeast(5),
+                        condition: Condition::PlayerGoldAtLeast(3),
                         then: vec![
                             gain_energy(1),
-                            Command::Player(PlayerCmd::LoseGold(Amount::Fixed(5))),
+                            Command::Player(PlayerCmd::LoseGold(Amount::Fixed(3))),
                         ],
                     }],
                 )
@@ -6026,12 +6036,12 @@ fn neow_relics() -> Vec<RelicDefinition> {
             ],
             ..obtained_only("RELIC.CHOICES_PARADOX", RelicRarity::Ancient)
         },
-        // A sere talon charges two curses and hands over three wishes.
+        // A sere talon charges nine maximum HP and hands over three wishes.
         upon_pickup(RelicDefinition {
             on_obtained: vec![
-                Command::CardPile(CardPileCmd::AddCursesToDeck {
-                    pool: id("CARD_POOL.CURSE_CARD_POOL"),
-                    count: 2,
+                Command::Creature(CreatureCmd::LoseMaxHp {
+                    target: CreatureSelector::Owner,
+                    amount: Amount::Fixed(9),
                 }),
                 Command::CardPile(CardPileCmd::AddToDeck {
                     card: CardOrigin::Model(id("CARD.WISH")),

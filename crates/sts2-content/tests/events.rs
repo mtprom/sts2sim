@@ -1065,8 +1065,12 @@ fn a_battleworn_dummy_fights_the_setting_it_was_put_on_and_pays_for_the_win() {
         &mut simulator,
         "BATTLEWORN_DUMMY.pages.INITIAL.options.SETTING_3",
     );
-    // The setting the option wrote on the encounter is what it fields.
+    // Each setting is its own encounter, fielding its own friend.
     let combat = simulator.state().combat.as_ref().expect("the fight starts");
+    assert_eq!(
+        combat.encounter_model,
+        id("ENCOUNTER.BATTLEWORN_DUMMY_EVENT_V3_ENCOUNTER")
+    );
     assert!(
         combat
             .creatures
@@ -2698,4 +2702,77 @@ fn a_crystal_spheres_gold_costs_the_boards_stream_a_read() {
     assert_eq!(offered.rewards[0].fingerprint.reward_type, "gold");
     assert_eq!(offered.rewards[0].fingerprint.gold_amount, 10);
     assert_eq!(event_die(&with_gold) - before, 1, "one read for the gold");
+}
+
+/// Darv deals out of eleven sets of one relic each. Ectoplasm and Sozu are
+/// offered at act index one only, Philosopher's Stone and Velvet Choker from
+/// act index one on, and the other seven everywhere.
+#[test]
+fn darv_deals_out_of_eleven_single_relic_sets() {
+    let registry = sts2_content::standard_registry();
+    let darv = registry
+        .event(&id("EVENT.DARV"))
+        .expect("the event is content");
+    let sts2_engine::EventGeneration::AncientRelics { groups, .. } = &darv.generation else {
+        panic!("Darv deals ancient relics");
+    };
+    assert_eq!(groups.len(), 11);
+    assert!(groups.iter().all(|group| group.relics.len() == 1));
+    let offered_in = |act: usize| -> Vec<String> {
+        groups
+            .iter()
+            .filter(|group| group.acts.includes(act))
+            .map(|group| group.relics[0].to_string())
+            .collect()
+    };
+    let everywhere = [
+        "RELIC.ASTROLABE",
+        "RELIC.BLACK_STAR",
+        "RELIC.CALLING_BELL",
+        "RELIC.EMPTY_CAGE",
+        "RELIC.PANDORAS_BOX",
+        "RELIC.RUNIC_PYRAMID",
+        "RELIC.SNECKO_EYE",
+    ];
+    assert_eq!(offered_in(0), everywhere);
+    let mut second = everywhere.to_vec();
+    second.extend([
+        "RELIC.ECTOPLASM",
+        "RELIC.SOZU",
+        "RELIC.PHILOSOPHERS_STONE",
+        "RELIC.VELVET_CHOKER",
+    ]);
+    assert_eq!(offered_in(1), second);
+    let mut third = everywhere.to_vec();
+    third.extend(["RELIC.PHILOSOPHERS_STONE", "RELIC.VELVET_CHOKER"]);
+    assert_eq!(offered_in(2), third);
+}
+
+/// Orobas's first pool is the shrymp and the glass eye; the sand castle sits in
+/// the second with the coffer, the driftwood and the pearl.
+#[test]
+fn orobas_keeps_the_sand_castle_in_its_second_pool() {
+    let registry = sts2_content::standard_registry();
+    let orobas = registry
+        .event(&id("EVENT.OROBAS"))
+        .expect("the event is content");
+    let sts2_engine::EventGeneration::OrobasRelics {
+        pool_one, pool_two, ..
+    } = &orobas.generation
+    else {
+        panic!("Orobas deals its own pools");
+    };
+    assert_eq!(
+        pool_one,
+        &vec![id("RELIC.ELECTRIC_SHRYMP"), id("RELIC.GLASS_EYE")]
+    );
+    assert_eq!(
+        pool_two,
+        &vec![
+            id("RELIC.ALCHEMICAL_COFFER"),
+            id("RELIC.DRIFTWOOD"),
+            id("RELIC.RADIANT_PEARL"),
+            id("RELIC.SAND_CASTLE"),
+        ]
+    );
 }

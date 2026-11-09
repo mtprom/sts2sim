@@ -1480,25 +1480,24 @@ pub fn punch_off_event_encounter() -> EncounterDefinition {
     }
 }
 
-/// The battleworn dummy's room: one of three battle friends, and which one is
-/// the setting the event writes on the encounter before the fight stands up.
+/// The battleworn dummy's rooms: one encounter per setting, each fielding its
+/// own battle friend. The build's common base is abstract and is never a room.
 #[must_use]
-pub fn battleworn_dummy_event_encounter() -> EncounterDefinition {
-    EncounterDefinition {
-        model_id: id("ENCOUNTER.BATTLEWORN_DUMMY_EVENT_ENCOUNTER"),
+pub fn battleworn_dummy_event_encounters() -> [EncounterDefinition; 3] {
+    let setting = |version: u8| EncounterDefinition {
+        model_id: id(&format!(
+            "ENCOUNTER.BATTLEWORN_DUMMY_EVENT_V{version}_ENCOUNTER"
+        )),
         slots: Vec::new(),
         spawn_slot_names: Vec::new(),
-        generation: MonsterGeneration::ChosenByTheEvent {
-            options: vec![
-                id("MONSTER.BATTLE_FRIEND_V1"),
-                id("MONSTER.BATTLE_FRIEND_V2"),
-                id("MONSTER.BATTLE_FRIEND_V3"),
-            ],
-        },
+        generation: MonsterGeneration::Fixed(vec![id(&format!(
+            "MONSTER.BATTLE_FRIEND_V{version}"
+        ))]),
         // The fight lays out no reward set at all: the event pays out instead,
         // and what it pays depends on which setting was fought and whether
         // the time ran out.
         gives_rewards: false,
         rewards: None,
-    }
+    };
+    [setting(1), setting(2), setting(3)]
 }

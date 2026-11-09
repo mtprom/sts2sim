@@ -1,8 +1,8 @@
 //! Event definitions of the pinned build.
 
 use sts2_engine::{
-    AncientRelicGroup, CardTag, EventAmount, EventCardFilter, EventCondition, EventDefinition,
-    EventEffect, EventGeneration, EventOption,
+    AncientGroupActs, AncientRelicGroup, CardTag, EventAmount, EventCardFilter, EventCondition,
+    EventDefinition, EventEffect, EventGeneration, EventOption,
 };
 
 use crate::id;
@@ -10,14 +10,14 @@ use crate::id;
 fn group(relics: &[&str]) -> AncientRelicGroup {
     AncientRelicGroup {
         relics: relics.iter().map(|relic| id(relic)).collect(),
-        only_in_act: None,
+        acts: AncientGroupActs::Any,
     }
 }
 
-/// A group only this act is offered.
-fn act_group(act: usize, relics: &[&str]) -> AncientRelicGroup {
+/// A group offered only in the acts given, by act index from 0.
+fn act_group(acts: AncientGroupActs, relics: &[&str]) -> AncientRelicGroup {
     AncientRelicGroup {
-        only_in_act: Some(act),
+        acts,
         ..group(relics)
     }
 }
@@ -42,8 +42,12 @@ pub fn darv() -> EventDefinition {
                 group(&["RELIC.PANDORAS_BOX"]),
                 group(&["RELIC.RUNIC_PYRAMID"]),
                 group(&["RELIC.SNECKO_EYE"]),
-                act_group(1, &["RELIC.ECTOPLASM", "RELIC.SOZU"]),
-                act_group(2, &["RELIC.PHILOSOPHERS_STONE", "RELIC.VELVET_CHOKER"]),
+                // Each relic is a group of its own, so an eligible one is
+                // always among those shuffled.
+                act_group(AncientGroupActs::Only(1), &["RELIC.ECTOPLASM"]),
+                act_group(AncientGroupActs::Only(1), &["RELIC.SOZU"]),
+                act_group(AncientGroupActs::From(1), &["RELIC.PHILOSOPHERS_STONE"]),
+                act_group(AncientGroupActs::From(1), &["RELIC.VELVET_CHOKER"]),
             ],
             keepsake: id("RELIC.DUSTY_TOME"),
             // The tome offers the ancient cards of the character's own pool,
@@ -820,17 +824,14 @@ pub fn orobas() -> EventDefinition {
         allowed: EventCondition::Always,
         vars: Vec::new(),
         generation: EventGeneration::OrobasRelics {
-            pool_one: vec![
-                id("RELIC.ELECTRIC_SHRYMP"),
-                id("RELIC.GLASS_EYE"),
-                id("RELIC.SAND_CASTLE"),
-            ],
+            pool_one: vec![id("RELIC.ELECTRIC_SHRYMP"), id("RELIC.GLASS_EYE")],
             prismatic: id("RELIC.PRISMATIC_GEM"),
             sea_glass: id("RELIC.SEA_GLASS"),
             pool_two: vec![
                 id("RELIC.ALCHEMICAL_COFFER"),
                 id("RELIC.DRIFTWOOD"),
                 id("RELIC.RADIANT_PEARL"),
+                id("RELIC.SAND_CASTLE"),
             ],
             pool_three: vec![
                 // The touch of Orobas is only offered where there is a
@@ -2888,10 +2889,13 @@ pub fn battleworn_dummy(potions: Vec<sts2_core::ModelId>) -> EventDefinition {
             ),
             &format!("Setting {}", index + 1),
             vec![EventEffect::EnterCombatWithoutLeaving {
-                encounter: id("ENCOUNTER.BATTLEWORN_DUMMY_EVENT_ENCOUNTER"),
+                encounter: id(&format!(
+                    "ENCOUNTER.BATTLEWORN_DUMMY_EVENT_V{}_ENCOUNTER",
+                    index + 1
+                )),
                 extra_rewards: Vec::new(),
                 resumes_parent: true,
-                chosen_monster: Some(index),
+                chosen_monster: None,
                 resume: vec![EventEffect::UnlessTheFightTimedOut(resume)],
             }],
         )

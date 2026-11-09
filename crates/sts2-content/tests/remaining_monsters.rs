@@ -304,10 +304,22 @@ fn the_fake_merchant_carries_its_ascension_branches() {
 /// three turns its arrival put on it have gone by.
 #[test]
 fn a_battle_friend_stands_for_three_turns_and_then_leaves() {
-    for (model, hp) in [
-        ("MONSTER.BATTLE_FRIEND_V1", 75),
-        ("MONSTER.BATTLE_FRIEND_V2", 150),
-        ("MONSTER.BATTLE_FRIEND_V3", 300),
+    for (model, encounter, hp) in [
+        (
+            "MONSTER.BATTLE_FRIEND_V1",
+            "ENCOUNTER.BATTLEWORN_DUMMY_EVENT_V1_ENCOUNTER",
+            75,
+        ),
+        (
+            "MONSTER.BATTLE_FRIEND_V2",
+            "ENCOUNTER.BATTLEWORN_DUMMY_EVENT_V2_ENCOUNTER",
+            150,
+        ),
+        (
+            "MONSTER.BATTLE_FRIEND_V3",
+            "ENCOUNTER.BATTLEWORN_DUMMY_EVENT_V3_ENCOUNTER",
+            300,
+        ),
     ] {
         let registry = sts2_content::standard_registry();
         let definition = registry
@@ -324,22 +336,19 @@ fn a_battle_friend_stands_for_three_turns_and_then_leaves() {
             })],
             "{model}'s timer has no applier"
         );
-        let mut scenario = ScenarioBuilder::new(
-            "LASTMONSTERS",
-            id("ENCOUNTER.BATTLEWORN_DUMMY_EVENT_ENCOUNTER"),
-        )
-        .player_hp(500, 500)
-        .energy(3, 3)
-        .turn(1, 1)
-        .rng_counter(RunStream::MonsterAi, 0)
-        .relics(&[id("RELIC.BURNING_BLOOD")])
-        .enemy(1, id(model), hp, hp, "NOTHING_MOVE")
-        .power(
-            1,
-            id("POWER.BATTLEWORN_DUMMY_TIME_LIMIT_POWER"),
-            3,
-            sts2_engine::PowerType::Buff,
-        );
+        let mut scenario = ScenarioBuilder::new("LASTMONSTERS", id(encounter))
+            .player_hp(500, 500)
+            .energy(3, 3)
+            .turn(1, 1)
+            .rng_counter(RunStream::MonsterAi, 0)
+            .relics(&[id("RELIC.BURNING_BLOOD")])
+            .enemy(1, id(model), hp, hp, "NOTHING_MOVE")
+            .power(
+                1,
+                id("POWER.BATTLEWORN_DUMMY_TIME_LIMIT_POWER"),
+                3,
+                sts2_engine::PowerType::Buff,
+            );
         for card_id in 0..5 {
             scenario = scenario.card(PileName::Hand, card_id, card("CARD.STRIKE_IRONCLAD"), 1);
         }
