@@ -583,8 +583,8 @@ mod tests {
         let mut text = format!(
             "[Format \"STS2PGN\"]\n[FormatVersion \"{version}\"]\n\
              [RecorderVersion \"test\"]\n[RunId \"synthetic\"]\n\
-             [GameVersion \"v0.107.1\"]\n[GameCommit \"59260271\"]\n\
-             [ModelIdHash \"3954186980\"]\n[Seed \"ABC\"]\n\
+             [GameVersion \"v0.111.0\"]\n[GameCommit \"41cef1ea\"]\n\
+             [ModelIdHash \"1568834832\"]\n[Seed \"ABC\"]\n\
              [Mode \"STANDARD\"]\n[Ascension \"0\"]\n\
              [Players \"[{{\\\"slot\\\":\\\"p0\\\",\\\"character\\\":\\\"IRONCLAD\\\"}}]\"]\n\
              [Mods \"[]\"]\n[Result \"*\"]\n\n"
