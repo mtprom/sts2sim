@@ -3667,39 +3667,6 @@ pub fn silent_powers() -> Vec<PowerDefinition> {
             ],
             ..counter("POWER.NOXIOUS_FUMES_POWER", PowerType::Buff)
         },
-        // An outbreak counts the times its owner has worked poison on anything,
-        // and every third one it burns everything for what it is worth. The
-        // count is the power's own, and it is kept modulo three.
-        PowerDefinition {
-            hooks: vec![
-                ModifierHook::every_turn(
-                    HookEvent::AfterPowerAmountChanged,
-                    vec![
-                        Command::Power(PowerCmd::ModifyCounter {
-                            power: PowerRef::listening(),
-                            amount: Amount::Fixed(1),
-                        }),
-                        Command::When {
-                            otherwise: Vec::new(),
-                            condition: Condition::ListeningPowerCounterAtLeast(3),
-                            then: vec![
-                                Command::Creature(CreatureCmd::Damage {
-                                    target: CreatureSelector::AllOpponents,
-                                    amount: stacks(),
-                                    props: ValueProps::UNPOWERED,
-                                }),
-                                Command::Power(PowerCmd::ModifyCounter {
-                                    power: PowerRef::listening(),
-                                    amount: Amount::Fixed(-3),
-                                }),
-                            ],
-                        },
-                    ],
-                )
-                .when(HookCondition::OwnerWorkedPower(id("POWER.POISON_POWER"))),
-            ],
-            ..counter("POWER.OUTBREAK_POWER", PowerType::Buff)
-        },
         // Phantom blades make every Shiv keep itself, and put their whole worth
         // behind the first Shiv of a turn and nothing behind the rest.
         PowerDefinition {
@@ -3875,33 +3842,11 @@ pub fn silent_powers() -> Vec<PowerDefinition> {
             )],
             ..counter("POWER.TRACKING_POWER", PowerType::Buff)
         },
-        // Well laid plans keeps back as many cards of the hand as it is worth.
-        // It asks on `BeforeFlushLate` — deliberately the late pass, so that
-        // the player sees what every other before-flush effect has done to the
-        // hand before choosing what to keep. Every listener on that pass gets
-        // to act before any of them finishes, so the engine banks the screen
-        // and opens it once the whole before-flush pass has run and before the
-        // hand goes down.
+        // Well-laid plans keep the whole hand up as its owner's turn ends,
+        // for as long as the power stands.
         PowerDefinition {
-            hooks: vec![
-                ModifierHook::every_turn(
-                    HookEvent::BeforeFlushLate,
-                    vec![Command::CardSelect(CardSelectCmd::FromHand {
-                        prefs: SelectorPrefs::unbounded_range(),
-                        maximum: Some(stacks()),
-                        exact_count: None,
-                        filter: CardFilter::NotRetainingThisTurn,
-                        then: vec![Command::Card(CardCmd::ApplySingleTurnKeyword {
-                            cards: CardSelector::Chosen,
-                            keyword: sts2_engine::CardKeyword::Retain,
-                        })],
-                    })],
-                )
-                // Only a hand that is about to be discarded is asked; a hand
-                // a pyramid keeps up is not.
-                .when(HookCondition::TheHandWouldFlush),
-            ],
-            ..counter("POWER.WELL_LAID_PLANS_POWER", PowerType::Buff)
+            keeps_hand: true,
+            ..single("POWER.WELL_LAID_PLANS_POWER", PowerType::Buff)
         },
         // A wraith form costs its owner dexterity every turn, for good: it
         // never takes itself off.
@@ -3976,6 +3921,15 @@ pub fn defect_powers() -> Vec<PowerDefinition> {
         temporary_focus("POWER.FOCUSED_STRIKE_POWER"),
         temporary_focus("POWER.HOTFIX_POWER"),
         temporary_focus("POWER.SYNCHRONIZE_POWER"),
+        // A hyperbeam's wrapper is the same the other way round: it takes
+        // Focus away as it lands and hands it back at the end of the turn.
+        PowerDefinition {
+            temporary: Some(sts2_engine::TemporaryPower {
+                internally_applied_power: id("POWER.FOCUS_POWER"),
+                positive: false,
+            }),
+            ..counter("POWER.HYPERBEAM_FOCUS_DOWN_POWER", PowerType::Debuff)
+        },
         // A lightning rod channels one orb as the energy is reset rather than
         // as the turn opens, so what an orb evoked to make room pays out is not
         // lost to the reset or to the block clear. One stack goes with it.

@@ -280,8 +280,9 @@ fn the_doom_cards() -> Vec<CardDefinition> {
             ),
             vec![doom(no_escape_amount(15))],
         ),
-        // Time's up is worth exactly what the target's Doom is.
-        exhausting(retain_when_upgraded(upgrading(
+        // Time's up is worth exactly what the target's Doom is, and it no
+        // longer burns up.
+        retain_when_upgraded(upgrading(
             card(
                 "CARD.TIMES_UP",
                 CardType::Attack,
@@ -296,7 +297,7 @@ fn the_doom_cards() -> Vec<CardDefinition> {
                 Amount::counting(Count::TargetPower(id("POWER.DOOM_POWER"))),
                 Amount::Fixed(1),
             )],
-        ))),
+        )),
         // A blight strike is a blow and as much Doom as the blow came to.
         striking(upgrading(
             card(
@@ -338,9 +339,9 @@ fn the_doom_cards() -> Vec<CardDefinition> {
                 CardType::Power,
                 TargetType::SelfTarget,
                 1,
-                vec![buff("POWER.SHROUD_POWER", 2)],
+                vec![buff("POWER.SHROUD_POWER", 3)],
             ),
-            vec![buff("POWER.SHROUD_POWER", 3)],
+            vec![buff("POWER.SHROUD_POWER", 4)],
         ),
         // A danse macabre pays block before every card worth two or more.
         upgrading(
@@ -382,9 +383,9 @@ fn the_doom_cards() -> Vec<CardDefinition> {
                 CardType::Power,
                 TargetType::SelfTarget,
                 1,
-                vec![buff("POWER.HAUNT_POWER", 6)],
+                vec![buff("POWER.HAUNT_POWER", 7)],
             ),
-            vec![buff("POWER.HAUNT_POWER", 8)],
+            vec![buff("POWER.HAUNT_POWER", 9)],
         ),
     ]
 }
@@ -618,9 +619,9 @@ fn the_scythe() -> CardDefinition {
             CardType::Attack,
             TargetType::AnyEnemy,
             2,
-            body(4),
+            body(5),
         ),
-        body(5),
+        body(7),
     ));
     definition.saved_properties = vec![
         sts2_engine::SavedCardProperty::of("CurrentDamage", 13),
@@ -681,26 +682,17 @@ fn dredge(count: i32) -> Vec<Command> {
     })]
 }
 
-/// Eidolon, played: the whole hand burns, one card at a time over the list as
-/// it stood, and nine or more of them pay a point of Intangible. The count is
-/// the local the build increments per burn, which is the hand's own size.
+/// Eidolon, played: every card in the exhaust pile that is ethereal as it
+/// stands and can be played, played automatically, over the list as it stood
+/// before the first of them.
 fn eidolon() -> Vec<Command> {
-    vec![Command::WithAmount {
-        amount: Amount::counting(Count::CardsInPile(PileName::Hand)),
-        then: vec![
-            Command::Card(CardCmd::Exhaust {
-                cards: CardSelector::Pile {
-                    pile: PileName::Hand,
-                    filter: CardFilter::Any,
-                },
-            }),
-            Command::When {
-                condition: Condition::BoundAtLeast(9),
-                then: vec![buff("POWER.INTANGIBLE_POWER", 1)],
-                otherwise: Vec::new(),
-            },
-        ],
-    }]
+    vec![Command::Card(CardCmd::AutoPlay {
+        cards: CardSelector::Pile {
+            pile: PileName::Exhaust,
+            filter: CardFilter::PlayableEthereal,
+        },
+        at_the_bodys_target: false,
+    })]
 }
 
 /// Fetch, played: the pet swings, and the play draws where no play of this
@@ -817,8 +809,9 @@ fn the_cards_that_wait() -> Vec<CardDefinition> {
             ),
             dredge(3),
         ))),
-        // An eidolon burns the whole hand and pays intangible for nine.
-        upgrading_cost(
+        // An eidolon plays every ethereal card standing in the exhaust pile
+        // that can be played, and burns up.
+        exhausting(upgrading_cost(
             card(
                 "CARD.EIDOLON",
                 CardType::Skill,
@@ -827,7 +820,7 @@ fn the_cards_that_wait() -> Vec<CardDefinition> {
                 eidolon(),
             ),
             1,
-        ),
+        )),
         // An eradicate lands as many times as the energy its own X swallowed.
         retaining(costing_x(with_damage_var(
             upgrading(
@@ -950,9 +943,9 @@ fn the_cards_that_wait() -> Vec<CardDefinition> {
                 CardType::Attack,
                 TargetType::AnyEnemy,
                 1,
-                vec![soul_storm(9, 2)],
+                vec![soul_storm(9, 4)],
             ),
-            vec![soul_storm(9, 3)],
+            vec![soul_storm(9, 6)],
         ),
         // The scythe grows every time it is played and keeps the growth on the
         // deck's own card.
@@ -1532,12 +1525,12 @@ fn the_plain_attacks() -> Vec<CardDefinition> {
                 TargetType::AnyEnemy,
                 1,
                 vec![
-                    attack(9),
+                    attack(10),
                     souls(1, PileName::Draw, DrawPilePosition::Random, false),
                 ],
             ),
             vec![
-                attack(11),
+                attack(13),
                 souls(1, PileName::Draw, DrawPilePosition::Random, true),
             ],
         ),

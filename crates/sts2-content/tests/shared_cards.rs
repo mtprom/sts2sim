@@ -509,7 +509,7 @@ fn the_minion_cards_and_a_shiv_land_what_they_declare() {
         );
         assert_eq!(pile(&simulator, PileName::Exhaust), [model_id]);
     }
-    for (upgrade, block) in [(0, 8), (1, 11)] {
+    for (upgrade, block) in [(0, 7), (1, 10)] {
         let mut simulator = fight(&[("CARD.MINION_SACRIFICE", upgrade)]);
         play(&mut simulator, "CARD.MINION_SACRIFICE");
         assert_eq!(player(&simulator).block, block);
@@ -879,7 +879,7 @@ fn the_next_turn_powers_pay_out_as_the_turn_opens() {
         );
     }
 
-    for (upgrade, block, cards, gained) in [(0, 15, 2, 2), (1, 17, 3, 3)] {
+    for (upgrade, block, cards, gained) in [(0, 16, 2, 2), (1, 18, 3, 3)] {
         let mut simulator = fight_with_draw(
             &[("CARD.RELAX", upgrade)],
             &[
@@ -1089,7 +1089,7 @@ fn cost_of(simulator: &Simulator, model_id: &str) -> i32 {
 /// A maul grows every maul in the fight, itself included.
 #[test]
 fn a_maul_grows_every_maul_in_the_fight() {
-    for (upgrade, damage, increase) in [(0, 5, 1), (1, 6, 2)] {
+    for (upgrade, damage, increase) in [(0, 5, 2), (1, 6, 3)] {
         let mut simulator = scenario(&[("CARD.MAUL", upgrade), ("CARD.MAUL", upgrade)], &[], 120)
             .build(sts2_content::standard_registry())
             .expect("the scenario builds");
@@ -2190,7 +2190,7 @@ fn a_rend_counts_the_debuffs_its_target_carries() {
         play(&mut simulator, "CARD.REND");
         before - creature(&simulator, 1).current_hp
     };
-    for (upgrade, base, per) in [(0, 15, 5), (1, 18, 8)] {
+    for (upgrade, base, per) in [(0, 10, 5), (1, 12, 8)] {
         assert_eq!(rend_damage(&[], upgrade), base);
         assert_eq!(rend_damage(&["POWER.WEAK_POWER"], upgrade), base + per);
         assert_eq!(

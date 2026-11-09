@@ -303,7 +303,12 @@ fn times_up_is_worth_exactly_the_doom_it_finds() {
             Some(39),
             "no Doom is no damage, at level {upgrade}"
         );
-        assert_eq!(pile(&simulator, PileName::Exhaust), ["CARD.TIMES_UP"]);
+        assert_eq!(
+            pile(&simulator, PileName::Exhaust),
+            Vec::<String>::new(),
+            "it no longer burns up"
+        );
+        assert_eq!(pile(&simulator, PileName::Discard), ["CARD.TIMES_UP"]);
 
         let mut simulator = built(scenario(&[39], &[("CARD.TIMES_UP", upgrade)], &[]).power(
             1,
@@ -356,8 +361,8 @@ fn the_plain_powers_lay_down_what_they_say() {
         ("CARD.COUNTDOWN", "POWER.COUNTDOWN_POWER", 6, 9),
         ("CARD.DANSE_MACABRE", "POWER.DANSE_MACABRE_POWER", 4, 6),
         ("CARD.DEVOUR_LIFE", "POWER.DEVOUR_LIFE_POWER", 1, 2),
-        ("CARD.HAUNT", "POWER.HAUNT_POWER", 6, 8),
-        ("CARD.SHROUD", "POWER.SHROUD_POWER", 2, 3),
+        ("CARD.HAUNT", "POWER.HAUNT_POWER", 7, 9),
+        ("CARD.SHROUD", "POWER.SHROUD_POWER", 3, 4),
         ("CARD.SPIRIT_OF_ASH", "POWER.SPIRIT_OF_ASH_POWER", 4, 5),
     ] {
         for (upgrade, stacks) in [(0, base), (1, upgraded)] {
@@ -425,11 +430,11 @@ fn pull_from_below_lands_once_per_ethereal_play() {
     }
 }
 
-/// A soul storm is worth nine, and two more for every Soul that has burned up
+/// A soul storm is worth nine, and four more for every Soul that has burned up
 /// this fight. The upgrade raises what a Soul is worth rather than the nine.
 #[test]
 fn soul_storm_grows_with_the_souls_that_burned() {
-    for (upgrade, per) in [(0, 2), (1, 3)] {
+    for (upgrade, per) in [(0, 4), (1, 6)] {
         let mut simulator = fight(&[("CARD.SOUL_STORM", upgrade)]);
         play(&mut simulator, "CARD.SOUL_STORM");
         assert_eq!(
@@ -778,20 +783,33 @@ fn a_dredge_with_no_room_asks_for_nothing() {
     );
 }
 
-/// An eidolon burns the whole hand and pays a point of Intangible where nine
-/// or more cards burned.
+/// An eidolon plays every ethereal card in the exhaust pile that can be
+/// played, leaves the rest there, and burns up itself. Upgrading it makes it
+/// cheaper.
 #[test]
-fn an_eidolon_burns_the_hand_and_pays_intangible_for_nine() {
-    for (held, intangible) in [(8, 0), (9, 1)] {
-        let mut hand: Vec<(&str, u8)> = vec![("CARD.EIDOLON", 0)];
-        hand.extend(std::iter::repeat_n(("CARD.DEFEND_NECROBINDER", 0), held));
-        let mut simulator = fight(&hand);
+fn an_eidolon_plays_the_ethereal_cards_back_out_of_the_exhaust_pile() {
+    for (upgrade, cost) in [(0, 2), (1, 1)] {
+        let mut simulator = built(
+            scenario(&[200], &[("CARD.EIDOLON", upgrade)], &[])
+                .card(PileName::Exhaust, 10, card("CARD.DEFILE", 0), 0)
+                .card(PileName::Exhaust, 11, card("CARD.DEFEND_NECROBINDER", 0), 0)
+                .card(PileName::Exhaust, 12, card("CARD.DAZED", 0), 0)
+                .card(PileName::Exhaust, 13, card("CARD.DEFILE", 0), 0),
+        );
+        let energy = simulator.state().combat.as_ref().unwrap().player.energy;
         play(&mut simulator, "CARD.EIDOLON");
-        assert_eq!(pile(&simulator, PileName::Hand).len(), 0);
         assert_eq!(
-            power_amount(&simulator, 0, "POWER.INTANGIBLE_POWER"),
-            intangible,
-            "with {held} cards held"
+            energy - simulator.state().combat.as_ref().unwrap().player.energy,
+            cost,
+            "at level {upgrade}; the defiles it plays cost nothing"
+        );
+        assert_eq!(hp_of(&simulator, 1), Some(200 - 2 * 13));
+        let mut exhausted = pile(&simulator, PileName::Exhaust);
+        exhausted.sort();
+        assert_eq!(
+            exhausted,
+            ["CARD.DAZED", "CARD.DEFEND_NECROBINDER", "CARD.EIDOLON"],
+            "the unplayable and the lasting cards stay, and the eidolon burns"
         );
     }
 }
@@ -1213,13 +1231,13 @@ fn the_scythe_grows_on_the_deck_card_as_well_as_the_copy() {
         deck.properties
             .get("CurrentDamage")
             .and_then(serde_json::Value::as_i64),
-        Some(17)
+        Some(18)
     );
     assert_eq!(
         deck.properties
             .get("IncreasedDamage")
             .and_then(serde_json::Value::as_i64),
-        Some(4)
+        Some(5)
     );
 }
 

@@ -238,30 +238,57 @@ fn envenom_poisons_what_the_attack_actually_hurt() {
     assert_eq!(power_amount(&simulator, 1, "POWER.POISON_POWER"), 1);
 }
 
-/// An outbreak burns everything every third time its owner poisons anything.
+/// An outbreak poisons everything for nine, twelve upgraded, and then sets
+/// each enemy's poison off at once: it bites for the whole of what it now
+/// is and one of it wears off, as though that enemy's turn had opened. The
+/// poison already standing counts, and an accelerant buys the extra bite here
+/// as it does at the turn.
 #[test]
-fn an_outbreak_pays_out_every_third_poison() {
+fn an_outbreak_poisons_everything_and_sets_it_off() {
+    for (upgrade, poison) in [(0, 9), (1, 12)] {
+        let mut simulator = Fight {
+            enemies: 2,
+            powers: &[(2, "POWER.POISON_POWER", 3, PowerType::Debuff)],
+            hand: &[("CARD.OUTBREAK", upgrade)],
+            ..Fight::default()
+        }
+        .build();
+        let energy = simulator.state().combat.as_ref().unwrap().player.energy;
+        play(&mut simulator, "CARD.OUTBREAK");
+        assert_eq!(
+            energy - simulator.state().combat.as_ref().unwrap().player.energy,
+            3
+        );
+        assert_eq!(creature(&simulator, 1).current_hp, 39 - poison);
+        assert_eq!(
+            power_amount(&simulator, 1, "POWER.POISON_POWER"),
+            poison - 1
+        );
+        assert_eq!(creature(&simulator, 2).current_hp, 39 - (poison + 3));
+        assert_eq!(
+            power_amount(&simulator, 2, "POWER.POISON_POWER"),
+            poison + 2
+        );
+        assert_eq!(
+            hand(&simulator),
+            Vec::<String>::new(),
+            "it is a skill, so it is not laid down as a power"
+        );
+    }
+
     let mut simulator = Fight {
-        enemies: 2,
-        hand: &[
-            ("CARD.OUTBREAK", 0),
-            ("CARD.DEADLY_POISON", 0),
-            ("CARD.DEADLY_POISON", 0),
-            ("CARD.DEADLY_POISON", 0),
-        ],
+        powers: &[(0, "POWER.ACCELERANT_POWER", 1, PowerType::Buff)],
+        hand: &[("CARD.OUTBREAK", 0)],
         ..Fight::default()
     }
     .build();
     play(&mut simulator, "CARD.OUTBREAK");
-    play(&mut simulator, "CARD.DEADLY_POISON");
-    play(&mut simulator, "CARD.DEADLY_POISON");
-    assert_eq!(creature(&simulator, 2).current_hp, 39, "not yet");
-    play(&mut simulator, "CARD.DEADLY_POISON");
     assert_eq!(
-        creature(&simulator, 2).current_hp,
-        39 - 11,
-        "the third poison paid out over everything"
+        creature(&simulator, 1).current_hp,
+        39 - 9 - 8,
+        "nine, then eight once the first bite wore off"
     );
+    assert_eq!(power_amount(&simulator, 1, "POWER.POISON_POWER"), 7);
 }
 
 // --- the ones that answer for a card play --------------------------------
@@ -412,35 +439,44 @@ fn tools_of_the_trade_draw_one_more_and_take_one_back() {
     assert_eq!(hand(&simulator).len(), 5);
 }
 
-/// Well laid plans ask which cards to keep back on the late half of the
-/// before-flush pass, where every listener gets to act before any of them
-/// finishes. The engine banks the screen a deferred body asks for and opens it
-/// once the whole pass has run, so ending the turn puts the
-/// retain pick to the player before the hand goes down — see
-/// `a_deferred_pass_still_asks.rs` for the discipline itself.
+/// Well-laid plans keep the whole hand up as the turn ends, with no pick to
+/// make, and keep doing it every turn after; upgrading only makes the card
+/// cheaper.
 #[test]
-fn well_laid_plans_ask_on_the_way_out_of_the_turn() {
-    let mut simulator = Fight {
-        hand: &[("CARD.WELL_LAID_PLANS", 0), ("CARD.SLICE", 0)],
-        ..Fight::default()
+fn well_laid_plans_keep_the_whole_hand() {
+    for (upgrade, cost) in [(0, 2), (1, 1)] {
+        let mut simulator = Fight {
+            hand: &[
+                ("CARD.WELL_LAID_PLANS", upgrade),
+                ("CARD.SLICE", 0),
+                ("CARD.DEFLECT", 0),
+            ],
+            draw: &[("CARD.DEFLECT", 0), ("CARD.DEFLECT", 0)],
+            ..Fight::default()
+        }
+        .build();
+        let energy = simulator.state().combat.as_ref().unwrap().player.energy;
+        play(&mut simulator, "CARD.WELL_LAID_PLANS");
+        assert_eq!(
+            energy - simulator.state().combat.as_ref().unwrap().player.energy,
+            cost
+        );
+        end_turn(&mut simulator);
+        assert!(
+            matches!(
+                simulator.decision(),
+                sts2_engine::DecisionContext::CombatPriority { .. }
+            ),
+            "nothing is asked on the way out of the turn"
+        );
+        let held = hand(&simulator);
+        assert!(held.iter().any(|card| card == "CARD.SLICE"), "{held:?}");
+        assert_eq!(
+            held.iter().filter(|card| *card == "CARD.DEFLECT").count(),
+            3,
+            "the deflect that was held stayed, and two more were drawn"
+        );
     }
-    .build();
-    play(&mut simulator, "CARD.WELL_LAID_PLANS");
-    end_turn(&mut simulator);
-    let kept = simulator
-        .legal_actions()
-        .iter()
-        .find(|action| {
-            matches!(action, Action::ChooseCards { cards, .. }
-                if cards.len() == 1 && cards[0].fingerprint.model_id == id("CARD.SLICE"))
-        })
-        .cloned()
-        .expect("the retain pick offers the slice");
-    simulator.step(kept).expect("keeping it applies");
-    assert!(
-        hand(&simulator).iter().any(|card| card == "CARD.SLICE"),
-        "the kept slice survived the flush into the next turn"
-    );
 }
 
 /// A blur keeps the block its owner is standing behind through the clear, and

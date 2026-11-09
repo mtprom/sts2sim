@@ -64,6 +64,25 @@ pub(crate) fn card(
     }
 }
 
+/// What an Expect a Fight blocks for: its base, and its extra for every point
+/// of its owner's strength, with strength below zero counted as none.
+fn expect_a_fight_block(base: i32, extra: i32) -> Command {
+    Command::Creature(CreatureCmd::GainBlock {
+        target: CreatureSelector::Owner,
+        amount: Amount::Sum(vec![
+            Amount::Fixed(base),
+            Amount::Product {
+                left: Box::new(Amount::Fixed(extra)),
+                right: Box::new(Amount::Greatest(vec![
+                    Amount::Fixed(0),
+                    Amount::counting(Count::OwnerPower(id("POWER.STRENGTH_POWER"))),
+                ])),
+            },
+        ]),
+        props: ValueProps::NONE,
+    })
+}
+
 /// Whether a card gains block, which every card declares for itself rather
 /// than anything worked out from what it does: a card that says yes is one a
 /// Nimble enchantment will go on, and nothing else asks.
@@ -72,12 +91,12 @@ pub(crate) fn card(
 /// belongs to the card, and gathering the ones that say yes in one place is
 /// what makes the set checkable against the build.
 ///
-/// Seventy-six cards of the build answer yes outright; two more — Mad Science
-/// and Sovereign Blade — answer from the state of the fight, and neither is
-/// registered here. What is listed is every one of the seventy-six this
-/// baseline registers, which is all of them but five: a demonic shield, an
-/// intercept, a lift, a mimic and a rally are multiplayer-only cards, and a
-/// single-player run's pools never hold one.
+/// Seventy-eight cards of the build answer yes outright; two more — Mad
+/// Science and Sovereign Blade — answer from the state of the fight, and
+/// neither is registered here. What is listed is every one of the
+/// seventy-eight this baseline registers, which is all of them but six: a
+/// constellation, a demonic shield, an intercept, a lift, a mimic and a rally
+/// are multiplayer-only cards, and a single-player run's pools never hold one.
 pub(crate) fn gains_block(model_id: &str) -> bool {
     matches!(
         model_id,
@@ -110,6 +129,7 @@ pub(crate) fn gains_block(model_id: &str) -> bool {
             | "CARD.EQUILIBRIUM"
             | "CARD.ESCAPE_PLAN"
             | "CARD.EVIL_EYE"
+            | "CARD.EXPECT_A_FIGHT"
             | "CARD.FIGHT_THROUGH"
             | "CARD.FINESSE"
             | "CARD.FISTICUFFS"
@@ -437,9 +457,9 @@ fn pool_attacks() -> Vec<CardDefinition> {
                 CardType::Attack,
                 TargetType::AnyEnemy,
                 3,
-                vec![attack(15), debuff("POWER.MANGLE_POWER", 10)],
+                vec![attack(20), debuff("POWER.MANGLE_POWER", 10)],
             ),
-            vec![attack(20), debuff("POWER.MANGLE_POWER", 15)],
+            vec![attack(26), debuff("POWER.MANGLE_POWER", 15)],
         ),
         // A setup strike leaves its owner stronger for the turn.
         striking(upgrading(
@@ -448,9 +468,9 @@ fn pool_attacks() -> Vec<CardDefinition> {
                 CardType::Attack,
                 TargetType::AnyEnemy,
                 1,
-                vec![attack(7), buff("POWER.SETUP_STRIKE_POWER", 2)],
+                vec![attack(7), buff("POWER.SETUP_STRIKE_POWER", 3)],
             ),
-            vec![attack(9), buff("POWER.SETUP_STRIKE_POWER", 3)],
+            vec![attack(9), buff("POWER.SETUP_STRIKE_POWER", 4)],
         )),
         // A pact's end asks what has burned up: three cards in the exhaust pile
         // and it lands, fewer and it does nothing at all.
@@ -460,9 +480,9 @@ fn pool_attacks() -> Vec<CardDefinition> {
                 CardType::Attack,
                 TargetType::AllEnemies,
                 0,
-                pacts_end(17),
+                pacts_end(18),
             ),
-            pacts_end(23),
+            pacts_end(24),
         ),
     ]
 }
@@ -658,9 +678,9 @@ fn pool_skills() -> Vec<CardDefinition> {
                 CardType::Skill,
                 TargetType::SelfTarget,
                 1,
-                vec![block(5), buff("POWER.COLOSSUS_POWER", 1)],
+                vec![block(4), buff("POWER.COLOSSUS_POWER", 1)],
             ),
-            vec![block(8), buff("POWER.COLOSSUS_POWER", 1)],
+            vec![block(7), buff("POWER.COLOSSUS_POWER", 1)],
         ),
         // A barrier of block that burns whoever swings through it.
         upgrading(
@@ -710,9 +730,9 @@ fn pool_powers() -> Vec<CardDefinition> {
                 CardType::Power,
                 TargetType::SelfTarget,
                 3,
-                vec![buff("POWER.DEMON_FORM_POWER", 2)],
+                vec![buff("POWER.DEMON_FORM_POWER", 3)],
             ),
-            vec![buff("POWER.DEMON_FORM_POWER", 3)],
+            vec![buff("POWER.DEMON_FORM_POWER", 4)],
         ),
         upgrading(
             card(
@@ -793,10 +813,10 @@ fn pool_remainder() -> Vec<CardDefinition> {
                     1,
                     rampage(5),
                 ),
-                rampage(9),
+                rampage(10),
             ),
-            9,
-            9,
+            10,
+            10,
         ),
         // A stomp costs one less for every attack its owner has already played
         // this turn, and one less again for each one played while it is held.
@@ -1013,25 +1033,17 @@ fn pool_listeners_and_piles() -> Vec<CardDefinition> {
             ),
             vec![second_wind(7)],
         ),
-        // Expecting a fight pays a point of energy for every attack in hand and
-        // then stops the next gain outright.
-        upgrading_cost(
+        // Expecting a fight is block: fifteen, and five more for every point
+        // of strength its owner holds. Strength below zero counts as none.
+        upgrading(
             card(
                 "CARD.EXPECT_A_FIGHT",
                 CardType::Skill,
                 TargetType::SelfTarget,
-                2,
-                vec![
-                    Command::Player(PlayerCmd::GainEnergy(Amount::counting(
-                        Count::CardsInPileOfType {
-                            pile: PileName::Hand,
-                            card_type: CardType::Attack,
-                        },
-                    ))),
-                    buff("POWER.NO_ENERGY_GAIN_POWER", 1),
-                ],
+                3,
+                vec![expect_a_fight_block(15, 5)],
             ),
-            1,
+            vec![expect_a_fight_block(16, 8)],
         ),
         // A battle trance draws deep and stops the well for the turn.
         upgrading(
@@ -1169,9 +1181,9 @@ fn howl_from_beyond() -> CardDefinition {
             CardType::Attack,
             TargetType::AllEnemies,
             3,
-            vec![sweep(16, 1)],
+            vec![sweep(18, 1)],
         ),
-        vec![sweep(21, 1)],
+        vec![sweep(24, 1)],
     );
     definition.hooks.push(sts2_engine::ModifierHook::every_turn(
         sts2_engine::HookEvent::AfterAutoPostPlayPhaseEntered,
@@ -1397,9 +1409,9 @@ fn starting_cards() -> Vec<CardDefinition> {
                     CardType::Attack,
                     TargetType::AnyEnemy,
                     1,
-                    vec![attack(16)],
+                    vec![attack(20)],
                 ),
-                vec![attack(20)],
+                vec![attack(24)],
             ),
             sts2_engine::CardRarity::Token,
         ),
@@ -1409,9 +1421,9 @@ fn starting_cards() -> Vec<CardDefinition> {
                 CardType::Skill,
                 TargetType::AnyEnemy,
                 1,
-                vec![block(7), debuff("POWER.VULNERABLE_POWER", 1)],
+                vec![block(6), debuff("POWER.VULNERABLE_POWER", 1)],
             ),
-            vec![block(8), debuff("POWER.VULNERABLE_POWER", 2)],
+            vec![block(7), debuff("POWER.VULNERABLE_POWER", 2)],
         ),
         // The one ancient card the Ironclad's own pool carries that a starter
         // does not become.
@@ -1983,7 +1995,7 @@ fn overgrowth_pickups() -> Vec<CardDefinition> {
                 CardType::Power,
                 TargetType::SelfTarget,
                 1,
-                crimson_mantle(8),
+                crimson_mantle(7),
             ),
             crimson_mantle(10),
         ),

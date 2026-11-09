@@ -275,9 +275,9 @@ fn commons() -> Vec<CardDefinition> {
                 CardType::Attack,
                 TargetType::AnyEnemy,
                 0,
-                collision_course(11),
+                collision_course(10),
             ),
-            collision_course(15),
+            collision_course(14),
         ),
         upgrading(
             card(
@@ -310,9 +310,9 @@ fn commons() -> Vec<CardDefinition> {
                 CardType::Attack,
                 TargetType::AllEnemies,
                 1,
-                crush_under(7, 1),
+                crush_under(8, 1),
             ),
-            crush_under(8, 2),
+            crush_under(9, 2),
         ),
         upgrading(
             card(
@@ -401,9 +401,9 @@ fn commons() -> Vec<CardDefinition> {
                 CardType::Skill,
                 TargetType::SelfTarget,
                 1,
-                vec![forge(9), buff("POWER.ENERGY_NEXT_TURN_POWER", 1)],
+                vec![forge(8), buff("POWER.ENERGY_NEXT_TURN_POWER", 1)],
             ),
-            vec![forge(13), buff("POWER.ENERGY_NEXT_TURN_POWER", 1)],
+            vec![forge(12), buff("POWER.ENERGY_NEXT_TURN_POWER", 1)],
         ),
         striking(upgrading(
             card(
@@ -421,9 +421,9 @@ fn commons() -> Vec<CardDefinition> {
                 CardType::Skill,
                 TargetType::SelfTarget,
                 1,
-                vec![forge(5), draw(2)],
+                vec![forge(6), draw(2)],
             ),
-            vec![forge(8), draw(2)],
+            vec![forge(9), draw(2)],
         ),
         upgrading(
             card(
@@ -608,9 +608,9 @@ fn uncommons() -> Vec<CardDefinition> {
                 CardType::Power,
                 TargetType::SelfTarget,
                 1,
-                vec![buff("POWER.PILLAR_OF_CREATION_POWER", 3)],
+                vec![buff("POWER.PILLAR_OF_CREATION_POWER", 2)],
             ),
-            vec![buff("POWER.PILLAR_OF_CREATION_POWER", 4)],
+            vec![buff("POWER.PILLAR_OF_CREATION_POWER", 3)],
         ),
         upgrading(
             card(
@@ -649,9 +649,9 @@ fn uncommons() -> Vec<CardDefinition> {
                     CardType::Attack,
                     TargetType::AnyEnemy,
                     1,
-                    vec![attack(30)],
+                    vec![attack(35)],
                 ),
-                vec![attack(40)],
+                vec![attack(45)],
             ),
             4,
         ),
@@ -942,9 +942,9 @@ fn uncommons() -> Vec<CardDefinition> {
                 CardType::Skill,
                 TargetType::SelfTarget,
                 1,
-                vec![buff("POWER.VIGOR_POWER", 6)],
+                vec![buff("POWER.VIGOR_POWER", 7)],
             ),
-            vec![buff("POWER.VIGOR_POWER", 8)],
+            vec![buff("POWER.VIGOR_POWER", 10)],
         ),
     ]
 }

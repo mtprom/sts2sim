@@ -260,7 +260,7 @@ fn the_plain_powers_lay_down_what_they_say() {
         ("CARD.ACCELERANT", "POWER.ACCELERANT_POWER", 1, 2),
         ("CARD.ACCURACY", "POWER.ACCURACY_POWER", 4, 6),
         ("CARD.AFTERIMAGE", "POWER.AFTERIMAGE_POWER", 1, 1),
-        ("CARD.ANTICIPATE", "POWER.ANTICIPATE_POWER", 2, 3),
+        ("CARD.ANTICIPATE", "POWER.ANTICIPATE_POWER", 2, 4),
         ("CARD.BURST", "POWER.BURST_POWER", 1, 2),
         ("CARD.CORROSIVE_WAVE", "POWER.CORROSIVE_WAVE_POWER", 2, 3),
         ("CARD.ENVENOM", "POWER.ENVENOM_POWER", 1, 2),
@@ -268,10 +268,10 @@ fn the_plain_powers_lay_down_what_they_say() {
         ("CARD.INFINITE_BLADES", "POWER.INFINITE_BLADES_POWER", 1, 1),
         ("CARD.MASTER_PLANNER", "POWER.MASTER_PLANNER_POWER", 1, 1),
         ("CARD.NOXIOUS_FUMES", "POWER.NOXIOUS_FUMES_POWER", 2, 3),
-        ("CARD.OUTBREAK", "POWER.OUTBREAK_POWER", 11, 15),
         ("CARD.PHANTOM_BLADES", "POWER.PHANTOM_BLADES_POWER", 9, 12),
         ("CARD.SERPENT_FORM", "POWER.SERPENT_FORM_POWER", 4, 6),
         ("CARD.SHADOWMELD", "POWER.SHADOWMELD_POWER", 1, 1),
+        ("CARD.SIDESTEP", "POWER.ENERGY_NEXT_TURN_POWER", 1, 2),
         ("CARD.SNEAKY", "POWER.SNEAKY_POWER", 1, 2),
         ("CARD.SPEEDSTER", "POWER.SPEEDSTER_POWER", 2, 2),
         (
@@ -280,7 +280,7 @@ fn the_plain_powers_lay_down_what_they_say() {
             1,
             1,
         ),
-        ("CARD.WELL_LAID_PLANS", "POWER.WELL_LAID_PLANS_POWER", 1, 2),
+        ("CARD.WELL_LAID_PLANS", "POWER.WELL_LAID_PLANS_POWER", 1, 1),
     ] {
         for (upgrade, stacks) in [(0, base), (1, upgraded)] {
             let mut simulator = fight(&[(model_id, upgrade)]);
@@ -318,7 +318,7 @@ fn the_plain_debuffs_land_where_they_are_aimed() {
 /// The cards that sweep the whole enemy side.
 #[test]
 fn the_sweeps_land_on_everything() {
-    for (model_id, base, upgraded) in [("CARD.FLICK_FLACK", 6, 8), ("CARD.DAGGER_SPRAY", 8, 12)] {
+    for (model_id, base, upgraded) in [("CARD.FLICK_FLACK", 7, 9), ("CARD.DAGGER_SPRAY", 8, 12)] {
         for (upgrade, damage) in [(0, base), (1, upgraded)] {
             let mut simulator = crowd(&[(model_id, upgrade)]);
             play(&mut simulator, model_id);
@@ -333,8 +333,8 @@ fn the_sweeps_land_on_everything() {
 fn the_sweeping_powers_land_on_everything() {
     for (model_id, power, base, upgraded) in [
         ("CARD.HAZE", "POWER.POISON_POWER", 4, 6),
+        ("CARD.HAZE", "POWER.WEAK_POWER", 1, 2),
         ("CARD.PIERCING_WAIL", "POWER.PIERCING_WAIL_POWER", 6, 8),
-        ("CARD.SCARE", "POWER.WEAK_POWER", 1, 1),
     ] {
         for (upgrade, stacks) in [(0, base), (1, upgraded)] {
             let mut simulator = crowd(&[(model_id, upgrade)]);
@@ -349,19 +349,9 @@ fn the_sweeping_powers_land_on_everything() {
     }
 }
 
-/// Upgrading a scare takes the Exhaust keyword off it; upgrading a calculated
-/// gamble puts Retain on.
+/// Upgrading a calculated gamble puts Retain on rather than moving a number.
 #[test]
-fn two_upgrades_move_a_keyword_rather_than_a_number() {
-    let mut simulator = crowd(&[("CARD.SCARE", 0)]);
-    play(&mut simulator, "CARD.SCARE");
-    assert_eq!(pile(&simulator, PileName::Exhaust), ["CARD.SCARE"]);
-
-    let mut simulator = crowd(&[("CARD.SCARE", 1)]);
-    play(&mut simulator, "CARD.SCARE");
-    assert_eq!(pile(&simulator, PileName::Exhaust), Vec::<String>::new());
-    assert_eq!(pile(&simulator, PileName::Discard), ["CARD.SCARE"]);
-
+fn an_upgrade_puts_retain_on_a_calculated_gamble() {
     let mut simulator = fight_with_draw(
         &[("CARD.CALCULATED_GAMBLE", 1), ("CARD.SLICE", 0)],
         &[("CARD.DEFLECT", 0)],
@@ -480,36 +470,51 @@ fn escape_plan_pays_block_only_for_a_skill() {
     }
 }
 
-/// Expertise draws the hand back up to its number, and nothing at all when the
-/// hand already holds that many.
+/// Expertise draws two cards, three upgraded, and each of them is kept through
+/// the end of this turn only: the cards drawn stay in hand as the turn ends,
+/// and the slice that was already held goes down with the flush.
 #[test]
-fn expertise_fills_the_hand_and_no_further() {
-    let mut simulator = fight_with_draw(
-        &[("CARD.EXPERTISE", 0), ("CARD.SLICE", 0)],
-        &[
-            ("CARD.SLICE", 0),
-            ("CARD.SLICE", 0),
-            ("CARD.SLICE", 0),
-            ("CARD.SLICE", 0),
-            ("CARD.SLICE", 0),
-            ("CARD.SLICE", 0),
-            ("CARD.SLICE", 0),
-        ],
-    );
-    play(&mut simulator, "CARD.EXPERTISE");
-    // The hand held one card once the expertise left it, so five come up.
-    assert_eq!(pile(&simulator, PileName::Hand).len(), 6);
-
-    let hand: Vec<(&str, u8)> = std::iter::once(("CARD.EXPERTISE", 0))
-        .chain(std::iter::repeat_n(("CARD.SLICE", 0), 7))
-        .collect();
-    let mut simulator = fight_with_draw(&hand, &[("CARD.DEFLECT", 0)]);
-    play(&mut simulator, "CARD.EXPERTISE");
-    assert_eq!(
-        pile(&simulator, PileName::Hand).len(),
-        7,
-        "nothing is drawn"
-    );
+fn expertise_draws_and_keeps_what_it_drew_for_the_turn() {
+    for (upgrade, drawn) in [(0, 2), (1, 3)] {
+        let mut simulator = fight_with_draw(
+            &[("CARD.EXPERTISE", upgrade), ("CARD.SLICE", 0)],
+            &[
+                ("CARD.DEFLECT", 0),
+                ("CARD.DEFLECT", 0),
+                ("CARD.DEFLECT", 0),
+                ("CARD.BACKFLIP", 0),
+                ("CARD.BACKFLIP", 0),
+                ("CARD.BACKFLIP", 0),
+                ("CARD.BACKFLIP", 0),
+                ("CARD.BACKFLIP", 0),
+                ("CARD.BACKFLIP", 0),
+            ],
+        );
+        play(&mut simulator, "CARD.EXPERTISE");
+        let ids = |simulator: &Simulator| -> Vec<u64> {
+            simulator
+                .state()
+                .combat
+                .as_ref()
+                .expect("the fight is standing")
+                .player
+                .piles
+                .hand
+                .iter()
+                .map(|held| held.id.get())
+                .collect()
+        };
+        // The slice is card 1; everything else in hand came off the draw.
+        let drawn_ids: Vec<u64> = ids(&simulator).into_iter().filter(|id| *id != 1).collect();
+        assert_eq!(drawn_ids.len(), drawn);
+        end_turn(&mut simulator);
+        let held = ids(&simulator);
+        assert!(
+            drawn_ids.iter().all(|id| held.contains(id)),
+            "the drawn cards were kept: {drawn_ids:?} in {held:?}"
+        );
+        assert!(!held.contains(&1), "the card already held was not");
+    }
 }
 
 /// Prepared draws and puts back as many as it drew.
@@ -817,19 +822,29 @@ fn precise_cut_is_worth_less_for_a_full_hand() {
     }
 }
 
-/// A mirage is worth every point of poison the other side is carrying.
+/// A mirage is worth every point of poison the other side is carrying. It
+/// costs one at both levels; the upgrade only stops it burning up.
 #[test]
 fn mirage_is_worth_the_poison_on_the_field() {
-    let mut simulator = crowd(&[
-        ("CARD.DEADLY_POISON", 0),
-        ("CARD.DEADLY_POISON", 0),
-        ("CARD.MIRAGE", 0),
-    ]);
-    play(&mut simulator, "CARD.DEADLY_POISON");
-    play(&mut simulator, "CARD.DEADLY_POISON");
-    play(&mut simulator, "CARD.MIRAGE");
-    assert_eq!(player(&simulator).block, 10);
-    assert_eq!(pile(&simulator, PileName::Exhaust), ["CARD.MIRAGE"]);
+    for upgrade in [0, 1] {
+        let mut simulator = crowd(&[
+            ("CARD.DEADLY_POISON", 0),
+            ("CARD.DEADLY_POISON", 0),
+            ("CARD.MIRAGE", upgrade),
+        ]);
+        play(&mut simulator, "CARD.DEADLY_POISON");
+        play(&mut simulator, "CARD.DEADLY_POISON");
+        let before = energy(&simulator);
+        play(&mut simulator, "CARD.MIRAGE");
+        assert_eq!(player(&simulator).block, 10);
+        assert_eq!(before - energy(&simulator), 1, "at level {upgrade}");
+        if upgrade == 0 {
+            assert_eq!(pile(&simulator, PileName::Exhaust), ["CARD.MIRAGE"]);
+        } else {
+            assert_eq!(pile(&simulator, PileName::Exhaust), Vec::<String>::new());
+            assert!(pile(&simulator, PileName::Discard).contains(&"CARD.MIRAGE".to_owned()));
+        }
+    }
 }
 
 /// A grand finale can only be played on an empty draw pile.

@@ -397,9 +397,9 @@ fn commons() -> Vec<CardDefinition> {
                 CardType::Attack,
                 TargetType::AnyEnemy,
                 1,
-                vec![attack(10), free_for_the_combat()],
+                vec![attack(11), free_for_the_combat()],
             ),
-            vec![attack(13), free_for_the_combat()],
+            vec![attack(15), free_for_the_combat()],
         )),
         upgrading(
             card(
@@ -762,12 +762,12 @@ fn uncommons() -> Vec<CardDefinition> {
                 TargetType::AnyEnemy,
                 3,
                 vec![
-                    multi_attack(Amount::Fixed(9), Amount::Fixed(2)),
+                    multi_attack(Amount::Fixed(10), Amount::Fixed(2)),
                     channel_times(GLASS, 2),
                 ],
             ),
             vec![
-                multi_attack(Amount::Fixed(12), Amount::Fixed(2)),
+                multi_attack(Amount::Fixed(13), Amount::Fixed(2)),
                 channel_times(GLASS, 2),
             ],
         )),
@@ -865,23 +865,23 @@ fn uncommons() -> Vec<CardDefinition> {
                 CardType::Attack,
                 TargetType::AnyEnemy,
                 3,
-                vec![energy_for_a_kill(24, 3)],
+                vec![energy_for_a_kill(26, 3)],
             ),
-            vec![energy_for_a_kill(32, 3)],
+            vec![energy_for_a_kill(34, 3)],
         )),
-        // Focus worth two for every distinct kind of orb its owner is
-        // holding, as a power that gives it back at the end of the turn.
-        uncommon(upgrade_drops_exhaust(exhausting(upgrading_in_place(card(
-            "CARD.SYNCHRONIZE",
-            CardType::Skill,
-            TargetType::SelfTarget,
-            1,
-            vec![apply_power(
-                "POWER.SYNCHRONIZE_POWER",
-                CreatureSelector::Owner,
-                Amount::per(0, 2, Count::DistinctOrbModelsHeld),
-            )],
-        ))))),
+        // Focus worth one for every distinct kind of orb its owner is
+        // holding, two once upgraded, as a power that gives it back at the end
+        // of the turn.
+        uncommon(upgrading(
+            card(
+                "CARD.SYNCHRONIZE",
+                CardType::Skill,
+                TargetType::SelfTarget,
+                1,
+                vec![synchronize(1)],
+            ),
+            vec![synchronize(2)],
+        )),
         uncommon(upgrading(
             card(
                 "CARD.SYNTHESIS",
@@ -933,9 +933,9 @@ fn uncommons() -> Vec<CardDefinition> {
                 CardType::Power,
                 TargetType::SelfTarget,
                 1,
-                vec![buff("POWER.THUNDER_POWER", 6)],
+                vec![buff("POWER.THUNDER_POWER", 8)],
             ),
-            vec![buff("POWER.THUNDER_POWER", 8)],
+            vec![buff("POWER.THUNDER_POWER", 11)],
         )),
         uncommon(upgrading_cost(
             exhausting(card(
@@ -948,6 +948,15 @@ fn uncommons() -> Vec<CardDefinition> {
             0,
         )),
     ]
+}
+
+/// Focus for every distinct kind of orb its owner holds, lent for the turn.
+fn synchronize(per: i32) -> Command {
+    apply_power(
+        "POWER.SYNCHRONIZE_POWER",
+        CreatureSelector::Owner,
+        Amount::per(0, per, Count::DistinctOrbModelsHeld),
+    )
 }
 
 /// Every transformable status card of the hand, each turned into a Fuel that
@@ -1204,23 +1213,9 @@ fn rares() -> Vec<CardDefinition> {
                 CardType::Attack,
                 TargetType::AllEnemies,
                 2,
-                vec![
-                    sweep(28, 1),
-                    apply_power(
-                        "POWER.FOCUS_POWER",
-                        CreatureSelector::Owner,
-                        Amount::Fixed(-3),
-                    ),
-                ],
+                vec![sweep(24, 1), hyperbeam_focus_down()],
             ),
-            vec![
-                sweep(36, 1),
-                apply_power(
-                    "POWER.FOCUS_POWER",
-                    CreatureSelector::Owner,
-                    Amount::Fixed(-3),
-                ),
-            ],
+            vec![sweep(30, 1), hyperbeam_focus_down()],
         )),
         rare(upgrading(
             card(
@@ -1262,8 +1257,9 @@ fn rares() -> Vec<CardDefinition> {
             vec![reshuffle_the_hand(), draw(6)],
         ))),
         // Every orb evoked twice, front first, and taken out of the queue on
-        // the second of the two. The count is taken before the loop opens.
-        rare(upgrading(
+        // the second of the two. The count is taken before the loop opens,
+        // and the card burns up.
+        rare(exhausting(upgrading(
             card(
                 "CARD.SHATTER",
                 CardType::Attack,
@@ -1272,7 +1268,7 @@ fn rares() -> Vec<CardDefinition> {
                 vec![sweep(7, 1), evoke_every_orb_twice()],
             ),
             vec![sweep(11, 1), evoke_every_orb_twice()],
-        )),
+        ))),
         rare(exhausting(upgrading_cost(
             card(
                 "CARD.SIGNAL_BOOST",
@@ -1305,13 +1301,17 @@ fn rares() -> Vec<CardDefinition> {
             ),
             vec![energy(6)],
         ))),
-        rare(innate_when_upgraded(upgrading_in_place(card(
-            "CARD.TRASH_TO_TREASURE",
-            CardType::Power,
-            TargetType::SelfTarget,
-            1,
-            vec![buff("POWER.TRASH_TO_TREASURE_POWER", 1)],
-        )))),
+        // Upgrading it makes it free rather than Innate.
+        rare(upgrading_cost(
+            card(
+                "CARD.TRASH_TO_TREASURE",
+                CardType::Power,
+                TargetType::SelfTarget,
+                1,
+                vec![buff("POWER.TRASH_TO_TREASURE_POWER", 1)],
+            ),
+            0,
+        )),
         // One Lightning orb for every Lightning orb its owner has already
         // channelled in this fight.
         rare(upgrade_drops_exhaust(exhausting(upgrading_in_place(card(
@@ -1332,6 +1332,15 @@ fn rares() -> Vec<CardDefinition> {
             vec![channel(LIGHTNING), channel(FROST), channel(DARK)],
         ))))),
     ]
+}
+
+/// The Focus a hyperbeam takes away until the end of the turn.
+fn hyperbeam_focus_down() -> Command {
+    apply_power(
+        "POWER.HYPERBEAM_FOCUS_DOWN_POWER",
+        CreatureSelector::Owner,
+        Amount::Fixed(3),
+    )
 }
 
 /// A copy of the card, free for the rest of the fight, into the discard
@@ -1476,12 +1485,12 @@ fn ancients_and_multiplayer() -> Vec<CardDefinition> {
                 TargetType::SelfTarget,
                 1,
                 vec![
-                    buff("POWER.FOCUS_POWER", 4),
+                    buff("POWER.FOCUS_POWER", 5),
                     buff("POWER.BIASED_COGNITION_POWER", 1),
                 ],
             ),
             vec![
-                buff("POWER.FOCUS_POWER", 5),
+                buff("POWER.FOCUS_POWER", 6),
                 buff("POWER.BIASED_COGNITION_POWER", 1),
             ],
         )),

@@ -10535,6 +10535,42 @@ impl Simulator {
         })
     }
 
+    /// A power's own trigger, asked for by something other than the turn: the
+    /// body it runs as its owner's side's turn opens, tested as though that
+    /// turn had just opened.
+    fn trigger_power(
+        &mut self,
+        owner: CreatureCombatId,
+        model_id: &ModelId,
+        instance: u64,
+    ) -> Result<(), EngineError> {
+        let listener = Listener {
+            owner,
+            source: ListenerSource::Power,
+            model_id: model_id.clone(),
+            power_instance: Some(instance),
+        };
+        let registry = Arc::clone(&self.content);
+        let hooks = registry
+            .listener_hooks(&listener)
+            .iter()
+            .filter(|hook| hook.event == crate::HookEvent::AfterSideTurnStart);
+        let mut hook_context = self.hook_context.clone();
+        hook_context.side = Some(self.creature(owner)?.side);
+        hook_context.value.target = Some(owner);
+        self.without_suspension("a power triggered out of turn", true, |simulator| {
+            for hook in hooks {
+                if !simulator.hook_condition_holds(&hook.condition, &listener, &hook_context)? {
+                    continue;
+                }
+                let context = simulator.listener_command_context(&listener);
+                let mut events = Vec::new();
+                simulator.run_commands(&hook.commands, &context, &mut events)?;
+            }
+            Ok(())
+        })
+    }
+
     /// The stacking half of an application. The listeners see the offset rather
     /// than the total, and a power worked out of existence by it is gone.
     fn modify_power_amount(
@@ -14590,6 +14626,24 @@ impl Simulator {
                     }
                 }
             }
+            // The named creatures are fixed before the first trigger, so one
+            // that dies of its own poison does not change who comes after it.
+            PowerCmd::Trigger { power, targets } => {
+                for owner in self.resolve_creatures(targets.clone(), context)? {
+                    if self.combat_is_ending() {
+                        break;
+                    }
+                    let instance = self
+                        .creature(owner)?
+                        .powers
+                        .iter()
+                        .find(|instance| instance.model_id == *power)
+                        .map(|instance| instance.instance);
+                    if let Some(instance) = instance {
+                        self.trigger_power(owner, power, instance)?;
+                    }
+                }
+            }
             // Every power the owner holds but the one that is kept, and a
             // removal for each of them, in the order the owner holds them.
             PowerCmd::RemoveOwnersOtherPowers { keep } => {
@@ -18642,6 +18696,10 @@ impl Simulator {
             }
             CardFilter::NotRetainingThisTurn | CardFilter::NotRetained => !self.card_retains(card),
             CardFilter::NotEthereal => !self.card_is_ethereal(card),
+            CardFilter::PlayableEthereal => {
+                self.card_is_ethereal(card)
+                    && self.fingerprint_passes(&card.fingerprint, &[CardFilter::Playable])
+            }
             // Costs energy now and does not cost X, which only the copy can
             // answer. The cost asked about is the card's own, with what was put
             // on the card itself over it and nothing a power or a relic says
@@ -18734,6 +18792,14 @@ impl Simulator {
             CardFilter::Ethereal => self
                 .content
                 .card_has_keyword(fingerprint, crate::CardKeyword::Ethereal),
+            // Off a combat pile the copy answers for itself; a card standing
+            // nowhere answers as its model is written.
+            CardFilter::PlayableEthereal => {
+                definition.is_some_and(|definition| !definition.unplayable)
+                    && self
+                        .content
+                        .card_has_keyword(fingerprint, crate::CardKeyword::Ethereal)
+            }
             // The type half of the Sly filter is still answered here.
             CardFilter::NotSlyOfType(card_type) | CardFilter::OfType(card_type) => {
                 self.content.card_type_of(fingerprint) == Some(*card_type)

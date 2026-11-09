@@ -180,7 +180,7 @@ fn the_silent_card_pool_is_the_eighty_a_rarity_rolls() {
             "CARD.FINISHER",
             "CARD.FLECHETTES",
             "CARD.FLICK_FLACK",
-            "CARD.SCARE",
+            "CARD.SIDESTEP",
             "CARD.FOOTWORK",
             "CARD.GRAND_FINALE",
             "CARD.HAND_TRICK",

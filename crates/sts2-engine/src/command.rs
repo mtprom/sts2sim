@@ -1453,6 +1453,14 @@ pub enum PowerCmd {
     /// in the order the owner holds them, which is what a hatching egg does to
     /// everything but the power that makes it a minion.
     RemoveOwnersOtherPowers { keep: Vec<ModelId> },
+    /// What a power's own trigger does where something other than the turn
+    /// asks for it, the way an Outbreak sets every enemy's poison off: the
+    /// body the power runs as its owner's side's turn opens, run now for each
+    /// named creature that carries it, in the order they are named.
+    Trigger {
+        power: ModelId,
+        targets: CreatureSelector,
+    },
     /// Adjusts a power instance's own stored variable. The build has no
     /// command for this: a power keeps its variables itself and changes them
     /// where it needs to, the way an Inferno grows the damage it deals itself
@@ -2254,6 +2262,9 @@ pub enum CardFilter {
     /// The card is ethereal as its model is written, rather than as a
     /// particular copy of it stands: the pool cards a big hat can conjure.
     Ethereal,
+    /// The card is ethereal as this copy stands and can be played: what an
+    /// Eidolon plays back out of the exhaust pile.
+    PlayableEthereal,
     /// A card of the colorless pool, which is what an heirloom hammer copies
     /// out of the hand.
     Colorless,
