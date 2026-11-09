@@ -1,14 +1,25 @@
-//! Deterministic random behavior from STS2 `v0.107.1`.
+//! Deterministic random behavior from STS2 `v0.111.0` (public beta).
 //!
 //! The high-level [`Rng`] counts one consumed Xoshiro output per uniform draw.
 //! Composite operations such as Gaussian sampling and shuffle consume through
 //! those primitives, so their counters match save data and replay projections.
+//!
+//! Seeds are 64-bit. A string becomes a seed through [`deterministic_hash`],
+//! the 64-bit `XXH64` of its UTF-8 bytes, and every derived stream adds such
+//! a hash to its parent's seed with wrapping 64-bit arithmetic. The build
+//! saves a stream as its counter plus the four raw generator words; every
+//! draw the high-level wrapper makes is counted, so the seed and counter
+//! reconstruct exactly those words ([`Rng::state_words`]).
 
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
 use serde::{Deserialize, Serialize};
+
+mod xxhash;
+
+pub use xxhash::{xxh32, xxh64};
 
 const SPLITMIX_INCREMENT: u64 = 11_400_714_819_323_198_485;
 const SPLITMIX_MULTIPLIER_1: u64 = 13_787_848_793_156_543_929;
@@ -137,14 +148,14 @@ impl Default for MegaRandom {
 /// Serializable identity of one high-level RNG.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RngState {
-    pub seed: u32,
+    pub seed: u64,
     pub counter: u64,
 }
 
 /// A counted gameplay RNG matching the build's own.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Rng {
-    seed: u32,
+    seed: u64,
     counter: u64,
     random: MegaRandom,
 }
@@ -152,11 +163,11 @@ pub struct Rng {
 impl Rng {
     /// Creates a stream and advances it to `counter`.
     #[must_use]
-    pub fn with_counter(seed: u32, counter: u64) -> Self {
+    pub fn with_counter(seed: u64, counter: u64) -> Self {
         let mut rng = Self {
             seed,
             counter: 0,
-            random: MegaRandom::new(u64::from(seed)),
+            random: MegaRandom::new(seed),
         };
         // Construction starts from zero, so this cannot fail.
         rng.fast_forward(counter).expect("fresh RNG can advance");
@@ -165,39 +176,47 @@ impl Rng {
 
     /// Creates a stream at counter zero.
     #[must_use]
-    pub fn new(seed: u32) -> Self {
+    pub fn new(seed: u64) -> Self {
         Self::with_counter(seed, 0)
     }
 
-    /// Derives the named stream using wrapping 32-bit addition.
+    /// Derives the named stream using wrapping 64-bit addition.
     #[must_use]
-    pub fn named(seed: u32, name: &str) -> Self {
-        Self::new(seed.wrapping_add(deterministic_hash(name) as u32))
+    pub fn named(seed: u64, name: &str) -> Self {
+        Self::new(seed.wrapping_add(deterministic_hash(name)))
     }
 
     /// Derives a stream the build builds from the run seed string alone.
     ///
     /// The seed must already be canonical; the stream is the one the lobby
-    /// stands up, seeded from the deterministic hash of that seed string taken
-    /// as an unsigned 32-bit number and then named.
+    /// stands up, seeded from the deterministic hash of that seed string and
+    /// then named. The lobby hashes the string itself, so a legacy `old`
+    /// prefix is hashed with the rest rather than routed through
+    /// [`run_seed_value`].
     #[must_use]
     pub fn for_seed(seed: &str, stream: SeedStream) -> Self {
-        Self::named(deterministic_hash(seed) as u32, stream.name())
+        Self::named(deterministic_hash(seed), stream.name())
     }
 
     /// Derives a content-local stream from run, player, model entry, and mixin.
     #[must_use]
-    pub fn content_local(run_seed: u32, player_slot: u32, model_entry: &str, mixin: u32) -> Self {
+    pub fn content_local(run_seed: u64, player_slot: u32, model_entry: &str, mixin: u64) -> Self {
         let seed = run_seed
-            .wrapping_add(player_slot)
-            .wrapping_add(deterministic_hash(model_entry) as u32)
+            .wrapping_add(u64::from(player_slot))
+            .wrapping_add(deterministic_hash(model_entry))
             .wrapping_add(mixin);
         Self::new(seed)
     }
 
     #[must_use]
-    pub const fn seed(&self) -> u32 {
+    pub const fn seed(&self) -> u64 {
         self.seed
+    }
+
+    /// The four raw generator words the build saves beside the counter.
+    #[must_use]
+    pub const fn state_words(&self) -> [u64; 4] {
+        self.random.state()
     }
 
     #[must_use]
@@ -442,9 +461,35 @@ pub fn canonicalize_seed(seed: &str) -> String {
         .to_owned()
 }
 
-/// Deterministic string hash over UTF-16 code units with wrapping `i32` math.
+/// The build's deterministic string hash: `XXH64` of the UTF-8 bytes under a
+/// zero seed.
 #[must_use]
-pub fn deterministic_hash(value: &str) -> i32 {
+pub fn deterministic_hash(value: &str) -> u64 {
+    xxh64(value.as_bytes(), 0)
+}
+
+/// The prefix a run seed saved before the 64-bit hash carries. The build
+/// still loads such runs: their numeric seed is the old hash of the rest of
+/// the string, widened from 32 bits.
+pub const LEGACY_SEED_PREFIX: &str = "old";
+
+/// The numeric seed a run's own stream set stands on.
+///
+/// Every other string the build hashes goes through [`deterministic_hash`]
+/// directly, including the run seed where the lobby and the player streams
+/// read it; only the run's stream set honors the legacy prefix.
+#[must_use]
+pub fn run_seed_value(seed: &str) -> u64 {
+    match seed.strip_prefix(LEGACY_SEED_PREFIX) {
+        Some(rest) => u64::from(deterministic_hash_old(rest) as u32),
+        None => deterministic_hash(seed),
+    }
+}
+
+/// The hash the build used before `v0.109`: 32-bit, over UTF-16 code units,
+/// with wrapping `i32` math. The build keeps it only for legacy seeds.
+#[must_use]
+pub fn deterministic_hash_old(value: &str) -> i32 {
     let units: Vec<u16> = value.encode_utf16().collect();
     let mut first = 352_654_597_i32;
     let mut second = first;
@@ -567,7 +612,7 @@ pub struct SerializableRunRngSet {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RunRngSet {
     string_seed: String,
-    seed: u32,
+    seed: u64,
     streams: BTreeMap<RunStream, Rng>,
 }
 
@@ -576,7 +621,7 @@ impl RunRngSet {
     #[must_use]
     pub fn new(seed: impl Into<String>) -> Self {
         let string_seed = seed.into();
-        let numeric_seed = deterministic_hash(&string_seed) as u32;
+        let numeric_seed = run_seed_value(&string_seed);
         let streams = RunStream::ALL
             .into_iter()
             .map(|stream| (stream, Rng::named(numeric_seed, stream.name())))
@@ -599,7 +644,7 @@ impl RunRngSet {
     }
 
     #[must_use]
-    pub const fn seed(&self) -> u32 {
+    pub const fn seed(&self) -> u64 {
         self.seed
     }
 
@@ -648,20 +693,20 @@ impl RunRngSet {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SerializablePlayerRngSet {
-    pub seed: u32,
+    pub seed: u64,
     pub counters: BTreeMap<PlayerStream, u64>,
 }
 
 /// Complete stream set for one stable player slot.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlayerRngSet {
-    seed: u32,
+    seed: u64,
     streams: BTreeMap<PlayerStream, Rng>,
 }
 
 impl PlayerRngSet {
     #[must_use]
-    pub fn new(seed: u32) -> Self {
+    pub fn new(seed: u64) -> Self {
         let streams = PlayerStream::ALL
             .into_iter()
             .map(|stream| (stream, Rng::named(seed, stream.name())))
@@ -672,11 +717,11 @@ impl PlayerRngSet {
     /// Derives the player seed from the run seed string and stable slot index.
     #[must_use]
     pub fn for_player(run_seed: &str, slot_index: u32) -> Self {
-        Self::new((deterministic_hash(run_seed) as u32).wrapping_add(slot_index))
+        Self::new(deterministic_hash(run_seed).wrapping_add(u64::from(slot_index)))
     }
 
     #[must_use]
-    pub const fn seed(&self) -> u32 {
+    pub const fn seed(&self) -> u64 {
         self.seed
     }
 
@@ -728,10 +773,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn seed_canonicalization_and_utf16_hashing_are_pinned() {
+    fn seed_canonicalization_and_hashing_are_pinned() {
         assert_eq!(canonicalize_seed("  n3z9ee2cob\n"), "N3Z9EE2C0B");
-        assert_eq!(deterministic_hash("N3Z9EE2CXB") as u32, 420_526_101);
-        assert_eq!(deterministic_hash("A😀B"), -314_900_378);
+        // XXH64 over UTF-8, checked against the reference C library.
+        assert_eq!(deterministic_hash("N3Z9EE2CXB"), 15_366_357_754_332_970_376);
+        assert_eq!(deterministic_hash("A😀B"), 13_265_266_347_483_789_756);
+        // The legacy hash over UTF-16 code units, still read for `old` seeds.
+        assert_eq!(deterministic_hash_old("N3Z9EE2CXB") as u32, 420_526_101);
+        assert_eq!(deterministic_hash_old("A😀B"), -314_900_378);
+    }
+
+    #[test]
+    fn a_legacy_prefix_routes_only_the_run_streams_through_the_old_hash() {
+        assert_eq!(
+            run_seed_value("N3Z9EE2CXB"),
+            deterministic_hash("N3Z9EE2CXB")
+        );
+        assert_eq!(run_seed_value("oldN3Z9EE2CXB"), 420_526_101);
+        let legacy = RunRngSet::new("oldN3Z9EE2CXB");
+        assert_eq!(legacy.seed(), 420_526_101);
+        assert_eq!(
+            legacy.stream(RunStream::UpFront).seed(),
+            1_912_476_648_099_608_213
+        );
+        // The player streams hash the whole string, prefix included.
+        assert_eq!(
+            PlayerRngSet::for_player("oldN3Z9EE2CXB", 0).seed(),
+            deterministic_hash("oldN3Z9EE2CXB")
+        );
     }
 
     #[test]
@@ -817,27 +886,63 @@ mod tests {
 
     #[test]
     fn named_player_and_content_streams_match_fixture_seeds() {
+        // Every derivation is the parent seed plus an XXH64, wrapping at 64
+        // bits; the expected values were summed independently of this crate.
         let run = RunRngSet::new("N3Z9EE2CXB");
-        assert_eq!(run.seed(), 420_526_101);
-        assert_eq!(run.stream(RunStream::UpFront).seed(), 3_480_746_352);
-        assert_eq!(run.stream(RunStream::CombatOrbs).seed(), 1_668_475_230);
+        assert_eq!(run.seed(), 15_366_357_754_332_970_376);
+        assert_eq!(
+            run.stream(RunStream::UpFront).seed(),
+            17_278_834_402_012_052_488
+        );
+        assert_eq!(
+            run.stream(RunStream::CombatOrbs).seed(),
+            7_403_189_023_458_028_250
+        );
 
         let player = PlayerRngSet::for_player("N3Z9EE2CXB", 0);
-        assert_eq!(player.seed(), 420_526_101);
-        assert_eq!(player.stream(PlayerStream::Rewards).seed(), 4_256_445_359);
-        assert_eq!(player.stream(PlayerStream::Shops).seed(), 2_840_321_520);
+        assert_eq!(player.seed(), 15_366_357_754_332_970_376);
+        assert_eq!(
+            player.stream(PlayerStream::Rewards).seed(),
+            17_740_809_554_748_926_267
+        );
+        assert_eq!(
+            player.stream(PlayerStream::Shops).seed(),
+            12_633_667_890_946_099_443
+        );
+        assert_eq!(
+            PlayerRngSet::for_player("N3Z9EE2CXB", 1).seed(),
+            15_366_357_754_332_970_377
+        );
 
         let act_selection = Rng::for_seed("N3Z9EE2CXB", SeedStream::ActSelection);
-        assert_eq!(act_selection.seed(), 3_953_569_258);
+        assert_eq!(act_selection.seed(), 5_685_260_305_087_343_320);
         assert_eq!(
             Rng::for_seed("X7JFABM2QS", SeedStream::ActSelection).seed(),
-            2_880_999_506
+            2_815_585_460_295_337_659
         );
 
         let local = Rng::content_local(run.seed(), 0, "BASH", 7);
-        assert_eq!(local.seed(), 3_612_350_988);
+        assert_eq!(local.seed(), 360_806_818_363_246_207);
         let monster = Rng::new(run.seed().wrapping_add(3).wrapping_add(12));
-        assert_eq!(monster.seed(), 420_526_116);
+        assert_eq!(monster.seed(), 15_366_357_754_332_970_391);
+    }
+
+    #[test]
+    fn seed_and_counter_reconstruct_the_saved_generator_words() {
+        // The build saves the four raw words; a counted stream rebuilt from
+        // its seed lands on exactly the words the raw generator reaches after
+        // that many outputs.
+        let mut counted = Rng::new(0x0123_4567_89ab_cdef);
+        for _ in 0..37 {
+            counted.next_bool();
+        }
+        let mut raw = MegaRandom::new(0x0123_4567_89ab_cdef);
+        for _ in 0..37 {
+            raw.next_u64();
+        }
+        assert_eq!(counted.state_words(), raw.state());
+        let rebuilt = Rng::from_state(counted.to_state());
+        assert_eq!(rebuilt.state_words(), raw.state());
     }
 
     #[test]
@@ -936,7 +1041,7 @@ mod tests {
     /// act one.
     #[test]
     fn gaussian_vectors_are_pinned_across_platforms() {
-        const VECTORS: [(u32, u64, u64, i32, u64, u32, u64); 5] = [
+        const VECTORS: [(u64, u64, u64, i32, u64, u32, u64); 5] = [
             (1, 13_835_631_089_280_702_353, 8, 12, 2, 3_222_292_831, 8),
             (7, 13_835_580_905_022_827_277, 2, 10, 2, 3_222_199_356, 2),
             (42, 13_836_017_557_355_122_814, 2, 12, 2, 3_223_012_684, 2),

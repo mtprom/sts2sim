@@ -485,7 +485,7 @@ mod tests {
             json!(["ENCOUNTER.WATERFALL_GIANT_BOSS"]);
         let sim = recorded_run("X7JFABM2QS", 10, sts2_engine::RunMode::Standard, &start).unwrap();
         let run = sim.state().run.as_ref().unwrap();
-        assert_eq!(run.acts[0].boss.to_string(), "ENCOUNTER.SOUL_FYSH_BOSS");
+        assert_eq!(run.acts[0].boss.to_string(), "ENCOUNTER.VANTOM_BOSS");
         assert_eq!(
             run.acts[1].boss.to_string(),
             "ENCOUNTER.THE_INSATIABLE_BOSS"
@@ -506,7 +506,8 @@ mod tests {
     #[test]
     fn explicit_empty_discovery_is_distinct_from_legacy_all_discovered() {
         let mut start = profile_start();
-        let legacy = recorded_run("N3Z9EE2CXB", 0, sts2_engine::RunMode::Standard, &start).unwrap();
+        // A seed whose roll opens in the Overgrowth under the beta's seed hash.
+        let legacy = recorded_run("X7JFABM2QS", 0, sts2_engine::RunMode::Standard, &start).unwrap();
         assert_eq!(
             legacy.state().run.as_ref().unwrap().acts[0]
                 .act_model
@@ -515,7 +516,7 @@ mod tests {
         );
         start.payload["data"]["profile"] = json!({"discovered_acts":[]});
         let undiscovered =
-            recorded_run("N3Z9EE2CXB", 0, sts2_engine::RunMode::Standard, &start).unwrap();
+            recorded_run("X7JFABM2QS", 0, sts2_engine::RunMode::Standard, &start).unwrap();
         assert_eq!(
             undiscovered.state().run.as_ref().unwrap().acts[0]
                 .act_model
@@ -524,7 +525,7 @@ mod tests {
         );
         start.payload["data"]["profile"] = json!({"discovered_acts":["ACT.UNDERDOCKS"]});
         let discovered =
-            recorded_run("N3Z9EE2CXB", 0, sts2_engine::RunMode::Standard, &start).unwrap();
+            recorded_run("X7JFABM2QS", 0, sts2_engine::RunMode::Standard, &start).unwrap();
         assert_eq!(
             discovered.state().run.as_ref().unwrap().acts,
             legacy.state().run.as_ref().unwrap().acts

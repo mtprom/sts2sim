@@ -239,16 +239,13 @@ fn a_raider_opens_on_its_own_machines_first_state() {
             .collect::<Vec<_>>(),
         vec![
             (
-                "MONSTER.ASSASSIN_RUBY_RAIDER".to_owned(),
-                "KILLSHOT_MOVE".to_owned()
+                "MONSTER.TRACKER_RUBY_RAIDER".to_owned(),
+                "TRACK_MOVE".to_owned()
             ),
+            ("MONSTER.AXE_RUBY_RAIDER".to_owned(), "SWING_1".to_owned()),
             (
                 "MONSTER.CROSSBOW_RUBY_RAIDER".to_owned(),
                 "RELOAD_MOVE".to_owned()
-            ),
-            (
-                "MONSTER.BRUTE_RUBY_RAIDER".to_owned(),
-                "BEAT_MOVE".to_owned()
             ),
         ]
     );
@@ -350,7 +347,7 @@ fn the_rat_room_fills_its_back_three_slots_and_rotates_their_openers() {
         "SCREECH_MOVE".to_owned(),
     ];
     let mut seen = BTreeSet::new();
-    for floor in 1..12 {
+    for floor in 1..20 {
         let fight = walk_in("ENCOUNTER.TWO_TAILED_RATS_NORMAL", floor);
         assert_eq!(
             enemies(&fight)

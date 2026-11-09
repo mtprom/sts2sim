@@ -19,17 +19,23 @@ fn act_ids(selection: &sts2_content::ActSelection) -> Vec<String> {
     selection.acts.iter().map(ToString::to_string).collect()
 }
 
+// The v0.111.0 beta hashes a seed with 64-bit XXH64, so the seeds the
+// v0.107.1 recordings pinned no longer roll what they did. Until beta
+// recordings exist, the expected rolls below come from an independent model
+// of the build's derivation (seed hash, named stream, xoshiro256**) written
+// apart from this crate, not from this crate's own output.
+
 #[test]
-fn seeds_recorded_opening_in_the_overgrowth_roll_it() {
+fn seeds_that_roll_the_overgrowth_open_in_it() {
     // Every one of these seeds opens in the Overgrowth and goes on to the
     // Hive and Glory; the act list is settled by the seed before any play,
     // and this is it.
     for seed in [
-        "N3Z9EE2CXB",
-        "QEY5K1P4LY",
-        "R8F8NFB8Y1",
-        "PCJZ1E6BT4",
+        "X7JFABM2QS",
         "BPK46736W9",
+        "04Z9EE2CXB",
+        "08Z9EE2CXB",
+        "12Z9EE2CXB",
     ] {
         // `Act1` defaults to `random` and the build hides the dropdown that
         // would change it, so this is the setting every run plays under.
@@ -53,7 +59,7 @@ fn a_seed_that_rolls_the_alternate_act_opens_in_underdocks() {
     // This seed opens in `ACT.UNDERDOCKS`: the act list is settled before
     // anything else in the run rolls, and this is what the roll reproduces.
     let selection = pinned_act_selection(
-        "X7JFABM2QS",
+        "N3Z9EE2CXB",
         ActOneSetting::Random,
         &id("CHARACTER.IRONCLAD"),
     )
@@ -161,11 +167,11 @@ fn a_locked_alternate_act_is_no_candidate_at_all() {
 fn a_random_character_is_rolled_off_the_same_stream_after_the_acts() {
     let (unlocks, discovered) = baseline();
     for (seed, expected) in [
-        ("N3Z9EE2CXB", "CHARACTER.NECROBINDER"),
-        ("X7JFABM2QS", "CHARACTER.REGENT"),
-        ("QEY5K1P4LY", "CHARACTER.IRONCLAD"),
-        ("R8F8NFB8Y1", "CHARACTER.IRONCLAD"),
-        ("PCJZ1E6BT4", "CHARACTER.REGENT"),
+        ("N3Z9EE2CXB", "CHARACTER.DEFECT"),
+        ("X7JFABM2QS", "CHARACTER.IRONCLAD"),
+        ("R8F8NFB8Y1", "CHARACTER.SILENT"),
+        ("BPK46736W9", "CHARACTER.NECROBINDER"),
+        ("03Z9EE2CXB", "CHARACTER.REGENT"),
     ] {
         let selection = select_acts(
             seed,
@@ -189,7 +195,7 @@ fn a_random_character_is_rolled_off_the_same_stream_after_the_acts() {
 #[test]
 fn a_run_that_rolls_the_defect_is_stood_up_as_his() {
     let simulator = sts2_content::standard_ironclad_run_with(
-        "06Z9EE2CXB",
+        "N3Z9EE2CXB",
         ActOneSetting::Random,
         &id(RANDOM_CHARACTER),
     )
@@ -209,7 +215,7 @@ fn a_run_that_rolls_the_defect_is_stood_up_as_his() {
 #[test]
 fn a_run_that_rolls_the_regent_is_stood_up_as_his() {
     let simulator = sts2_content::standard_ironclad_run_with(
-        "X7JFABM2QS",
+        "03Z9EE2CXB",
         ActOneSetting::Random,
         &id(RANDOM_CHARACTER),
     )
@@ -227,7 +233,7 @@ fn a_run_that_rolls_the_regent_is_stood_up_as_his() {
 #[test]
 fn a_run_that_rolls_the_necrobinder_is_stood_up_as_hers() {
     let simulator = sts2_content::standard_ironclad_run_with(
-        "N3Z9EE2CXB",
+        "BPK46736W9",
         ActOneSetting::Random,
         &id(RANDOM_CHARACTER),
     )
@@ -245,7 +251,7 @@ fn a_run_that_rolls_the_necrobinder_is_stood_up_as_hers() {
 #[test]
 fn a_run_that_opens_in_the_underdocks_generates() {
     let simulator =
-        sts2_content::standard_ironclad_run("X7JFABM2QS").expect("the seeded run generates");
+        sts2_content::standard_ironclad_run("N3Z9EE2CXB").expect("the seeded run generates");
     let run = simulator.state().run.as_ref().expect("the run exists");
     assert_eq!(
         run.acts[0].act_model.to_string(),

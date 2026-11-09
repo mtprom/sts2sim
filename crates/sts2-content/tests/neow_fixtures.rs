@@ -168,8 +168,11 @@ fn neows_bones_wait_for_both_relics_without_holding_the_claimed_relics_body() {
     use sts2_engine::Action;
     use sts2_rng::RunStream;
 
+    // A seed whose Neow offers the bones, whose bones deal the Large Capsule
+    // and the Cursed Pearl, and whose capsule draws nothing off the niche
+    // stream, so that stream moving is the curse and nothing else.
     let mut simulator =
-        sts2_content::standard_ironclad_run("N3EWU9Z7TK").expect("the run generates");
+        sts2_content::standard_ironclad_run("N3EWU9ZHHX").expect("the run generates");
     let bones = simulator.legal_actions().iter().find(|action| {
         matches!(action, Action::ChooseEvent { option_id, .. } if option_id.ends_with(".NEOWS_BONES"))
     }).cloned().expect("Neow offers the bones");

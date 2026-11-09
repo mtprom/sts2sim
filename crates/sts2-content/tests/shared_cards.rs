@@ -1991,10 +1991,10 @@ fn an_entropy_puts_its_power_on_and_nothing_else() {
         "one card of the hand turns into another every turn while it stands"
     );
 
-    // A stream position at which the two filters part ways: with the
-    // combat-ineligible cards taken out ahead of the roll, the transform
-    // lands on Refine Blade rather than Reflect.
-    let mut transformed = ScenarioBuilder::new("ZPBUDFAAAA", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+    // A seed at which the two filters part ways: with the combat-ineligible
+    // cards taken out ahead of the roll, the transform lands on Radiate
+    // rather than Refine Blade.
+    let mut transformed = ScenarioBuilder::new("ZPBUDFAA0L", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
         .played_as(id("CHARACTER.REGENT"))
         .player_hp(75, 75)
         .energy(3, 3)
@@ -2014,7 +2014,7 @@ fn an_entropy_puts_its_power_on_and_nothing_else() {
     end_turn(&mut transformed);
     assert_eq!(
         pile(&transformed, PileName::Hand),
-        ["CARD.REFINE_BLADE"],
+        ["CARD.RADIATE"],
         "the combat-ineligible Royalties is removed before this roll"
     );
     assert_eq!(

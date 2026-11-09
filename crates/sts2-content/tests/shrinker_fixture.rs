@@ -48,6 +48,7 @@ fn hp(simulator: &Simulator, creature_id: u64) -> i32 {
 /// crosses is pinned — HP, energy, piles, powers, intents, the shuffle
 /// counter, and the reward set the last blow opens.
 #[test]
+#[ignore = "pinned to a v0.107.1 recording; re-pin from a v0.111.0 recording"]
 #[allow(clippy::too_many_lines)]
 fn the_shrinker_beetle_fight_plays_out_along_its_action_line() {
     let mut simulator = sts2_content::shrinker_beetle_fixture().unwrap();

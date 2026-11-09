@@ -14,7 +14,12 @@ use sts2_engine::{
     RunState, Simulator,
 };
 
-const SEED: &str = "N3Z9EE2CXB";
+// The v0.107.1 reference seed rolled the Overgrowth; under the beta's 64-bit
+// seed hash it rolls the Underdocks, so the reference moved to a seed that
+// opens in the Overgrowth again (checked against an independent model of the
+// beta's act roll). The per-level details pinned below are this crate's own
+// output for that seed until a beta recording confirms them.
+const SEED: &str = "X7JFABM2QS";
 
 fn id(value: &str) -> sts2_core::ModelId {
     value.parse().expect("static model ID")
@@ -75,7 +80,7 @@ fn the_reference_seed_generates_the_same_run_at_every_level_but_for_the_rules() 
         (7, 64, 2, 11, 8, None),
         (8, 64, 2, 11, 8, None),
         (9, 64, 2, 11, 8, None),
-        (10, 64, 2, 11, 8, Some("ENCOUNTER.AEONGLASS_BOSS")),
+        (10, 64, 2, 11, 8, Some("ENCOUNTER.QUEEN_BOSS")),
     ];
     for (ascension, hp, potions, deck, elites, second_boss) in expected {
         let simulator = run_at(ascension);
@@ -119,7 +124,7 @@ fn the_reference_seed_generates_the_same_run_at_every_level_but_for_the_rules() 
                 .map(|act| act.boss.to_string())
                 .collect::<Vec<_>>(),
             [
-                "ENCOUNTER.THE_KIN_BOSS",
+                "ENCOUNTER.VANTOM_BOSS",
                 "ENCOUNTER.KAISER_CRAB_BOSS",
                 "ENCOUNTER.TEST_SUBJECT_BOSS"
             ],
@@ -173,8 +178,8 @@ fn swarming_elites_puts_eight_elite_points_on_a_map_that_carried_five() {
     ] {
         assert_eq!(count(below, family), count(at, family), "{family:?} points");
     }
-    assert_eq!(count(below, MapPointType::RestSite), [9, 9, 7]);
-    assert_eq!(count(at, MapPointType::RestSite), [9, 9, 5]);
+    assert_eq!(count(below, MapPointType::RestSite), [8, 11, 8]);
+    assert_eq!(count(at, MapPointType::RestSite), [8, 11, 8]);
 }
 
 // --- 2: Weary Traveler ----------------------------------------------------
@@ -224,7 +229,7 @@ fn poverty_pays_three_quarters_of_a_monster_room_s_purse() {
 /// And a chest's own gold, which is rolled and then scaled the same way.
 #[test]
 fn poverty_takes_a_quarter_off_a_chest_s_gold() {
-    for (ascension, gained) in [(2, 50_i32), (3, 37)] {
+    for (ascension, gained) in [(2, 44_i32), (3, 33)] {
         let mut simulator = one_room_run(ascension, RoomChoice::Treasure);
         let before = simulator.state().run_player.gold;
         walk_to(&mut simulator, 4);

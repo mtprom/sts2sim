@@ -1,11 +1,13 @@
-use sts2_rng::{Rng, deterministic_hash};
+use sts2_rng::{Rng, run_seed_value};
 
-const CURSES: [&str; 8] = [
+const CURSES: [&str; 10] = [
     "CURSED_PEARL",
+    "DOWSING_ROD",
     "HEFTY_TABLET",
     "LARGE_CAPSULE",
     "LEAFY_POULTICE",
     "NEOWS_BONES",
+    "NEOWS_SACRIFICE",
     "PRECARIOUS_SHEARS",
     "SILKEN_TRESS",
     "SILVER_CRUCIBLE",
@@ -41,9 +43,9 @@ pub fn standard_neow_options(seed: &str) -> Vec<String> {
 /// starts from.
 #[must_use]
 pub fn standard_neow_page(seed: &str) -> (Vec<String>, u64) {
-    let run_seed = deterministic_hash(seed) as u32;
-    let event_seed = run_seed.wrapping_add(deterministic_hash("NEOW") as u32);
-    let mut rng = Rng::new(event_seed);
+    // An event's stream is the run seed plus the player's slot (zero alone)
+    // plus the hash of the event's own entry.
+    let mut rng = Rng::content_local(run_seed_value(seed), 0, "NEOW", 0);
 
     let curse = CURSES[rng
         .next_index(CURSES.len())
@@ -55,6 +57,9 @@ pub fn standard_neow_page(seed: &str) -> (Vec<String>, u64) {
         "HEFTY_TABLET" => positive.retain(|option| *option != "ARCANE_SCROLL"),
         "LEAFY_POULTICE" => positive.retain(|option| *option != "NEW_LEAF"),
         "PRECARIOUS_SHEARS" => positive.retain(|option| *option != "PRECISE_SCISSORS"),
+        "NEOWS_SACRIFICE" => {
+            positive.retain(|option| !matches!(*option, "PHIAL_HOLSTER" | "LOST_COFFER"));
+        }
         _ => {}
     }
     if curse != "LARGE_CAPSULE" {

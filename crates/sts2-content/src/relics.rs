@@ -5911,9 +5911,11 @@ fn skin_of_four() -> sts2_engine::RolledSkin {
 fn neow_option_relics() -> Vec<sts2_core::ModelId> {
     [
         "RELIC.CURSED_PEARL",
+        "RELIC.DOWSING_ROD",
         "RELIC.HEFTY_TABLET",
         "RELIC.LARGE_CAPSULE",
         "RELIC.LEAFY_POULTICE",
+        "RELIC.NEOWS_SACRIFICE",
         "RELIC.PRECARIOUS_SHEARS",
         "RELIC.SILKEN_TRESS",
         "RELIC.SILVER_CRUCIBLE",
@@ -5954,6 +5956,10 @@ fn offered_only(model_id: &str) -> RelicDefinition {
 #[allow(clippy::too_many_lines, reason = "one entry per relic")]
 fn neow_relics() -> Vec<RelicDefinition> {
     vec![
+        // A dowsing rod puts the Dowsing quest in the deck.
+        upon_pickup(offered_only("RELIC.DOWSING_ROD")),
+        // Neow's sacrifice procures an Ambergris and adds a Guilty curse.
+        upon_pickup(offered_only("RELIC.NEOWS_SACRIFICE")),
         // Cursed Pearl pays 333 gold for a Greed curse, both as it is
         // obtained, in that order.
         RelicDefinition {
