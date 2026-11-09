@@ -555,6 +555,49 @@ fn a_blood_potion_heals_a_fifth_of_the_maximum() {
     assert_eq!(player(&simulator).current_hp, 46);
 }
 
+/// An ambergris heals half the maximum, and drunk in a fight it buys one more
+/// turn in place of the enemy's. Taking that turn spends it, so the next turn
+/// hands over as usual.
+#[test]
+fn an_ambergris_heals_half_and_buys_one_more_turn() {
+    let mut simulator = ScenarioBuilder::new(SEED, id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .player_hp(30, 80)
+        .energy(9, 9)
+        .turn(1, 1)
+        .potions(vec![Some(id("POTION.AMBERGRIS")), None, None])
+        .rng_counter(RunStream::MonsterAi, 0)
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 39, 39, "SHRINKER_MOVE")
+        .build(sts2_content::standard_registry())
+        .expect("the scenario builds");
+    let round_and_turn = |simulator: &Simulator| {
+        let combat = simulator
+            .state()
+            .combat
+            .as_ref()
+            .expect("the fight is standing");
+        (combat.round, combat.player.turn)
+    };
+    drink(&mut simulator, "POTION.AMBERGRIS");
+    assert_eq!(player(&simulator).current_hp, 70);
+    assert_eq!(power_amount(&simulator, 0, "POWER.AMBERGRIS_POWER"), 1);
+
+    end_turn(&mut simulator);
+    assert_eq!(
+        round_and_turn(&simulator),
+        (1, 2),
+        "the enemy never took its turn"
+    );
+    assert_eq!(power_amount(&simulator, 0, "POWER.AMBERGRIS_POWER"), 0);
+    assert_eq!(
+        power_amount(&simulator, 0, "POWER.SHRINK_POWER"),
+        0,
+        "the beetle never shrank anyone"
+    );
+
+    end_turn(&mut simulator);
+    assert_eq!(round_and_turn(&simulator), (2, 3));
+}
+
 /// A fruit juice raises the maximum and heals by as much.
 #[test]
 fn a_fruit_juice_raises_the_maximum() {

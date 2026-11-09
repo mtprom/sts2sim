@@ -1970,6 +1970,15 @@ pub enum CardSelector {
         #[serde(default = "any_card")]
         filter: CardFilter,
     },
+    /// The same set, shuffled in deck order on the named stream, and the
+    /// first `take` of what comes back, which is what a relic that enchants a
+    /// few cards of the deck at random as it is taken reads.
+    ShuffledDeckCardsEnchantableBy {
+        enchantment: ModelId,
+        take: Amount,
+        #[serde(default = "shuffle_stream")]
+        stream: ShuffleStream,
+    },
     /// Every card anywhere in the combat that passes the filter, whichever
     /// pile it stands in.
     AllCombatCards { filter: CardFilter },
@@ -2241,6 +2250,9 @@ pub enum CardFilter {
     /// The card carries no Innate keyword, which is what a body looking for a
     /// card of the draw pile worth burning prefers on the opening turn.
     NotInnate,
+    /// A card of the type that carries no Innate keyword, which is what a
+    /// jeweled mask prefers out of the draw pile.
+    NotInnateOfType(CardType),
     /// The card has an energy cost that can be written over: a cost that is
     /// not below nothing before anything stands on it, and not X. That is what
     /// a snecko oil asks before it rolls a new one.

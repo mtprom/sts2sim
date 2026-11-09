@@ -351,11 +351,11 @@ fn commons() -> Vec<CardDefinition> {
                     CardType::Attack,
                     TargetType::AnyEnemy,
                     1,
-                    vec![attack(12), draw(2)],
+                    vec![attack(12), buff("POWER.DRAW_CARDS_NEXT_TURN_POWER", 2)],
                 ),
-                vec![attack(13), draw(3)],
+                vec![attack(13), buff("POWER.DRAW_CARDS_NEXT_TURN_POWER", 3)],
             ),
-            2,
+            1,
         ),
         upgrading(
             card(

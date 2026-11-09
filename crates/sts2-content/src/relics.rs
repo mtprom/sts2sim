@@ -1749,9 +1749,9 @@ fn event_relics() -> Vec<RelicDefinition> {
             ],
             ..obtained_only("RELIC.HAND_DRILL", RelicRarity::Event)
         },
-        // A history course replays the last attack or skill its owner played
-        // the turn before, as a copy that goes nowhere afterwards. The first
-        // turn of a fight has no turn before it.
+        // A history course replays the last attack its owner played the turn
+        // before, as a copy that goes nowhere afterwards. The first turn of a
+        // fight has no turn before it.
         RelicDefinition {
             hooks: vec![ModifierHook::every_turn(
                 HookEvent::AfterAutoPrePlayPhaseEntered,
@@ -1760,10 +1760,7 @@ fn event_relics() -> Vec<RelicDefinition> {
                     condition: Condition::PlayerTurnAtLeast(2),
                     then: vec![Command::Card(sts2_engine::CardCmd::AutoPlayDupe {
                         cards: sts2_engine::CardSelector::LastPlayedLastTurn {
-                            types: vec![
-                                sts2_engine::CardType::Attack,
-                                sts2_engine::CardType::Skill,
-                            ],
+                            types: vec![sts2_engine::CardType::Attack],
                         },
                     })],
                 }],
@@ -5171,40 +5168,22 @@ fn cost_relics() -> Vec<RelicDefinition> {
             ],
             ..obtained_only("RELIC.DIAMOND_DIADEM", RelicRarity::Ancient)
         },
-        // Toasty mittens burn a card off the draw pile before every hand draw
-        // and pay a strength for it. On the opening turn the card burned is
-        // the first that is not innate, and otherwise the first there is.
+        // Toasty mittens put a screen over the hand as every turn of their
+        // owner's opens, once the hand is drawn: the card picked burns, and a
+        // strength is paid whatever was picked.
         RelicDefinition {
             hooks: vec![ModifierHook::every_turn(
-                HookEvent::BeforeHandDraw,
+                HookEvent::AfterPlayerTurnStart,
                 vec![
-                    Command::CardPile(CardPileCmd::ShuffleIfNecessary),
-                    Command::When {
-                        otherwise: Vec::new(),
-                        condition: Condition::PlayerTurnIs(1),
-                        then: vec![Command::Select {
-                            cards: sts2_engine::CardSelector::FirstInPilePreferring {
-                                pile: sts2_engine::PileName::Draw,
-                                preferred: sts2_engine::CardFilter::NotInnate,
-                            },
-                            then: vec![Command::Card(sts2_engine::CardCmd::Exhaust {
-                                cards: sts2_engine::CardSelector::Chosen,
-                            })],
-                        }],
-                    },
-                    Command::When {
-                        otherwise: Vec::new(),
-                        condition: Condition::Not(Box::new(Condition::PlayerTurnIs(1))),
-                        then: vec![Command::Select {
-                            cards: sts2_engine::CardSelector::FirstInPilePreferring {
-                                pile: sts2_engine::PileName::Draw,
-                                preferred: sts2_engine::CardFilter::Any,
-                            },
-                            then: vec![Command::Card(sts2_engine::CardCmd::Exhaust {
-                                cards: sts2_engine::CardSelector::Chosen,
-                            })],
-                        }],
-                    },
+                    Command::CardSelect(sts2_engine::CardSelectCmd::FromHand {
+                        prefs: sts2_engine::SelectorPrefs::exactly(1),
+                        maximum: None,
+                        exact_count: None,
+                        filter: sts2_engine::CardFilter::Any,
+                        then: vec![Command::Card(sts2_engine::CardCmd::Exhaust {
+                            cards: sts2_engine::CardSelector::Chosen,
+                        })],
+                    }),
                     own_power("POWER.STRENGTH_POWER", Amount::Fixed(1)),
                 ],
             )],
@@ -5527,7 +5506,8 @@ fn counting_relics() -> Vec<RelicDefinition> {
             ..obtained_only("RELIC.CROSSBOW", RelicRarity::Ancient)
         },
         // A jeweled mask pulls one power out of the draw pile into the opening
-        // hand, free for the turn.
+        // hand, free for the turn. It passes over an Innate power, which the
+        // opening hand would hold anyway, unless every power there is one.
         RelicDefinition {
             hooks: vec![ModifierHook::every_turn(
                 HookEvent::BeforeHandDraw,
@@ -5537,8 +5517,12 @@ fn counting_relics() -> Vec<RelicDefinition> {
                     then: vec![Command::Select {
                         cards: sts2_engine::CardSelector::RandomFromPile {
                             pile: sts2_engine::PileName::Draw,
-                            filter: sts2_engine::CardFilter::OfType(sts2_engine::CardType::Power),
-                            fallback: None,
+                            filter: sts2_engine::CardFilter::NotInnateOfType(
+                                sts2_engine::CardType::Power,
+                            ),
+                            fallback: Some(sts2_engine::CardFilter::OfType(
+                                sts2_engine::CardType::Power,
+                            )),
                         },
                         then: vec![
                             Command::Card(sts2_engine::CardCmd::SetTemporaryCost {
@@ -5957,9 +5941,25 @@ fn offered_only(model_id: &str) -> RelicDefinition {
 fn neow_relics() -> Vec<RelicDefinition> {
     vec![
         // A dowsing rod puts the Dowsing quest in the deck.
-        upon_pickup(offered_only("RELIC.DOWSING_ROD")),
-        // Neow's sacrifice procures an Ambergris and adds a Guilty curse.
-        upon_pickup(offered_only("RELIC.NEOWS_SACRIFICE")),
+        upon_pickup(RelicDefinition {
+            on_obtained: vec![Command::CardPile(CardPileCmd::AddToDeck {
+                card: CardOrigin::Model(id("CARD.DOWSING")),
+            })],
+            ..obtained_only("RELIC.DOWSING_ROD", RelicRarity::Ancient)
+        }),
+        // Neow's sacrifice puts an Ambergris in the belt where there is room
+        // for one, then a Guilty curse in the deck, in that order.
+        upon_pickup(RelicDefinition {
+            on_obtained: vec![
+                Command::Potion(sts2_engine::PotionCmd::TryToProcure(
+                    sts2_engine::PotionOrigin::Model(id("POTION.AMBERGRIS")),
+                )),
+                Command::CardPile(CardPileCmd::AddToDeck {
+                    card: CardOrigin::Model(id("CARD.GUILTY")),
+                }),
+            ],
+            ..obtained_only("RELIC.NEOWS_SACRIFICE", RelicRarity::Ancient)
+        }),
         // Cursed Pearl pays 333 gold for a Greed curse, both as it is
         // obtained, in that order.
         RelicDefinition {
@@ -6163,13 +6163,19 @@ fn creates(count: usize, rarity: CardRarity) -> CardCreation {
 /// on every deck card it can, or puts one over a card reward.
 fn enchanting_ancients() -> Vec<RelicDefinition> {
     vec![
-        // A beautiful bracelet puts three Swift on three cards of the deck.
+        // A beautiful bracelet puts two Swift on four cards of the deck it
+        // picks itself: whatever Swift can go on, shuffled on the niche
+        // stream, and the first four.
         RelicDefinition {
-            on_obtained: vec![enchant_chosen_deck_cards(
-                "ENCHANTMENT.SWIFT",
-                3,
-                SelectorPrefs::exactly(3),
-            )],
+            on_obtained: vec![Command::Card(CardCmd::Enchant {
+                cards: CardSelector::ShuffledDeckCardsEnchantableBy {
+                    enchantment: id("ENCHANTMENT.SWIFT"),
+                    take: Amount::Fixed(4),
+                    stream: sts2_engine::ShuffleStream::Niche,
+                },
+                enchantment: id("ENCHANTMENT.SWIFT"),
+                amount: Amount::Fixed(2),
+            })],
             ..obtained_only("RELIC.BEAUTIFUL_BRACELET", RelicRarity::Ancient)
         },
         // An electric shrymp puts Imbued on one.

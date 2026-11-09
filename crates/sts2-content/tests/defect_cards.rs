@@ -390,6 +390,27 @@ fn a_rocket_punch_swings_and_draws() {
     assert_eq!(pile(&simulator, PileName::Hand).len(), 1);
 }
 
+/// Every status its owner conjures into the fight takes a point off a Rocket
+/// Punch until it is next played, wherever the punch is standing. The two
+/// Wounds a Fight Through deals out make it free, and the play spends the
+/// discount.
+#[test]
+fn a_rocket_punch_is_cheaper_for_every_conjured_status() {
+    let mut simulator = scenario(&Fight {
+        hand: &[("CARD.FIGHT_THROUGH", 0), ("CARD.ROCKET_PUNCH", 0)],
+        draw: &[("CARD.ROCKET_PUNCH", 0), ("CARD.STRIKE_DEFECT", 0)],
+        ..Fight::default()
+    });
+    play(&mut simulator, "CARD.FIGHT_THROUGH");
+    let after_the_wounds = player(&simulator).energy;
+    play(&mut simulator, "CARD.ROCKET_PUNCH");
+    assert_eq!(player(&simulator).energy, after_the_wounds, "two off two");
+    // The punch it drew was listening from the draw pile, so it is free too.
+    play(&mut simulator, "CARD.ROCKET_PUNCH");
+    assert_eq!(player(&simulator).energy, after_the_wounds);
+    assert_eq!(39 - creature(&simulator, 1).current_hp, 26);
+}
+
 /// A Scrape draws four and discards whatever still costs something.
 #[test]
 fn a_scrape_keeps_only_what_costs_nothing() {

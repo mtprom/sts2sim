@@ -201,7 +201,7 @@ fn imbued() -> EnchantmentDefinition {
     }
 }
 
-/// Inky: one more damage, and one Weak on whatever the play reached.
+/// Inky: one Weak on whatever the play reached, and nothing on the damage.
 ///
 /// The debuff goes on the play's own target unless the card aims at the whole
 /// enemy side, in which case it goes on every enemy that can be hit.
@@ -216,10 +216,6 @@ fn inky() -> EnchantmentDefinition {
         })
     };
     EnchantmentDefinition {
-        value_hooks: vec![powered(
-            HookEvent::EnchantDamageAdditive,
-            vec![Command::Modify(ModifierCmd::Add(Amount::Fixed(1)))],
-        )],
         on_play: vec![
             Command::When {
                 otherwise: Vec::new(),

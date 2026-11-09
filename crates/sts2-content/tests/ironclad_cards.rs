@@ -842,33 +842,19 @@ fn an_evil_eye_pays_twice_once_something_has_burned() {
     }
 }
 
-/// A forgotten ritual asks before it burns itself, so playing it first pays
-/// nothing at all.
+/// A forgotten ritual pays its energy whether or not anything has burned this
+/// turn, and burns itself for having been played.
 #[test]
-fn a_forgotten_ritual_does_not_count_its_own_burn() {
+fn a_forgotten_ritual_pays_outright() {
     for (upgrade, gained) in [(0, 3), (1, 4)] {
         let mut simulator = fight(&[("CARD.FORGOTTEN_RITUAL", upgrade)]);
         let before = energy(&simulator);
         play(&mut simulator, "CARD.FORGOTTEN_RITUAL");
-        assert_eq!(
-            energy(&simulator),
-            before - 1,
-            "it costs its energy and pays none back"
-        );
+        assert_eq!(energy(&simulator), before - 1 + gained);
         assert_eq!(
             pile(&simulator, PileName::Exhaust),
             ["CARD.FORGOTTEN_RITUAL"]
         );
-
-        let mut simulator = fight(&[
-            ("CARD.FORGOTTEN_RITUAL", upgrade),
-            ("CARD.IMPERVIOUS", 0),
-            ("CARD.STRIKE_IRONCLAD", 0),
-        ]);
-        play(&mut simulator, "CARD.IMPERVIOUS");
-        let before = energy(&simulator);
-        play(&mut simulator, "CARD.FORGOTTEN_RITUAL");
-        assert_eq!(energy(&simulator), before - 1 + gained);
     }
 }
 

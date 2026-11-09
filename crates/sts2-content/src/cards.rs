@@ -1262,18 +1262,16 @@ fn burning_cards() -> Vec<CardDefinition> {
             ),
             evil_eye(11),
         ),
-        // A forgotten ritual pays nothing at all unless something has already
-        // burned this turn. It burns itself for having been played, which is
-        // after its body has asked.
+        // A forgotten ritual pays its energy outright and burns.
         exhausting(upgrading(
             card(
                 "CARD.FORGOTTEN_RITUAL",
                 CardType::Skill,
                 TargetType::SelfTarget,
                 1,
-                forgotten_ritual(3),
+                vec![energy(3)],
             ),
-            forgotten_ritual(4),
+            vec![energy(4)],
         )),
         // A drum of battle draws when it is played and pays energy when it
         // burns, however it comes to burn. The energy is its own var, so the
@@ -1293,14 +1291,6 @@ fn evil_eye(block_amount: i32) -> Vec<Command> {
             then: vec![block(block_amount)],
         },
     ]
-}
-
-fn forgotten_ritual(amount: i32) -> Vec<Command> {
-    vec![Command::When {
-        otherwise: Vec::new(),
-        condition: Condition::OwnerExhaustedACardThisTurn,
-        then: vec![energy(amount)],
-    }]
 }
 
 /// Drum of Battle: the draw is what playing it does, and the energy is its own

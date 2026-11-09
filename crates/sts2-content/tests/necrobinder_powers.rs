@@ -422,6 +422,38 @@ fn the_whole_doomed_list_goes_down_in_one_pass() {
     );
 }
 
+/// Regeneration heals in the early pass of a turn's end, ahead of Doom on
+/// either side: a creature it lifts above its Doom is not doomed when Doom asks.
+/// On the player's side Doom asks only once the turn is over.
+#[test]
+fn regeneration_heals_ahead_of_doom_on_either_side() {
+    let mut simulator = scenario(&Fight {
+        player_hp: 10,
+        powers: &[
+            (0, "POWER.DOOM_POWER", 12, PowerType::Debuff),
+            (0, "POWER.REGEN_POWER", 5, PowerType::Buff),
+        ],
+        ..Fight::default()
+    });
+    end_turn(&mut simulator);
+    assert_eq!(
+        simulator.state().terminal,
+        None,
+        "the player was lifted to 15"
+    );
+
+    let mut simulator = scenario(&Fight {
+        enemies: &[10],
+        powers: &[
+            (1, "POWER.DOOM_POWER", 12, PowerType::Debuff),
+            (1, "POWER.REGEN_POWER", 5, PowerType::Buff),
+        ],
+        ..Fight::default()
+    });
+    end_turn(&mut simulator);
+    assert_eq!(hp_of(&simulator, 1), Some(15), "the beetle was lifted too");
+}
+
 /// The player's own side is a side like any other: as her turn ends, as much
 /// Doom on her as she has HP left takes her down, and the enemies never get to
 /// act on the turn it happens.

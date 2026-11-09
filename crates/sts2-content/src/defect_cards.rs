@@ -771,7 +771,7 @@ fn uncommons() -> Vec<CardDefinition> {
                 channel_times(GLASS, 2),
             ],
         )),
-        uncommon(upgrading(
+        uncommon(cheaper_for_every_conjured_status(upgrading(
             card(
                 "CARD.ROCKET_PUNCH",
                 CardType::Attack,
@@ -780,7 +780,7 @@ fn uncommons() -> Vec<CardDefinition> {
                 vec![attack(13), draw(1)],
             ),
             vec![attack(14), draw(2)],
-        )),
+        ))),
         uncommon(upgrading(
             card(
                 "CARD.SCAVENGE",
@@ -1037,6 +1037,25 @@ fn burn_one_card_of_the_hand() -> Command {
 
 /// That many cards drawn, and every one of them that still costs something,
 /// or costs X, discarded.
+/// Rocket Punch, as a card is conjured into the fight: every status its owner
+/// conjures takes a point off its cost until it is next played.
+fn cheaper_for_every_conjured_status(mut definition: CardDefinition) -> CardDefinition {
+    definition.hooks.push(
+        sts2_engine::ModifierHook::every_turn(
+            sts2_engine::HookEvent::AfterCardGeneratedForCombat,
+            vec![Command::Card(CardCmd::AddCostUntilPlayed {
+                cards: CardSelector::Source,
+                amount: Amount::Fixed(-1),
+            })],
+        )
+        .when(sts2_engine::HookCondition::All(vec![
+            sts2_engine::HookCondition::OwnerConjuredTheCard,
+            sts2_engine::HookCondition::ConjuredCardIsOfType(CardType::Status),
+        ])),
+    );
+    definition
+}
+
 fn draw_and_discard_what_costs_something(count: i32) -> Command {
     Command::Drawn {
         count: Amount::Fixed(count),

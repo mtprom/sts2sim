@@ -606,8 +606,9 @@ fn phantom_blades_pay_for_the_first_shiv_of_a_turn() {
     );
 }
 
-/// Tracking multiplies what its owner's cards deal to anything shaken, and
-/// leaves everything else where it was.
+/// Tracking adds its amount as a percentage to what its owner's cards deal to
+/// anything shaken, and leaves everything else where it was. Two of them come
+/// to twice over.
 #[test]
 fn tracking_multiplies_what_lands_on_the_weakened() {
     let mut simulator = Fight {
@@ -625,6 +626,21 @@ fn tracking_multiplies_what_lands_on_the_weakened() {
         ..Fight::default()
     }
     .build();
+    play(&mut simulator, "CARD.TRACKING");
+    play(&mut simulator, "CARD.SLICE");
+    assert_eq!(creature(&simulator, 1).current_hp, 39 - 9, "half again");
+
+    let mut simulator = Fight {
+        powers: &[(1, "POWER.WEAK_POWER", 1, PowerType::Debuff)],
+        hand: &[
+            ("CARD.TRACKING", 0),
+            ("CARD.TRACKING", 0),
+            ("CARD.SLICE", 0),
+        ],
+        ..Fight::default()
+    }
+    .build();
+    play(&mut simulator, "CARD.TRACKING");
     play(&mut simulator, "CARD.TRACKING");
     play(&mut simulator, "CARD.SLICE");
     assert_eq!(creature(&simulator, 1).current_hp, 39 - 12, "twice over");

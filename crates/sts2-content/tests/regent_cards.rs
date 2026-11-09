@@ -1183,16 +1183,27 @@ fn a_prophesize_draws() {
     }
 }
 
-/// A guiding star is a blow and a draw.
+/// A guiding star costs one star, and is a blow and a draw owed for next turn
+/// rather than one made now.
 #[test]
-fn a_guiding_star_draws_behind_its_blow() {
-    for (level, damage, drawn) in [(0, 12, 2), (1, 13, 3)] {
+fn a_guiding_star_owes_its_draw_for_next_turn() {
+    for (level, damage, owed) in [(0, 12, 2), (1, 13, 3)] {
         let draw = stack("CARD.STRIKE_REGENT", 3);
         let mut simulator = built(scenario(&[200], &[("CARD.GUIDING_STAR", level)], &draw, 20));
+        assert_eq!(costs(&simulator, "CARD.GUIDING_STAR").1, 1);
         let hp = hp_of(&simulator, 1);
+        let held = stars(&simulator);
         play(&mut simulator, "CARD.GUIDING_STAR");
         assert_eq!(hp - hp_of(&simulator, 1), damage, "at level {level}");
-        assert_eq!(pile(&simulator, PileName::Hand).len(), drawn);
+        assert_eq!(stars(&simulator), held - 1);
+        assert!(
+            pile(&simulator, PileName::Hand).is_empty(),
+            "nothing drawn yet"
+        );
+        assert_eq!(
+            power_amount(&simulator, 0, "POWER.DRAW_CARDS_NEXT_TURN_POWER"),
+            owed
+        );
     }
 }
 

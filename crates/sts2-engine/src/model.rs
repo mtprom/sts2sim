@@ -1351,6 +1351,10 @@ pub enum HookEvent {
     /// machinery yet; anything that answers it for another room is unsupported
     /// until it does.
     AfterRoomEntered,
+    /// As a map point's room is about to be entered, once it has been worked
+    /// out and before anything in it runs. Only a Dowsing listens, to count
+    /// the unknown points it is carried onto.
+    BeforeRoomEntered,
     /// Once for each creature that has gone down, over the run's listeners.
     AfterDeath,
     /// Once for the whole list a doom kill took down. A doom kill takes the
@@ -1525,6 +1529,7 @@ impl HookEvent {
             | Self::BeforeCombatStart
             | Self::BeforeCombatStartLate
             | Self::AfterDeath
+            | Self::BeforeRoomEntered
             | Self::AfterRoomEntered => ListenerScope::Run,
             // The reward passes walk the run list with no combat behind it at
             // all, so a fight standing behind the reward screen takes no part
@@ -2096,6 +2101,10 @@ pub struct PowerDefinition {
     /// The whole hand stays where it is at the end of the turn.
     #[serde(default)]
     pub keeps_hand: bool,
+    /// While its amount is above nothing, the player who carries it is owed
+    /// another turn as theirs ends, the way an Ambergris buys one.
+    #[serde(default)]
+    pub grants_an_extra_turn: bool,
     /// What the power does as it comes off, whether it was taken off outright
     /// or fell away at nothing.
     #[serde(default)]

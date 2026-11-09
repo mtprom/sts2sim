@@ -34,6 +34,7 @@ fn power(model_id: &str, power_type: PowerType, hooks: Vec<ModifierHook>) -> Pow
         temporary: None,
         play_restriction: None,
         owner_death_triggers_fatal: true,
+        grants_an_extra_turn: false,
         keeps_block: false,
         stops_draws_outside_hand_draw: false,
         keeps_hand: false,

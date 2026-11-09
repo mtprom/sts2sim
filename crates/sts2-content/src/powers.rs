@@ -31,6 +31,7 @@ fn power(model_id: &str, power_type: PowerType, stack_type: PowerStackType) -> P
         temporary: None,
         play_restriction: None,
         owner_death_triggers_fatal: true,
+        grants_an_extra_turn: false,
         keeps_block: false,
         stops_draws_outside_hand_draw: false,
         keeps_hand: false,
@@ -164,6 +165,7 @@ fn minion_power(model_id: &str) -> PowerDefinition {
         // A minion's death is not a fatal blow: killing a minion is not the
         // kill a Feed asks for.
         owner_death_triggers_fatal: false,
+        grants_an_extra_turn: false,
         ..single(model_id, PowerType::Buff)
     }
 }
@@ -387,6 +389,7 @@ fn reattach_power() -> PowerDefinition {
 fn burrowed_power() -> PowerDefinition {
     PowerDefinition {
         owner_death_triggers_fatal: true,
+        grants_an_extra_turn: false,
         keeps_block: true,
         stops_draws_outside_hand_draw: false,
         keeps_hand: false,
@@ -585,6 +588,7 @@ fn possession(model_id: &str, stat: &str) -> PowerDefinition {
 fn reacting_powers() -> Vec<PowerDefinition> {
     vec![
         flex_potion_power(),
+        ambergris_power(),
         // An illusion holds the field when it dies and comes back whole, and
         // marks its owner a minion as it lands.
         PowerDefinition {
@@ -968,6 +972,20 @@ fn flex_potion_power() -> PowerDefinition {
             positive: true,
         }),
         ..counter("POWER.FLEX_POTION_POWER", PowerType::Buff)
+    }
+}
+
+/// The extra turn an Ambergris drunk in a fight buys. While any of it is left
+/// its owner is owed another turn as theirs ends, and each turn taken that way
+/// spends one.
+fn ambergris_power() -> PowerDefinition {
+    PowerDefinition {
+        grants_an_extra_turn: true,
+        hooks: vec![ModifierHook::every_turn(
+            HookEvent::AfterTakingExtraTurn,
+            vec![decrement()],
+        )],
+        ..counter("POWER.AMBERGRIS_POWER", PowerType::Buff)
     }
 }
 
@@ -2017,13 +2035,14 @@ fn free_attack_power() -> PowerDefinition {
     }
 }
 
-/// Regeneration heals its owner at the end of every turn it takes part in, and
-/// counts itself down for it.
+/// Regeneration heals its owner as every turn it takes part in begins to end,
+/// in the early pass ahead of Doom and of the orbs, and counts itself down for
+/// it.
 fn regen_power() -> PowerDefinition {
     PowerDefinition {
         hooks: vec![
             ModifierHook::every_turn(
-                HookEvent::AfterSideTurnEnd,
+                HookEvent::BeforeSideTurnEndEarly,
                 vec![
                     Command::Creature(CreatureCmd::Heal {
                         target: CreatureSelector::Owner,
@@ -2036,6 +2055,21 @@ fn regen_power() -> PowerDefinition {
         ],
         ..counter("POWER.REGEN_POWER", PowerType::Buff)
     }
+}
+
+/// Doom's kill, asked of one doomed creature: where it is standing and the
+/// first of the doomed on its side, the whole doomed list goes down.
+fn doom_kill() -> Vec<Command> {
+    vec![Command::When {
+        otherwise: Vec::new(),
+        condition: Condition::All(vec![
+            Condition::OwnerIsAlive,
+            Condition::OwnerIsTheFirstDoomedOnItsSide,
+        ]),
+        then: vec![Command::Creature(CreatureCmd::DoomKill {
+            target: CreatureSelector::DoomedOnOwnersSide,
+        })],
+    }]
 }
 
 /// A speed potion lends dexterity for the turn, the way flex lends strength.
@@ -2135,6 +2169,7 @@ fn ironclad_card_powers() -> Vec<PowerDefinition> {
         // whole of it.
         PowerDefinition {
             owner_death_triggers_fatal: true,
+            grants_an_extra_turn: false,
             keeps_block: true,
             stops_draws_outside_hand_draw: false,
             keeps_hand: false,
@@ -3825,7 +3860,8 @@ pub fn silent_powers() -> Vec<PowerDefinition> {
             ],
             ..counter("POWER.TOOLS_OF_THE_TRADE_POWER", PowerType::Buff)
         },
-        // Tracking multiplies what its owner's cards deal to anything shaken.
+        // Tracking adds its amount, as a percentage, to what its owner's cards
+        // deal to anything shaken.
         PowerDefinition {
             hooks: vec![modifies(
                 HookEvent::ModifyDamageMultiplicative,
@@ -3834,8 +3870,8 @@ pub fn silent_powers() -> Vec<PowerDefinition> {
                     otherwise: Vec::new(),
                     condition: Condition::TargetHasPower(id("POWER.WEAK_POWER")),
                     then: vec![Command::Modify(ModifierCmd::Scale(Amount::per(
-                        0,
                         100,
+                        1,
                         Count::ListeningPowerAmount,
                     )))],
                 }],
@@ -4994,23 +5030,23 @@ pub fn necrobinder_powers() -> Vec<PowerDefinition> {
         // Doom is a countdown on somebody else's life: as the side it is on
         // ends its turn, every creature there carrying at least as much of it
         // as it has HP left goes down, and the whole list goes down from the
-        // first of them rather than one at a time.
+        // first of them rather than one at a time. The enemy side is asked
+        // before its turn ends; the player's side once it has, which is after
+        // the orbs have fired and the hand has gone down.
         PowerDefinition {
             hooks: vec![
-                ModifierHook::every_turn(
-                    HookEvent::BeforeSideTurnEnd,
-                    vec![Command::When {
-                        otherwise: Vec::new(),
-                        condition: Condition::All(vec![
-                            Condition::OwnerIsAlive,
-                            Condition::OwnerIsTheFirstDoomedOnItsSide,
-                        ]),
-                        then: vec![Command::Creature(CreatureCmd::DoomKill {
-                            target: CreatureSelector::DoomedOnOwnersSide,
-                        })],
-                    }],
-                )
-                .when(HookCondition::OwnerIsParticipant),
+                ModifierHook::every_turn(HookEvent::BeforeSideTurnEnd, doom_kill()).when(
+                    HookCondition::All(vec![
+                        HookCondition::OwnerIsParticipant,
+                        HookCondition::EnemySideTurn,
+                    ]),
+                ),
+                ModifierHook::every_turn(HookEvent::AfterSideTurnEnd, doom_kill()).when(
+                    HookCondition::All(vec![
+                        HookCondition::OwnerIsParticipant,
+                        HookCondition::PlayerSideTurn,
+                    ]),
+                ),
             ],
             ..counter("POWER.DOOM_POWER", PowerType::Debuff)
         },

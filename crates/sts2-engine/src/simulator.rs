@@ -5259,6 +5259,11 @@ impl Simulator {
     }
 
     pub(crate) fn enter_room(&mut self, definition: RoomDefinition) -> Result<(), EngineError> {
+        // The build pushes the room and asks the run's listeners about it
+        // before the room itself is entered. Only a map point's first room is
+        // entered here, so what a listener reads as the point's room count is
+        // always one.
+        self.dispatch_hooks(&[crate::HookEvent::BeforeRoomEntered], &HookContext::none())?;
         self.record_room_visit(&definition);
         let mut fill_the_chest = false;
         let active = match definition {
@@ -18302,6 +18307,33 @@ impl Simulator {
                     })
                     .collect())
             }
+            CardSelector::ShuffledDeckCardsEnchantableBy {
+                enchantment,
+                take,
+                stream,
+            } => {
+                let Some(definition) = self.content.enchantment(enchantment) else {
+                    return Err(unsupported_content(enchantment));
+                };
+                let take = usize::try_from(self.resolve_amount(take, context)?.max(0)).unwrap_or(0);
+                let mut candidates: Vec<(usize, crate::CardFingerprint)> = self
+                    .state
+                    .run_player
+                    .deck
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, fingerprint)| {
+                        self.content.can_enchant(definition, fingerprint, true)
+                    })
+                    .map(|(index, fingerprint)| (index, fingerprint.clone()))
+                    .collect();
+                self.shuffle_on(*stream, &mut candidates)?;
+                candidates.truncate(take);
+                Ok(candidates
+                    .into_iter()
+                    .map(|(index, fingerprint)| ChosenCard::Deck { index, fingerprint })
+                    .collect())
+            }
             CardSelector::DeckCards { filters } => Ok(self
                 .state
                 .run_player
@@ -18823,6 +18855,12 @@ impl Simulator {
             CardFilter::NotInnate => !self
                 .content
                 .card_has_keyword(fingerprint, crate::CardKeyword::Innate),
+            CardFilter::NotInnateOfType(card_type) => {
+                self.content.card_type_of(fingerprint) == Some(*card_type)
+                    && !self
+                        .content
+                        .card_has_keyword(fingerprint, crate::CardKeyword::Innate)
+            }
             CardFilter::NotOfType(card_type) => {
                 definition.is_some() && self.content.card_type_of(fingerprint) != Some(*card_type)
             }
@@ -19830,12 +19868,12 @@ impl Simulator {
     }
 
     /// Whether an extra player turn is owed, which the build asks of every
-    /// player just as the player side is about to hand over. The only listener
-    /// that answers it is a relic, and it answers off what it declares rather
-    /// than a body of its own.
+    /// player just as the player side is about to hand over. A relic answers
+    /// off what it declares rather than a body of its own, and so does a power
+    /// the player carries at more than nothing.
     fn owes_an_extra_player_turn(&self) -> Result<bool, EngineError> {
         let turn = self.combat()?.player.turn;
-        Ok(self.state.run_player.relics.iter().any(|relic| {
+        let owed_by_a_relic = self.state.run_player.relics.iter().any(|relic| {
             !relic.melted
                 && !relic.latched
                 && self
@@ -19843,7 +19881,16 @@ impl Simulator {
                     .relic(&relic.model_id)
                     .and_then(|definition| definition.grants_an_extra_turn.as_ref())
                     .is_some_and(|rule| !self.owner_has_played_a_card_this_turn(turn, rule))
-        }))
+        });
+        let player_id = self.combat()?.player.creature_id;
+        let owed_by_a_power = self.creature(player_id)?.powers.iter().any(|instance| {
+            instance.amount > 0
+                && self
+                    .content
+                    .power(&instance.model_id)
+                    .is_some_and(|definition| definition.grants_an_extra_turn)
+        });
+        Ok(owed_by_a_relic || owed_by_a_power)
     }
 
     /// Whether the player has played a card this turn, as the extra-turn relic

@@ -878,14 +878,14 @@ fn bubble_bubble_only_adds_to_poison_already_there() {
     }
 }
 
-/// Tracking stacks two the first time and one every time after it.
+/// Tracking stacks fifty every time it is played.
 #[test]
-fn tracking_stacks_two_and_then_one() {
+fn tracking_stacks_fifty_every_time() {
     let mut simulator = fight(&[("CARD.TRACKING", 0), ("CARD.TRACKING", 0)]);
     play(&mut simulator, "CARD.TRACKING");
-    assert_eq!(power_amount(&simulator, 0, "POWER.TRACKING_POWER"), 2);
+    assert_eq!(power_amount(&simulator, 0, "POWER.TRACKING_POWER"), 50);
     play(&mut simulator, "CARD.TRACKING");
-    assert_eq!(power_amount(&simulator, 0, "POWER.TRACKING_POWER"), 3);
+    assert_eq!(power_amount(&simulator, 0, "POWER.TRACKING_POWER"), 100);
 }
 
 /// A dodge and roll owes next turn exactly what its block came to.

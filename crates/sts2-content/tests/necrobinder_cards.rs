@@ -552,12 +552,12 @@ fn squeeze_counts_every_other_card_that_swings_the_pet() {
     }
 }
 
-/// A sacrifice puts the pet down and stands its owner behind twice what the pet
-/// was worth. The block is worked out from the pet's maximum before the kill,
+/// A sacrifice puts the pet down and stands its owner behind three times what
+/// the pet was worth. The block is worked out from the pet's maximum before the kill,
 /// because after it there is nothing left to read. Its upgrade makes it free
 /// rather than bigger.
 #[test]
-fn sacrifice_puts_the_pet_down_for_twice_its_size() {
+fn sacrifice_puts_the_pet_down_for_three_times_its_size() {
     for (bodyguard, summoned) in [(0, 5), (1, 7)] {
         for (upgrade, cost) in [(0, 1), (1, 0)] {
             let mut simulator =
@@ -567,7 +567,7 @@ fn sacrifice_puts_the_pet_down_for_twice_its_size() {
             play(&mut simulator, "CARD.SACRIFICE");
             assert_eq!(
                 player(&simulator).block,
-                2 * summoned,
+                3 * summoned,
                 "a pet of {summoned} at level {upgrade}"
             );
             assert_eq!(

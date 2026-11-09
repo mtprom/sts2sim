@@ -445,8 +445,8 @@ fn a_guilt_counts_the_fights_a_run_has_seen_and_then_leaves() {
 #[test]
 fn the_conjured_tokens_pay_out_once_and_burn() {
     for (model_id, upgrade, energy_gained, cards_drawn) in [
-        ("CARD.FUEL", 0, 1, 1),
-        ("CARD.FUEL", 1, 1, 2),
+        ("CARD.FUEL", 0, 1, 0),
+        ("CARD.FUEL", 1, 2, 0),
         ("CARD.LUMINESCE", 0, 2, 0),
         ("CARD.LUMINESCE", 1, 3, 0),
         ("CARD.SOUL", 0, 0, 2),
@@ -1817,6 +1817,82 @@ fn a_discovery_offers_three_and_gives_one_free() {
         .clone();
     assert_eq!(hand.len(), 1);
     assert_eq!(hand[0].energy_cost, 0);
+}
+
+/// An abundance offers three of the character's own powers, upgraded before
+/// the screen goes up, with no way past the screen. The one taken lands in the
+/// hand free for the turn, and the abundance burns.
+#[test]
+fn an_abundance_offers_three_upgraded_powers_and_gives_one_free() {
+    for (upgrade, cost) in [(0, 1), (1, 0)] {
+        let mut simulator = fight(&[("CARD.ABUNDANCE", upgrade)]);
+        let held = |simulator: &Simulator| {
+            simulator
+                .state()
+                .combat
+                .as_ref()
+                .expect("the fight is standing")
+                .player
+                .piles
+                .hand[0]
+                .energy_cost
+        };
+        assert_eq!(held(&simulator), cost);
+        play(&mut simulator, "CARD.ABUNDANCE");
+        let offered: Vec<sts2_engine::CardHandle> = simulator
+            .legal_actions()
+            .iter()
+            .filter_map(|action| match action {
+                Action::ChooseCards { cards, .. } => cards.first().cloned(),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(offered.len(), 3, "three powers and no skip");
+        let registry = sts2_content::standard_registry();
+        let ironclad: Vec<sts2_core::ModelId> = registry
+            .card_pool(&id("CARD_POOL.IRONCLAD_CARD_POOL"))
+            .expect("the walking character's pool is registered")
+            .iter()
+            .map(|card| card.model_id.clone())
+            .collect();
+        for card in &offered {
+            let model_id = &card.fingerprint.model_id;
+            let definition = registry.card(model_id).expect("registered content");
+            assert_eq!(
+                definition.card_type,
+                sts2_engine::CardType::Power,
+                "{model_id}"
+            );
+            assert!(
+                ironclad.contains(model_id),
+                "{model_id} is the walker's own"
+            );
+            assert_eq!(card.fingerprint.upgrade_level, 1, "{model_id} is upgraded");
+        }
+        let taken = offered[0].fingerprint.model_id.clone();
+        let action = simulator
+            .legal_actions()
+            .iter()
+            .find(|action| {
+                matches!(action, Action::ChooseCards { cards, .. }
+                    if cards.first().is_some_and(|card| card.fingerprint.model_id == taken))
+            })
+            .cloned()
+            .expect("the first offer can be taken");
+        simulator.step(action).expect("taking it applies");
+        let piles = &simulator
+            .state()
+            .combat
+            .as_ref()
+            .expect("the fight is standing")
+            .player
+            .piles;
+        assert_eq!(piles.hand.len(), 1);
+        assert_eq!(piles.hand[0].fingerprint.model_id, taken);
+        assert_eq!(piles.hand[0].fingerprint.upgrade_level, 1);
+        assert_eq!(piles.hand[0].energy_cost, 0, "free for the turn");
+        assert_eq!(pile(&simulator, PileName::Exhaust), vec!["CARD.ABUNDANCE"]);
+    }
 }
 
 /// A hidden gem makes one card of the draw pile play twice more.

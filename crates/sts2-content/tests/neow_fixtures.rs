@@ -8,12 +8,14 @@
 fn every_neow_option_a_single_player_run_can_be_offered_is_taken() {
     // Every option Neow can offer, less the massive scroll, whose
     // availability turns on the number of players.
-    const OFFERED: [&str; 27] = [
+    const OFFERED: [&str; 29] = [
         "CURSED_PEARL",
+        "DOWSING_ROD",
         "HEFTY_TABLET",
         "LARGE_CAPSULE",
         "LEAFY_POULTICE",
         "NEOWS_BONES",
+        "NEOWS_SACRIFICE",
         "PRECARIOUS_SHEARS",
         "SILKEN_TRESS",
         "SILVER_CRUCIBLE",
@@ -216,4 +218,88 @@ fn neows_bones_wait_for_both_relics_without_holding_the_claimed_relics_body() {
         niche + 1
     );
     assert!(simulator.state().run.as_ref().unwrap().pending.is_empty());
+}
+
+/// A run that has just taken the named Neow option and nothing else.
+fn take_neow_relic(relic: &str) -> sts2_engine::Simulator {
+    let simulator = sts2_content::standard_ironclad_run("N3Z9EE2CXB").expect("the run generates");
+    let option_id = format!("NEOW.pages.INITIAL.options.{relic}");
+    let mut state = simulator.state().clone();
+    let option = sts2_engine::EventOption {
+        option_id: option_id.clone(),
+        label: option_id.clone(),
+        effects: vec![sts2_engine::EventEffect::ObtainRelic(
+            format!("RELIC.{relic}").parse().expect("static model ID"),
+        )],
+        is_proceed: false,
+        was_chosen: false,
+        locked: false,
+    };
+    if let Some(run) = state.run.as_mut() {
+        if let Some(sts2_engine::ActiveRoom::Event { options, .. }) = run.active_room.as_mut() {
+            *options = vec![option.clone()];
+        }
+        if let Some(begun) = run.begun_event.as_mut() {
+            begun.options = vec![option];
+        }
+    }
+    let mut simulator =
+        sts2_engine::Simulator::from_generated_state(state, sts2_content::standard_registry())
+            .expect("the run stands back up");
+    simulator
+        .step(sts2_engine::Action::ChooseEvent {
+            index: 0,
+            option_id,
+        })
+        .unwrap_or_else(|error| panic!("{relic} stopped: {error:?}"));
+    simulator
+}
+
+fn last_deck_card(simulator: &sts2_engine::Simulator) -> String {
+    simulator
+        .state()
+        .run_player
+        .deck
+        .last()
+        .expect("the deck is not empty")
+        .model_id
+        .to_string()
+}
+
+/// Neow's sacrifice puts an Ambergris in the belt and a Guilty at the end of
+/// the deck.
+#[test]
+fn neows_sacrifice_hands_over_an_ambergris_and_a_guilt() {
+    let simulator = take_neow_relic("NEOWS_SACRIFICE");
+    assert!(
+        simulator
+            .state()
+            .run_player
+            .potions
+            .iter()
+            .flatten()
+            .any(|held| held.to_string() == "POTION.AMBERGRIS"),
+        "the ambergris is in the belt"
+    );
+    assert_eq!(last_deck_card(&simulator), "CARD.GUILTY");
+}
+
+/// A dowsing rod puts a Dowsing at the end of the deck, with nothing counted
+/// yet.
+#[test]
+fn a_dowsing_rod_hands_over_the_quest() {
+    let simulator = take_neow_relic("DOWSING_ROD");
+    assert_eq!(last_deck_card(&simulator), "CARD.DOWSING");
+    let dowsing = simulator
+        .state()
+        .run_player
+        .deck
+        .last()
+        .expect("the deck is not empty");
+    assert!(
+        dowsing
+            .properties
+            .get("RoomsEntered")
+            .is_none_or(|entered| *entered == serde_json::json!(0))
+    );
 }

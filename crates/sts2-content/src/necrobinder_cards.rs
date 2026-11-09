@@ -427,8 +427,8 @@ fn blight_strike(damage: i32) -> Command {
 #[allow(clippy::too_many_lines, reason = "one entry per card")]
 fn the_rest_of_the_pet() -> Vec<CardDefinition> {
     vec![
-        // A sacrifice puts the pet down and stands behind twice what it was
-        // worth. The block is worked out before the kill, because after it
+        // A sacrifice puts the pet down and stands behind three times what it
+        // was worth. The block is worked out before the kill, because after it
         // there is nothing to read.
         retaining(upgrading_cost(
             card(
@@ -439,7 +439,7 @@ fn the_rest_of_the_pet() -> Vec<CardDefinition> {
                 vec![Command::WithAmount {
                     amount: Amount::Scaled {
                         base: 0,
-                        per: 2,
+                        per: 3,
                         count: Count::PetMaxHp,
                     },
                     then: vec![Command::When {

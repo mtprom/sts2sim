@@ -889,6 +889,61 @@ fn a_planisphere_pays_for_an_unknown_point() {
     assert_eq!(run_hp(&simulator), before, "a known rest site pays nothing");
 }
 
+/// A run standing at the fixture map's start with one Dowsing in the deck
+/// that has already counted `entered` unknown points.
+fn run_dowsing(entered: i32) -> Simulator {
+    let mut state = run_holding(&[]).state().clone();
+    let mut dowsing = card("CARD.DOWSING", 0);
+    if entered > 0 {
+        dowsing
+            .properties
+            .insert("RoomsEntered".to_owned(), serde_json::json!(entered));
+    }
+    state.run_player.deck.push(dowsing);
+    Simulator::from_generated_state(state, sts2_content::standard_registry())
+        .expect("the run builds")
+}
+
+/// A Dowsing counts the unknown points its owner walks onto, whatever the point
+/// turned out to be, and on the fifth turns into an Abundance at the end of
+/// the deck. A known point counts nothing.
+#[test]
+fn a_dowsing_counts_unknown_points_and_turns_into_an_abundance() {
+    let deck = |simulator: &Simulator| -> Vec<sts2_engine::CardFingerprint> {
+        simulator.state().run_player.deck.clone()
+    };
+    let dowsing = |simulator: &Simulator| {
+        deck(simulator)
+            .into_iter()
+            .find(|held| held.model_id == id("CARD.DOWSING"))
+    };
+
+    let mut simulator = run_dowsing(0);
+    walk_to(&mut simulator, 2);
+    assert_eq!(
+        dowsing(&simulator).and_then(|held| held.properties.get("RoomsEntered").cloned()),
+        Some(serde_json::json!(1))
+    );
+
+    let mut simulator = run_dowsing(0);
+    walk_to(&mut simulator, 1);
+    assert_eq!(
+        dowsing(&simulator).and_then(|held| held.properties.get("RoomsEntered").cloned()),
+        Some(serde_json::json!(0)),
+        "a known rest site counts nothing"
+    );
+
+    let mut simulator = run_dowsing(4);
+    let before = deck(&simulator).len();
+    walk_to(&mut simulator, 2);
+    let after = deck(&simulator);
+    assert!(dowsing(&simulator).is_none(), "the quest is done");
+    assert_eq!(after.len(), before);
+    let abundance = after.last().expect("the deck is not empty");
+    assert_eq!(abundance.model_id, id("CARD.ABUNDANCE"));
+    assert_eq!(abundance.upgrade_level, 0);
+}
+
 /// A pantograph heals twenty-five as a boss fight opens and nothing as an
 /// ordinary one does.
 #[test]
@@ -3963,6 +4018,65 @@ fn the_ancients_that_stock_the_hand_from_a_pile() {
     );
 }
 
+/// A jeweled mask passes over an Innate power, which the opening hand would
+/// hold anyway, for one that is not.
+#[test]
+fn a_jeweled_mask_prefers_a_power_that_is_not_innate() {
+    let mut state = run_holding(&["RELIC.JEWELED_MASK"]).state().clone();
+    let mut entropy = sts2_engine::CardFingerprint::base(id("CARD.ENTROPY"));
+    entropy.upgrade_level = 1;
+    state.run_player.deck.push(entropy);
+    state
+        .run_player
+        .deck
+        .push(sts2_engine::CardFingerprint::base(id("CARD.INFLAME")));
+    let mut mask = Simulator::from_generated_state(state, sts2_content::standard_registry())
+        .expect("the run rebuilds");
+    walk_to(&mut mask, 3);
+    let hand = &mask
+        .state()
+        .combat
+        .as_ref()
+        .expect("a fight")
+        .player
+        .piles
+        .hand;
+    let free = |model: &str| {
+        hand.iter()
+            .find(|card| card.fingerprint.model_id == id(model))
+            .map(|card| card.temporary_costs.last().map(|cost| cost.cost))
+    };
+    assert_eq!(
+        free("CARD.INFLAME"),
+        Some(Some(0)),
+        "the mask pulled it, free"
+    );
+    assert_eq!(
+        free("CARD.ENTROPY"),
+        Some(None),
+        "drawn as innate, at its own cost"
+    );
+}
+
+/// A history course replays the last attack its owner played the turn before,
+/// passing over a skill played after it.
+#[test]
+fn a_history_course_replays_the_last_attack_and_not_a_skill() {
+    let hand = [("CARD.STRIKE_IRONCLAD", 0), ("CARD.DEFEND_IRONCLAD", 0)];
+    let mut course = fight_tough(&["RELIC.HISTORY_COURSE"], &hand);
+    let mut plain = fight_tough(&[], &hand);
+    for simulator in [&mut course, &mut plain] {
+        play(simulator, "CARD.STRIKE_IRONCLAD");
+        play(simulator, "CARD.DEFEND_IRONCLAD");
+        end_turn(simulator);
+    }
+    assert!(
+        creature(&course, 1).current_hp < creature(&plain, 1).current_hp,
+        "the strike swung again"
+    );
+    assert_eq!(player(&course).block, 0, "the defend was not replayed");
+}
+
 /// A philosopher's stone pays an energy and arms everything on the other side,
 /// including whatever arrives after the fight has started.
 #[test]
@@ -4271,13 +4385,35 @@ fn a_diamond_diadem_answers_a_quiet_turn() {
     assert_eq!(relic_counter(&busy, "RELIC.DIAMOND_DIADEM"), 3);
 }
 
-/// Toasty mittens burn the first card of the draw pile and pay a strength for
-/// it before every hand draw.
+/// Toasty mittens put a screen over the hand as every turn opens, once the
+/// hand is drawn: the card picked burns, and a strength is paid for it.
 #[test]
-fn toasty_mittens_burn_a_card_for_a_strength() {
-    let simulator = fight_from_run(&["RELIC.TOASTY_MITTENS"]);
+fn toasty_mittens_burn_a_card_of_the_hand_for_a_strength() {
+    let mut simulator = fight_from_run(&["RELIC.TOASTY_MITTENS"]);
+    let sts2_engine::DecisionContext::ChooseCards {
+        choice_id,
+        candidates,
+        ..
+    } = simulator.decision().clone()
+    else {
+        panic!("the mittens put a screen over the hand");
+    };
+    let hand = hand_size(&simulator);
+    assert_eq!(candidates.len(), hand, "the whole hand is on the screen");
+    let picked = candidates[0].clone();
+    simulator
+        .step(Action::ChooseCards {
+            choice_id,
+            cards: vec![picked.clone()],
+        })
+        .expect("the choice applies");
     let combat = simulator.state().combat.as_ref().expect("a fight");
     assert_eq!(combat.player.piles.exhaust.len(), 1);
+    assert_eq!(
+        combat.player.piles.exhaust[0].fingerprint.model_id,
+        picked.fingerprint.model_id
+    );
+    assert_eq!(hand_size(&simulator), hand - 1);
     assert_eq!(power_amount(&simulator, 0, "POWER.STRENGTH_POWER"), 1);
 }
 
@@ -4551,7 +4687,6 @@ fn the_relics_that_ask_which_cards_to_enchant() {
         ("RELIC.GNARLED_HAMMER", "ENCHANTMENT.SHARP", 3, 3),
         ("RELIC.KIFUDA", "ENCHANTMENT.ADROIT", 3, 3),
         ("RELIC.PUNCH_DAGGER", "ENCHANTMENT.MOMENTUM", 5, 1),
-        ("RELIC.BEAUTIFUL_BRACELET", "ENCHANTMENT.SWIFT", 3, 3),
         ("RELIC.ELECTRIC_SHRYMP", "ENCHANTMENT.IMBUED", 1, 1),
         ("RELIC.TRI_BOOMERANG", "ENCHANTMENT.INSTINCT", 1, 3),
     ] {
@@ -4574,6 +4709,36 @@ fn the_relics_that_ask_which_cards_to_enchant() {
             "{relic} put its own amount on"
         );
     }
+}
+
+/// A beautiful bracelet asks nothing: it puts two Swift on four cards of the
+/// deck it picks itself, shuffled on the niche stream.
+#[test]
+fn a_beautiful_bracelet_picks_four_cards_itself() {
+    let mut simulator = run_holding_with_treasure(&[], "RELIC.BEAUTIFUL_BRACELET");
+    let niche = niche_counter(&simulator);
+    take_the_treasure(&mut simulator);
+    assert!(
+        !matches!(
+            simulator.decision(),
+            sts2_engine::DecisionContext::ChooseCards { .. }
+        ),
+        "no screen goes up"
+    );
+    assert_eq!(deck_carrying(&simulator, "ENCHANTMENT.SWIFT"), 4);
+    assert!(
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .filter_map(|card| card.enchantment.as_ref())
+            .all(|held| held.model_id == id("ENCHANTMENT.SWIFT") && held.amount == 2)
+    );
+    assert!(
+        niche_counter(&simulator) > niche,
+        "the shuffle read the niche stream"
+    );
 }
 
 /// A royal stamp approves one card, and reads the niche stream once for the

@@ -1235,18 +1235,15 @@ fn the_late_pool() -> Vec<CardDefinition> {
             ),
             0,
         ),
-        // Tracking stacks two the first time and one every time after.
+        // Tracking stacks fifty every time, each fifty being half again as
+        // much damage.
         upgrading_cost(
             card(
                 "CARD.TRACKING",
                 CardType::Power,
                 TargetType::SelfTarget,
                 2,
-                vec![Command::When {
-                    condition: Condition::OwnerLacksPower(id("POWER.TRACKING_POWER")),
-                    then: vec![buff("POWER.TRACKING_POWER", 2)],
-                    otherwise: vec![buff("POWER.TRACKING_POWER", 1)],
-                }],
+                vec![buff("POWER.TRACKING_POWER", 50)],
             ),
             1,
         ),

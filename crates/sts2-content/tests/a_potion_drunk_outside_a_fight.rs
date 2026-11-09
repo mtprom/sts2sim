@@ -170,3 +170,22 @@ fn a_blood_potion_drunk_near_full_heals_only_up_to_the_maximum() {
         "the potion was spent"
     );
 }
+
+/// An ambergris drunk on the map heals half the run's maximum and buys no
+/// turn, there being no fight to take one in.
+#[test]
+fn an_ambergris_drunk_outside_a_fight_only_heals() {
+    let mut simulator = standing_on_the_map(30, 100, &["POTION.AMBERGRIS"]);
+    drink(&mut simulator, "POTION.AMBERGRIS");
+    assert_eq!(simulator.state().run_player.current_hp, 80);
+    assert!(simulator.state().combat.is_none());
+    assert!(
+        simulator
+            .state()
+            .run_player
+            .potions
+            .iter()
+            .all(Option::is_none),
+        "the potion was spent"
+    );
+}
