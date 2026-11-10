@@ -20,7 +20,7 @@ fn observe(sequence: u64, after: u64, context: &str, state: &Value) -> Record {
         sequence,
         "state.observe",
         json!({"after":after,"context":context,"state":state,
-        "projection_version":1,"digest":sts2_replay::projection_digest(state).unwrap()}),
+        "projection_version":2,"digest":sts2_replay::projection_digest(state).unwrap()}),
     )
 }
 

@@ -427,7 +427,6 @@ impl ScenarioBuilder {
                 player_actions_disabled: false,
                 ending_player_turn_phase_one: false,
                 ending_player_turn_phase_two: false,
-                phase_two_left_standing: false,
                 played_card_was_attack: false,
                 played_card_was_chosen: false,
                 played_card_type: None,
@@ -474,6 +473,7 @@ impl ScenarioBuilder {
                 next_creature_id: creatures.len() as u64,
                 // The models the encounter counts as having spawned: the
                 // creatures the fight was laid out with, one entry per model.
+                created_not_added: Vec::new(),
                 spawned_enemy_models: {
                     let mut models: Vec<ModelId> = Vec::new();
                     for creature in &creatures {

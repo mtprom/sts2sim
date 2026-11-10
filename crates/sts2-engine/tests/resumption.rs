@@ -506,9 +506,9 @@ fn a_screen_in_the_end_of_turn_listeners_holds_the_whole_handover() {
 #[test]
 fn a_screen_in_the_flush_listeners_leaves_the_handover_reading_as_still_running() {
     // The flush listeners run inside phase two of the handover, and the build
-    // lowers `ending_player_turn_phase_two` only once the whole handover has
-    // run out — so it is still up while the player answers, and answering is
-    // not the player acting again.
+    // lowers `ending_player_turn_phase_two` only once the sides have switched,
+    // so it is still up while the player answers and down once the answer has
+    // let the handover run on.
     let mut simulator = dummy(builder())
         .power(0, id("POWER.FLUSH_ASKER"), 1, PowerType::Buff)
         .card(PileName::Hand, 1, fingerprint("CARD.FILLER"), 0)
@@ -536,8 +536,8 @@ fn a_screen_in_the_flush_listeners_leaves_the_handover_reading_as_still_running(
     let combat = simulator.state().combat.as_ref().unwrap();
     assert_eq!(combat.player.turn, 2);
     assert!(
-        combat.ending_player_turn_phase_two,
-        "the flag outlives the handover and is cleared when the player next acts"
+        !combat.ending_player_turn_phase_two,
+        "the flag came down with the switch, before the next turn opened"
     );
     assert_eq!(
         block_of(&simulator, 0),
@@ -736,24 +736,17 @@ fn a_screen_in_the_turn_setup_survives_a_snapshot_taken_while_it_is_up() {
     simulator.step(Action::EndTurn { turn: 1 }).unwrap();
     assert!(choosing(&simulator));
 
-    // The one thing about this boundary the build does not settle. The
-    // build lowers `ending_player_turn_phase_two` when the handover that
-    // raised it runs out, and this is the one screen the handover does not
-    // wait for: the player turn's setup is carried only as far as the point
-    // where it pauses, so the turn start runs on past the screen and the
-    // handover unwinds behind it. What the flag reads while the screen stands
-    // is therefore a question of when that unwinding lands, which is timing
-    // rather than logic. The rule applied here is the one applied everywhere
-    // else: the flag stands until the player acts again, and answering a
-    // screen is that act.
+    // The handover lowered `ending_player_turn_phase_two` as the sides
+    // switched, before the enemy turn and this player turn were opened, so the
+    // setup's screen stands with the flag already down.
     assert!(
-        simulator
+        !simulator
             .state()
             .combat
             .as_ref()
             .unwrap()
             .ending_player_turn_phase_two,
-        "the handover's own flag is still up while the setup's screen stands"
+        "the handover's own flag is down while the setup's screen stands"
     );
 
     // The same state carried out through the portable boundary and back has to
@@ -786,7 +779,7 @@ fn a_screen_in_the_turn_setup_survives_a_snapshot_taken_while_it_is_up() {
             .as_ref()
             .unwrap()
             .ending_player_turn_phase_two,
-        "and the answer is the player acting again, which clears it"
+        "and answering does not raise it again"
     );
 }
 

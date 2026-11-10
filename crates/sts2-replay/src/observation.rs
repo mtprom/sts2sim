@@ -101,6 +101,13 @@ fn render_player(state: &GameState, content: &sts2_engine::ContentRegistry) -> V
                     .stream(PlayerStream::Transformations)
                     .counter(),
             },
+            "states": {
+                "rewards": render_stream(state.player_rng.stream(PlayerStream::Rewards)),
+                "shops": render_stream(state.player_rng.stream(PlayerStream::Shops)),
+                "transformations": render_stream(
+                    state.player_rng.stream(PlayerStream::Transformations)
+                ),
+            },
         },
     })
 }
@@ -399,28 +406,63 @@ fn render_run(state: &GameState, run: &RunState) -> Value {
             .map(ToString::to_string)
             .collect::<Vec<_>>(),
         "shared_relic_grab_bag": render_grab_bag(&run.shared_relic_grab_bag),
-        "rng": {
-            "seed": run.config.seed,
-            "counters": {
-                "up_front": counter(state, RunStream::UpFront),
-                "shuffle": counter(state, RunStream::Shuffle),
-                "unknown_map_point": counter(state, RunStream::UnknownMapPoint),
-                "combat_card_generation": counter(state, RunStream::CombatCardGeneration),
-                "combat_potion_generation": counter(state, RunStream::CombatPotionGeneration),
-                "combat_card_selection": counter(state, RunStream::CombatCardSelection),
-                "combat_energy_costs": counter(state, RunStream::CombatEnergyCosts),
-                "combat_targets": counter(state, RunStream::CombatTargets),
-                "monster_ai": counter(state, RunStream::MonsterAi),
-                "niche": counter(state, RunStream::Niche),
-                "combat_orbs": counter(state, RunStream::CombatOrbs),
-                "treasure_room_relics": counter(state, RunStream::TreasureRoomRelics),
-            },
-        },
+        "rng": render_run_rng(state, run),
+    })
+}
+
+/// The run's RNG: its seed, and each stream's draw count and generator state.
+fn render_run_rng(state: &GameState, run: &RunState) -> Value {
+    const STREAMS: [(&str, RunStream); 12] = [
+        ("up_front", RunStream::UpFront),
+        ("shuffle", RunStream::Shuffle),
+        ("unknown_map_point", RunStream::UnknownMapPoint),
+        ("combat_card_generation", RunStream::CombatCardGeneration),
+        (
+            "combat_potion_generation",
+            RunStream::CombatPotionGeneration,
+        ),
+        ("combat_card_selection", RunStream::CombatCardSelection),
+        ("combat_energy_costs", RunStream::CombatEnergyCosts),
+        ("combat_targets", RunStream::CombatTargets),
+        ("monster_ai", RunStream::MonsterAi),
+        ("niche", RunStream::Niche),
+        ("combat_orbs", RunStream::CombatOrbs),
+        ("treasure_room_relics", RunStream::TreasureRoomRelics),
+    ];
+    let counters: Map<String, Value> = STREAMS
+        .iter()
+        .map(|(name, stream)| ((*name).to_owned(), json!(counter(state, *stream))))
+        .collect();
+    let states: Map<String, Value> = STREAMS
+        .iter()
+        .map(|(name, stream)| ((*name).to_owned(), run_stream(state, *stream)))
+        .collect();
+    json!({
+        "seed": run.config.seed,
+        "counters": counters,
+        "states": states,
     })
 }
 
 fn counter(state: &GameState, stream: RunStream) -> u64 {
     state.rng.stream(stream).counter()
+}
+
+fn run_stream(state: &GameState, stream: RunStream) -> Value {
+    render_stream(state.rng.stream(stream))
+}
+
+/// One stream as projection v2 records it: the draw count and the four
+/// generator words the build saves beside it.
+fn render_stream(stream: &sts2_rng::Rng) -> Value {
+    let [state0, state1, state2, state3] = stream.state_words();
+    json!({
+        "counter": stream.counter(),
+        "state0": state0,
+        "state1": state1,
+        "state2": state2,
+        "state3": state3,
+    })
 }
 
 fn render_grab_bag(bag: &sts2_engine::RelicGrabBagState) -> Value {
@@ -1207,9 +1249,13 @@ fn walk(pointer: &str, expected: &Value, rendered: &Value, differences: &mut Vec
         (Value::Number(expected_number), Value::Number(rendered_number))
             if !expected_number.is_i64() || !rendered_number.is_i64() =>
         {
-            // The recording carries these at single precision, so that is the
-            // width they have to agree at, bit for bit.
+            // The recording carries fractions at single precision, so that is
+            // the width they have to agree at, bit for bit. A whole number past
+            // the signed range, such as an RNG generator word, agrees exactly.
             let same = match (expected_number.as_f64(), rendered_number.as_f64()) {
+                _ if expected_number.is_u64() && rendered_number.is_u64() => {
+                    expected_number.as_u64() == rendered_number.as_u64()
+                }
                 (Some(expected), Some(rendered)) => {
                     (expected as f32).to_bits() == (rendered as f32).to_bits()
                 }

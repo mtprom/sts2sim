@@ -213,12 +213,14 @@ None         between turns, during the enemy's turn, and once combat is over
 
 `ending_player_turn_phase_one` covers the end-of-turn listeners and what the
 hand does to whoever still holds it. `ending_player_turn_phase_two` covers
-putting the hand down and switching sides, and it stays set until the player
-next acts, because the handover it belongs to is not over until the next player
-turn is standing. Answering a screen the handover itself opened is
-not the player acting again: the flag stays up while the handover is still
-owed. `player_actions_disabled` is set for the whole handover in both
-directions.
+putting the hand down and switching sides, and it comes down as soon as the
+sides have switched (and any extra-turn hooks have run), before the fight's
+loop opens the next side's turn. A screen opened inside phase two, by a flush
+listener for example, stands with the flag up, and the flag comes down once the
+answer has let the switch happen. Both flags live on the fight's own turn
+state, which a load builds afresh, so a run quit partway through a handover
+comes back with both down. `player_actions_disabled` is set for the whole
+handover in both directions.
 
 A fight is stood up before it is announced. Every creature joins, each runs what
 it does as it joins, and only then is the combat marked `in_progress`. A whole
@@ -290,13 +292,10 @@ same points — the check settles a pending loss first, which is the build's
 order. A won fight is finished by whoever asked, which is where a settled queue
 finishes one too; a lost one has already taken the combat with it.
 
-One thing about this chain the game does not settle observably.
-`ending_player_turn_phase_two` is cleared when the handover that set it is over,
-and the player's own turn setup is the one screen the handover does not wait
-for. What the flag reads in the observation written for that screen therefore
-depends on ordering the game never pins. The engine keeps the rule it applies
-everywhere else: the flag stands until the player acts again, and answering the
-screen is that act. The turn-setup resumption test pins that reading.
+`ending_player_turn_phase_two` is cleared in the `finally` of the handover
+step that set it, which returns before the enemy turn or the next player turn
+is opened. So a screen the player's own turn setup opens always stands with the
+flag down. The turn-setup resumption test pins that reading.
 
 ### Illegal stale target
 
@@ -409,6 +408,15 @@ decision boundary is that mechanism. It is a mode instead: while it stands, a
 screen answers itself with the first cards it offers rather than being put to
 the player, which is the whole of the one selector the game pushes in gameplay.
 
+Choice IDs count up across the run, and a screen can use one up without ever
+being shown. The hand, combat-pile and plain-grid screens reserve their ID
+before they look at what they would offer, so one that answers itself, with
+nothing to pick or no more than it asks for, still takes an ID. The reward grid
+and the bundle screen reserve theirs once they know there is something to
+offer. The deck screens and the choose-a-card screen reserve one only when the
+screen really goes up. No screen reserves one while an automated selector is
+answering, or once the fight is over or ending.
+
 The transform screen offers the deck's transformable cards, which is everything
 that is not a quest card and can leave the deck. What it shows beside each of
 them — what that card would become — is a preview built off canonical models
@@ -446,7 +454,18 @@ over, so a creature summoned into a slot in front of its summoner changes what
 the next boomerang hits. The side is re-sorted into slot order every time a
 creature with a slot joins, and a slot the encounter does not name sorts in
 front of every one it does. It is not the order anything is rendered in; the
-projection sorts creatures by combat ID. The pet selector reads the pet off
+projection sorts creatures by combat ID.
+
+Making a creature and bringing it into the fight are separate steps in the
+game, and `CreatureCmd::Add` does both at once. A body that gets a creature
+ready before letting it in uses `CreatureCmd::Create` and later
+`CreatureCmd::AddCreated` instead: the creature takes its combat ID and rolls
+its HP when it is made, and it joins the end of the side, enters the room's
+history, and is announced to listeners only when it is added. Until then it is
+left out of every other arrival's HP roll. A fallen Gremlin Merc works this way:
+the fat gremlin is made and given its heist first, the sneaky gremlin is made
+and added, and the fat one is added last, so it has the lower ID but takes its
+turn second. The pet selector reads the pet off
 whoever issued the command: it names nobody where the owner has none, and it
 names the corpse where the pet is down, because the game answers with a dead pet
 too — every body that must not act on one checks for itself whether the pet is
@@ -2165,6 +2184,12 @@ all. A lost fight does not come apart at all: the game-over screen goes up from
 inside the very kill that ended it, everything paused is abandoned, and the
 flags stay exactly as they stood — which is why the projection of a defeat can
 show a player still standing in the middle of a turn ending.
+
+Giving a run up from the pause menu is not an action the player takes inside
+the game's rules, so it is `Simulator::abandon` rather than an `Action`. The
+game kills every player with a forced kill that nothing can prevent, and the
+run ends as `RunResult::Abandoned`. A fight standing at the time ends lost
+like any other, with the turns it lasted written into the room's history.
 
 The flag is racing the recorder's snapshot in the game itself, so a defeat can
 be recorded either way. This engine takes the settled reading; a recording

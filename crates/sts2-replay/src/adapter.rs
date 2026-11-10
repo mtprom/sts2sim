@@ -380,6 +380,26 @@ impl ReplayAdapter {
             | "event.crystal_sphere.start"
             | "event.crystal_sphere.set_tool"
             | "event.crystal_sphere.proceed" => None,
+            // The player giving the run up. A fight's own finish is written
+            // while the killing action is still settling and changes nothing
+            // here, but an abandon is a step of its own: the state in front of
+            // it is settled, and the build then kills the player outright.
+            "run.finish"
+                if record
+                    .payload
+                    .pointer("/data/result")
+                    .and_then(Value::as_str)
+                    == Some("ABANDONED") =>
+            {
+                if self.verify_observations {
+                    self.pass_over_stage_observation();
+                    self.verify_pending_observation()?;
+                }
+                self.simulator.abandon().map_err(|error| {
+                    Self::error(record, AdapterErrorCode::IllegalAction, error.to_string())
+                })?;
+                None
+            }
             // The run picked back up off its save file. It is not an action —
             // nobody chose it — but it puts the run back where the build last
             // saved it and leaves marks the projection carries from there on.
@@ -464,9 +484,6 @@ impl ReplayAdapter {
     /// checked against the state it describes, then that state is dropped for
     /// the save point, and the load's own marks are applied on top of it.
     fn resume(&mut self, record: &Record) -> Result<(), AdapterError> {
-        // The last thing the quit session wrote was a stage of a turn
-        // handover: the run was quit with the enemy's turn under way.
-        let quit_inside_a_handover = self.pending_stage == ObservationStage::Handover;
         if self.verify_observations {
             self.pass_over_stage_observation();
             self.verify_pending_observation()?;
@@ -484,12 +501,7 @@ impl ReplayAdapter {
         self.rewound_actions += self.actions_since_save;
         self.actions_since_save = 0;
         self.resumes += 1;
-        let resumed = if quit_inside_a_handover {
-            self.simulator.resumed_from_save_inside_a_handover()
-        } else {
-            self.simulator.resumed_from_save()
-        };
-        resumed.map_err(|error| {
+        self.simulator.resumed_from_save().map_err(|error| {
             Self::error(record, AdapterErrorCode::IllegalAction, error.to_string())
         })?;
         // Resuming raises the run's reload count and writes the save back

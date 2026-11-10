@@ -262,9 +262,11 @@ fn generate_up_front(
     config: &RunConfig,
     unlock_preset: &UnlockPresetManifest,
 ) -> Result<UpFrontGeneration, EngineError> {
-    // Content pools currently implement the full-epoch, post-first-run rules.
-    // Accept independent encounter/discovery histories without silently making
-    // a fresh or partially unlocked profile use veteran content.
+    // Content pools implement the full-epoch rules. A first run is accepted:
+    // its rules (forced early unknown rooms, the first chest's Gorget) are
+    // read off the profile as the run plays. Accept independent
+    // encounter/discovery histories without silently making a partially
+    // unlocked profile use veteran content.
     let baseline = UnlockPresetManifest::pinned().map_err(|error| {
         EngineError::new(ErrorCode::InternalInvariant).with_detail("profile", error.to_string())
     })?;
@@ -280,10 +282,6 @@ fn generate_up_front(
             "profile",
             "content pools require all pinned epochs revealed",
         ));
-    }
-    if unlock_preset.unlocks.number_of_runs == 0 {
-        return Err(EngineError::new(ErrorCode::UnsupportedContent)
-            .with_detail("profile", "first-run generation rules are not implemented"));
     }
     let selection = select_acts(
         seed,

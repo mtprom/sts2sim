@@ -5368,18 +5368,11 @@ pub struct CombatState {
     pub played_card_play_index: i32,
     /// The two halves of the player's turn handover. Phase one runs the
     /// end-of-turn listeners and the hand's own turn-end effects; phase two
-    /// puts the hand down and switches sides. Phase two stays set until the
-    /// player's next turn has opened, because that turn is started from inside
-    /// it.
+    /// puts the hand down and switches sides. Both belong to the fight's own
+    /// turn state, and phase two comes down as soon as the sides have
+    /// switched, before the next side's turn is opened.
     pub ending_player_turn_phase_one: bool,
     pub ending_player_turn_phase_two: bool,
-    /// Phase two was left set by a fight that is gone. The mark belongs to
-    /// whatever runs fights rather than to a fight, and only the end of a
-    /// handover takes it down: a run quit while the enemy's turn was under way
-    /// never reached that end, so the fight the load stands back up opens with
-    /// the mark still up and keeps it until its own first handover is over.
-    #[serde(default)]
-    pub phase_two_left_standing: bool,
     /// Whether something has made the player ready to end their turn without
     /// them choosing to. Ending a turn this way does not block, so the
     /// handover runs once whatever reached it has settled rather than inside
@@ -5470,6 +5463,11 @@ pub struct CombatState {
     /// entry per model however many creatures of it there were.
     #[serde(default)]
     pub spawned_enemy_models: Vec<ModelId>,
+    /// Creatures a body has made but not yet brought into the fight, oldest
+    /// first. They already stand in `creatures` under their own ids, and are
+    /// left out of the HP roll of anything that arrives before they do.
+    #[serde(default)]
+    pub created_not_added: Vec<CreatureCombatId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -5661,6 +5659,8 @@ impl GameState {
 pub enum RunResult {
     Victory,
     Defeat,
+    /// The player gave the run up.
+    Abandoned,
 }
 
 /// The displayed per-copy state of a combat card: everything the card's

@@ -562,13 +562,14 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_content_profiles_fail_explicitly() {
+    fn a_first_run_profile_generates() {
         let mut start = profile_start();
         start.payload["data"]["state"]["players"][0]["unlocks"]["number_of_runs"] = json!(0);
-        let error = recorded_run("ABC", 0, sts2_engine::RunMode::Standard, &start)
-            .err()
-            .unwrap();
-        assert!(error.to_string().contains("first-run generation"));
+        assert!(recorded_run("ABC", 0, sts2_engine::RunMode::Standard, &start).is_ok());
+    }
+
+    #[test]
+    fn unsupported_content_profiles_fail_explicitly() {
         let mut start = profile_start();
         start.payload["data"]["state"]["players"][0]["unlocks"]["epochs"] = json!([]);
         let error = recorded_run("ABC", 0, sts2_engine::RunMode::Standard, &start)
@@ -618,7 +619,7 @@ mod tests {
             text,
             "{sequence} state.observe {}",
             json!({
-                "after":sequence-1,"context":"action.settled","projection_version":1,
+                "after":sequence-1,"context":"action.settled","projection_version":2,
                 "digest":sts2_replay::projection_digest(state).unwrap(),"state":state
             })
         )
@@ -645,7 +646,7 @@ mod tests {
                 json!({
                     "base":7,
                     "patch":[["set",["players"],state["players"]],["set",["run","total_floor"],20]],
-                    "observation":{"after":7,"context":"action.settled","projection_version":1,
+                    "observation":{"after":7,"context":"action.settled","projection_version":2,
                         "digest":sts2_replay::projection_digest(&state).unwrap()}
                 })
             )

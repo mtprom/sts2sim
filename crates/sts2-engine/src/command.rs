@@ -294,6 +294,23 @@ pub enum CreatureCmd {
         #[serde(default)]
         then: Vec<Command>,
     },
+    /// Makes a monster for the enemy side without bringing it into the fight
+    /// yet, which is what a body does when it gets a creature ready before it
+    /// lets it in. Its id and HP are settled now, against the enemy side as it
+    /// stands, and `then` runs at once with the caller as owner and the new
+    /// creature as target. Until an [`CreatureCmd::AddCreated`] brings it in,
+    /// no other arrival's HP roll counts it.
+    Create {
+        monster: ModelId,
+        #[serde(default)]
+        slot: SpawnSlot,
+        #[serde(default)]
+        then: Vec<Command>,
+    },
+    /// Brings the oldest creature a [`CreatureCmd::Create`] made into the
+    /// fight, with everything an arrival runs. Over a fight that is ending the
+    /// creature never joins, and it is dropped instead.
+    AddCreated,
     /// The same, over a monster rolled out of a list on the monster-AI
     /// stream. The caller's own last roll is taken out of the list first — a
     /// fabricator never rolls the same monster twice running — and what this

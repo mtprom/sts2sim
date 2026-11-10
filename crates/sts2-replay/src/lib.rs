@@ -502,8 +502,13 @@ pub fn validate_stream<R: BufRead>(
     Ok(summary)
 }
 
-/// Validates a Projection v1 observation's embedded digest, accepting both the
-/// legacy Rust encoding and the C# recorder's encoding of canonical wire values.
+/// The state projection the pinned build's recorder writes. Version 2 is
+/// version 1 with each RNG stream's four generator words and counter beside
+/// its draw count, which the v0.111.0 build saves in place of a seed.
+pub const PROJECTION_VERSION: u64 = 2;
+
+/// Validates a projection's embedded digest, accepting both the legacy Rust
+/// encoding and the C# recorder's encoding of canonical wire values.
 pub fn validate_observation(record: &Record) -> Result<(), ReplayError> {
     if record.kind != "state.observe" {
         return Err(ReplayError::new(0, ReplayErrorKind::NotObservation));
@@ -512,7 +517,7 @@ pub fn validate_observation(record: &Record) -> Result<(), ReplayError> {
         .payload
         .as_object()
         .ok_or_else(|| ReplayError::new(0, ReplayErrorKind::RecordPayloadNotObject))?;
-    if object.get("projection_version").and_then(Value::as_u64) != Some(1) {
+    if object.get("projection_version").and_then(Value::as_u64) != Some(PROJECTION_VERSION) {
         return Err(ReplayError::new(0, ReplayErrorKind::UnsupportedProjection));
     }
     let state = object

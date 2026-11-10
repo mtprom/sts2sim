@@ -560,3 +560,45 @@ fn an_expose_against_a_tunneler_with_no_block_stuns_nothing() {
         "the expose still leaves it open"
     );
 }
+
+/// When the Gremlin Merc goes down, the beta makes the fat gremlin first (and
+/// hands it a heist for anything the merc stole) before anything joins, then
+/// makes and brings in the sneaky gremlin, and brings the fat one in last. So the fat gremlin takes the
+/// lower id, while the sneaky one stands ahead of it on the enemy side and
+/// takes its turn first.
+#[test]
+fn a_fallen_merc_makes_the_fat_gremlin_first_and_lets_it_in_last() {
+    let mut simulator = ScenarioBuilder::new("MERCTEST", id("ENCOUNTER.GREMLIN_MERC_NORMAL"))
+        .player_hp(80, 80)
+        .energy(3, 3)
+        .turn(1, 1)
+        .relics(&[id("RELIC.BURNING_BLOOD")])
+        .enemy(1, id("MONSTER.GREMLIN_MERC"), 1, 47, "GIMME_MOVE")
+        .in_slot("merc")
+        .power(
+            1,
+            id("POWER.SURPRISE_POWER"),
+            1,
+            sts2_engine::PowerType::Buff,
+        )
+        .card(PileName::Hand, 0, card("CARD.STRIKE_IRONCLAD"), 1)
+        .build(sts2_content::standard_registry())
+        .unwrap();
+    strike(&mut simulator);
+    let combat = simulator.state().combat.as_ref().unwrap();
+    let enemies: Vec<(u64, String)> = combat
+        .creatures
+        .iter()
+        .filter(|creature| creature.side == sts2_engine::CombatSide::Enemy && creature.alive())
+        .map(|creature| (creature.id.get(), creature.model_id.to_string()))
+        .collect();
+    assert_eq!(
+        enemies,
+        vec![
+            (3, "MONSTER.SNEAKY_GREMLIN".to_owned()),
+            (2, "MONSTER.FAT_GREMLIN".to_owned()),
+        ],
+        "the sneaky gremlin joined first, the fat one was made first"
+    );
+    assert!(combat.created_not_added.is_empty());
+}

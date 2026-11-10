@@ -476,6 +476,37 @@ fn map_combat_can_reach_a_real_terminal_defeat() {
     assert_eq!(simulator.state().run_player.current_hp, 0);
 }
 
+/// Giving the run up kills the player outright and ends the run as abandoned.
+/// A fight standing at the time ends with it, and the room's history keeps
+/// the turns that fight lasted.
+#[test]
+fn abandoning_a_run_mid_fight_kills_the_player_and_ends_the_run() {
+    let mut simulator = generated_run();
+    choose_map(&mut simulator, 4);
+    end_turn(&mut simulator);
+    simulator.abandon().expect("the run is given up");
+    let state = simulator.state();
+    assert_eq!(state.terminal, Some(RunResult::Abandoned));
+    assert_eq!(state.run_player.current_hp, 0);
+    assert!(state.combat.is_none(), "the fight went with the run");
+    let turns = state
+        .run
+        .as_ref()
+        .and_then(|run| run.map_history.last())
+        .and_then(|act| act.points.last())
+        .and_then(|point| point.rooms.last())
+        .map(|room| room.turns_taken);
+    assert_eq!(turns, Some(2), "the fight lasted into its second turn");
+    assert!(matches!(
+        simulator.decision(),
+        DecisionContext::Terminal { .. }
+    ));
+    simulator
+        .abandon()
+        .expect("an ended run has nothing to give up");
+    assert_eq!(simulator.state().terminal, Some(RunResult::Abandoned));
+}
+
 #[test]
 fn active_room_state_is_portable() {
     let mut simulator = generated_run();
@@ -892,14 +923,13 @@ fn a_reload_into_a_fight_still_standing_keeps_what_the_turn_was_given() {
     assert_eq!(fight_standing(&simulator), spent);
 }
 
-/// The second-phase mark of a turn handover is put up as the handover begins
-/// and taken down only as it ends. A run quit with the enemy's turn under way
-/// never reaches that end, and nothing else takes the mark down: the fight the
-/// load stands back up opens with it up, keeps it through the whole of its
-/// first turn, and loses it the ordinary way once a handover of its own has
-/// run out. Seed `2CKB2N4LNB`, records 807 to 826.
+/// The second-phase mark of a turn handover belongs to the fight's own turn
+/// state. It is up while the hand goes down and the sides switch, and down
+/// again before the enemy's turn opens, so a run quit with the enemy's turn
+/// under way comes back without it, and a load builds the fight's turn state
+/// afresh in any case. Seed `2CKB2N4LNB`.
 #[test]
-fn a_run_quit_inside_a_handover_comes_back_with_the_mark_still_up() {
+fn a_run_quit_inside_a_handover_comes_back_with_the_mark_down() {
     let phase_two = |simulator: &Simulator| {
         simulator
             .state()
@@ -913,29 +943,17 @@ fn a_run_quit_inside_a_handover_comes_back_with_the_mark_still_up() {
     let entrance = simulator.snapshot();
     assert!(!phase_two(&simulator));
     end_turn(&mut simulator);
+    assert!(
+        !phase_two(&simulator),
+        "the handover took the mark down as the sides switched"
+    );
 
     // The quit, mid-handover, and the load over the save the entrance wrote.
     simulator.restore(&entrance).expect("the save restores");
-    simulator
-        .resumed_from_save_inside_a_handover()
-        .expect("the run resumes");
-    assert!(phase_two(&simulator), "the fight opens with the mark up");
+    simulator.resumed_from_save().expect("the run resumes");
+    assert!(!phase_two(&simulator), "the fight opens with the mark down");
     strike(&mut simulator);
-    assert!(phase_two(&simulator), "and acting does not take it down");
-    end_turn(&mut simulator);
-    assert!(phase_two(&simulator), "a handover of its own is what does");
-    strike(&mut simulator);
-    assert!(
-        !phase_two(&simulator),
-        "once the player has acted behind it"
-    );
-
-    // A load that interrupted nothing leaves no mark.
-    let mut plain = generated_run();
-    choose_map(&mut plain, 4);
-    plain.resumed_from_save().expect("the run resumes");
-    strike(&mut plain);
-    assert!(!phase_two(&plain));
+    assert!(!phase_two(&simulator));
 }
 
 /// Stars gained as a fight's room is entered — what a divine right pays —

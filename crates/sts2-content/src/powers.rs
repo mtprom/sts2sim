@@ -4372,17 +4372,14 @@ fn gremlin_merc_powers() -> Vec<PowerDefinition> {
             hooks: vec![
                 ModifierHook::every_turn(
                     HookEvent::AfterDeath,
+                    // The fat gremlin is made first and handed the heist
+                    // before anything joins, so it takes the lower id and the
+                    // first HP roll; the sneaky gremlin is made and brought in
+                    // next, and the fat one is brought in last.
                     vec![
-                        Command::Creature(CreatureCmd::Add {
-                            monster: id("MONSTER.SNEAKY_GREMLIN"),
-                            slot: sts2_engine::SpawnSlot::Named("sneaky".to_owned()),
-                            initial_state: None,
-                            then: Vec::new(),
-                        }),
-                        Command::Creature(CreatureCmd::Add {
+                        Command::Creature(CreatureCmd::Create {
                             monster: id("MONSTER.FAT_GREMLIN"),
                             slot: sts2_engine::SpawnSlot::Named("fat".to_owned()),
-                            initial_state: None,
                             then: vec![Command::Power(PowerCmd::Apply {
                                 // The heist is aimed at the same purse the
                                 // thievery was, which is what it hands back.
@@ -4395,6 +4392,13 @@ fn gremlin_merc_powers() -> Vec<PowerDefinition> {
                                 ))),
                             })],
                         }),
+                        Command::Creature(CreatureCmd::Add {
+                            monster: id("MONSTER.SNEAKY_GREMLIN"),
+                            slot: sts2_engine::SpawnSlot::Named("sneaky".to_owned()),
+                            initial_state: None,
+                            then: Vec::new(),
+                        }),
+                        Command::Creature(CreatureCmd::AddCreated),
                     ],
                 )
                 .when(HookCondition::OwnerDied),

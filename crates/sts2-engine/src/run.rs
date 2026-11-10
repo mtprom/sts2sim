@@ -415,6 +415,21 @@ impl RelicGrabBagState {
         None
     }
 
+    /// Whether any bucket still holds the relic.
+    #[must_use]
+    pub fn contains(&self, model_id: &ModelId) -> bool {
+        [
+            &self.common,
+            &self.uncommon,
+            &self.rare,
+            &self.shop,
+            &self.event,
+            &self.ancient,
+        ]
+        .into_iter()
+        .any(|bucket| bucket.contains(model_id))
+    }
+
     /// Drops one relic from every bucket, as taking a relic does to the pool it
     /// is no longer available in.
     pub fn remove(&mut self, model_id: &ModelId) {

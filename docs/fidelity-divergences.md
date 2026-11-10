@@ -171,8 +171,10 @@ rather than off the body, which nothing that replays needs.
 **The build.** A lost fight raises the game-over screen from inside the very
 kill that ended it, and the flags of the turn that was ending stay exactly as
 they stood. `ending_player_turn_phase_two` is cleared by the handover that set
-it, and the recorder's snapshot of the defeat races that clear: the same loss
-at the same point can be recorded with the flag down or still up.
+it as soon as the sides have switched, so a loss in the enemy's turn finds it
+down already. A loss inside phase two itself, before the switch, races that
+clear: the recorder's snapshot of the same loss at the same point can show the
+flag down or still up.
 
 **This simulator.** The settled reading, with the flag down: a defeat is
 projected as a player no longer in the middle of a turn ending.

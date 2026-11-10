@@ -10,7 +10,7 @@ use crate::{Event, Parser, Record, ReplayErrorKind, canonical, decode_input};
 
 fn observe(sequence: u64, state: &Value) -> Record {
     let mut payload = json!({"digest":canonical::digest(state).unwrap(),
-        "projection_version":1, "after":sequence-1, "context":"action.settled",
+        "projection_version":2, "after":sequence-1, "context":"action.settled",
         "base":"extension", "patch":{"unknown":true}});
     payload["state"] = state.clone();
     Record {

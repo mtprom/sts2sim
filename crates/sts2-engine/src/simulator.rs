@@ -1444,13 +1444,11 @@ impl Simulator {
         if let Some(combat) = self.state.combat.as_mut() {
             combat.round = 1;
             combat.player.turn = 1;
-            // A mark an earlier load left standing over this save went down
-            // with the handover that followed it; this load did not interrupt
-            // one, or it would say so itself.
-            if combat.phase_two_left_standing {
-                combat.phase_two_left_standing = false;
-                combat.ending_player_turn_phase_two = false;
-            }
+            // The handover marks belong to the fight's own turn state, which a
+            // load builds afresh, so a run quit halfway through a handover
+            // comes back with both of them down.
+            combat.ending_player_turn_phase_one = false;
+            combat.ending_player_turn_phase_two = false;
             // A save taken over a fight already won holds the room, not the
             // fight: the load stands a finished room back up with a combat
             // state built fresh around it, and a fight that is not inside a
@@ -1473,26 +1471,6 @@ impl Simulator {
             run.next_reward_set_id = next_reward_set_id;
         }
         self.rebuild_boundary()
-    }
-
-    /// The load of a run that was quit while a turn handover was under way —
-    /// after the player ended their turn and before their next one opened.
-    ///
-    /// It is [`Self::resumed_from_save`] and one thing more. The handover's
-    /// second-phase mark is put up as the handover begins and taken down only
-    /// as it ends, and a quit in between tears the fight down without ending
-    /// it. Nothing else takes the mark down, so the fight the load stands back
-    /// up opens with it up, and it stays up through that fight's first turn
-    /// until its own first handover has run to its end.
-    pub fn resumed_from_save_inside_a_handover(&mut self) -> Result<(), EngineError> {
-        self.resumed_from_save()?;
-        if let Some(combat) = self.state.combat.as_mut()
-            && !combat.has_ended
-        {
-            combat.ending_player_turn_phase_two = true;
-            combat.phase_two_left_standing = true;
-        }
-        Ok(())
     }
 
     pub fn project(&self, scope: ProjectionScope) -> Result<PortableState, EngineError> {
@@ -2101,18 +2079,6 @@ impl Simulator {
         if self.owes_the_shelf() && !self.suspended() {
             self.settle_owed_shelf(events)?;
         }
-        // The turn handover reads as still running right up to the moment the
-        // player acts again, which is where the build finally clears it: the
-        // flag is set inside a call that only returns once the next player turn
-        // is standing. A screen opened inside the handover is the player acting
-        // without the handover having returned, so the flag stays up across the
-        // answer, exactly as the build's does.
-        if !self.turn_handover_pending()
-            && let Some(combat) = self.state.combat.as_mut()
-            && !combat.phase_two_left_standing
-        {
-            combat.ending_player_turn_phase_two = false;
-        }
         match action {
             Action::ChooseMap { destination } => {
                 self.choose_map(*destination, events)?;
@@ -2522,17 +2488,6 @@ impl Simulator {
                 }
             }
         }
-    }
-
-    /// Whether the turn handover is still standing on the queue, which is what
-    /// keeps its phase-two flag up while the player answers a screen it opened.
-    fn turn_handover_pending(&self) -> bool {
-        self.state.combat.as_ref().is_some_and(|combat| {
-            combat.queue.iter().any(|effect| {
-                matches!(effect, Effect::Resume(frame)
-                    if matches!(**frame, crate::ResumeFrame::TurnHandover(_)))
-            })
-        })
     }
 
     /// Marks the frame the code is about to enter as one a selection screen
@@ -4738,6 +4693,26 @@ impl Simulator {
             .run
             .as_ref()
             .ok_or_else(|| EngineError::new(ErrorCode::WrongDecisionContext))?;
+        // A profile that has never finished a run gets fixed results before
+        // anything else is asked: the first two unknown points it walks onto
+        // are events and the third is a monster. The count is of the unknown
+        // points already walked, run-wide, and the forced result draws nothing
+        // and leaves the odds where they stand.
+        if run.unlocks.number_of_runs == 0 {
+            let walked_points = run.map_history.iter().flat_map(|act| &act.points);
+            let walked = walked_points.clone().count();
+            // The point being resolved has already joined the history here,
+            // where the build appends it only after the roll.
+            let earlier_unknown = walked_points
+                .take(walked.saturating_sub(1))
+                .filter(|point| point.point_type == crate::MapPointType::Unknown)
+                .count();
+            match earlier_unknown {
+                0 | 1 => return Ok(crate::ResolvedRoom::Event),
+                2 => return Ok(crate::ResolvedRoom::Monster),
+                _ => {}
+            }
+        }
         let odds = run.unknown_room_odds;
         // A shop is off the table right after another shop, and when every path
         // onward leads to one.
@@ -4789,17 +4764,6 @@ impl Simulator {
                     blocked.push(kind);
                 }
             }
-        }
-        // A profile that has never finished a run forces the first two unknown
-        // points to fixed results, counted off the map-point history. This
-        // baseline is pinned to a profile with runs behind it, so that path is
-        // refused rather than rolled as though it were the ordinary one.
-        if run.unlocks.number_of_runs == 0 {
-            return Err(EngineError::new(ErrorCode::UnsupportedContent)
-                .with_detail("model_id", "ODDS.UNKNOWN_MAP_POINT")
-                .with_detail("reason", "first-run unknown map point rules")
-                .with_detail("act", run.current_act)
-                .with_detail("floor", run.floor));
         }
         let roll = self
             .state
@@ -4957,17 +4921,34 @@ impl Simulator {
             return Ok(());
         }
         let rarity = roll_relic_rarity(self.state.rng.stream_mut(RunStream::TreasureRoomRelics));
-        self.prune_disallowed_relics(true);
+        let relics: Vec<ModelId> = if let Some(tutorial) = self.first_chest_relic() {
+            // The rarity is still rolled, but the bag is not pulled from, so
+            // nothing is pruned from it either.
+            let run = self
+                .state
+                .run
+                .as_mut()
+                .expect("first_chest_relic needs a run");
+            run.player_relic_grab_bag.remove(&tutorial);
+            run.shared_relic_grab_bag.remove(&tutorial);
+            vec![tutorial]
+        } else {
+            self.prune_disallowed_relics(true);
+            let run = self
+                .state
+                .run
+                .as_mut()
+                .ok_or_else(|| EngineError::new(ErrorCode::WrongDecisionContext))?;
+            run.shared_relic_grab_bag
+                .pull_from_front(rarity, &[])
+                .into_iter()
+                .collect()
+        };
         let run = self
             .state
             .run
             .as_mut()
             .ok_or_else(|| EngineError::new(ErrorCode::WrongDecisionContext))?;
-        let relics: Vec<ModelId> = run
-            .shared_relic_grab_bag
-            .pull_from_front(rarity, &[])
-            .into_iter()
-            .collect();
         if let Some(ActiveRoom::Treasure { relics: chest }) = run.active_room.as_mut() {
             chest.clone_from(&relics);
         }
@@ -5002,6 +4983,34 @@ impl Simulator {
             self.close_the_chest();
         }
         Ok(())
+    }
+
+    /// The relic the first treasure chest of a profile's first run is forced
+    /// to hold: Gorget, while the player's own bag still has it. The chest
+    /// being opened is the only treasure room the run's history holds.
+    fn first_chest_relic(&self) -> Option<ModelId> {
+        let run = self.state.run.as_ref()?;
+        if run.unlocks.number_of_runs != 0 {
+            return None;
+        }
+        let points: Vec<&crate::MapPointVisit> =
+            run.map_history.iter().flat_map(|act| &act.points).collect();
+        let (_, earlier) = points.split_last()?;
+        let holds_treasure = |point: &crate::MapPointVisit| {
+            point
+                .rooms
+                .iter()
+                .any(|room| room.room_type == crate::MapPointType::Treasure)
+        };
+        // The room being opened may not have joined its point's record yet;
+        // either way it is a treasure room, so only the earlier points count.
+        if earlier.iter().any(|point| holds_treasure(point)) {
+            return None;
+        }
+        let gorget: ModelId = "RELIC.GORGET".parse().expect("static model ID");
+        run.player_relic_grab_bag
+            .contains(&gorget)
+            .then_some(gorget)
     }
 
     /// The point the run is standing on is the one a quest card of the deck
@@ -5162,6 +5171,7 @@ impl Simulator {
             .iter()
             .filter(|creature| creature.side == CombatSide::Enemy)
             .chain(combat.creatures.iter().filter(|creature| creature.is_pet()))
+            .filter(|creature| !combat.created_not_added.contains(&creature.id))
             .map(|creature| (creature.id, creature.model_id.clone()))
             .collect();
         if let Some(room) = self
@@ -5475,7 +5485,6 @@ impl Simulator {
             player_actions_disabled: false,
             ending_player_turn_phase_one: false,
             ending_player_turn_phase_two: false,
-            phase_two_left_standing: false,
             played_card_was_attack: false,
             played_card_was_chosen: false,
             played_card_type: None,
@@ -5542,6 +5551,7 @@ impl Simulator {
             // The encounter is told about each creature as it is made, and it
             // keeps one entry per canonical monster however many creatures of it
             // the encounter laid down.
+            created_not_added: Vec::new(),
             spawned_enemy_models: {
                 let mut models: Vec<ModelId> = Vec::new();
                 for creature in &creatures {
@@ -5721,6 +5731,22 @@ impl Simulator {
         initial_state: Option<&str>,
         owner: Option<CreatureCombatId>,
     ) -> Result<Option<CreatureCombatId>, EngineError> {
+        let Some(id) = self.create_monster(model_id, slot, initial_state, owner)? else {
+            return Ok(None);
+        };
+        self.admit_monster(id)?;
+        Ok(Some(id))
+    }
+
+    /// The first half of a summon: the creature is made, numbered and given
+    /// its HP, and stands in the creature list, but nothing has heard of it.
+    fn create_monster(
+        &mut self,
+        model_id: &ModelId,
+        slot: &crate::SpawnSlot,
+        initial_state: Option<&str>,
+        owner: Option<CreatureCombatId>,
+    ) -> Result<Option<CreatureCombatId>, EngineError> {
         let slots = self.encounter_slots();
         let slot_name = match slot {
             crate::SpawnSlot::Unslotted => None,
@@ -5753,11 +5779,12 @@ impl Simulator {
             }
         };
         let slot = slot_index(&slots, slot_name.as_deref());
-        let spawned_hp: Vec<i32> = self
-            .combat()?
+        let combat = self.combat()?;
+        let spawned_hp: Vec<i32> = combat
             .creatures
             .iter()
             .filter(|creature| creature.side == CombatSide::Enemy)
+            .filter(|creature| !combat.created_not_added.contains(&creature.id))
             .map(|creature| creature.max_hp)
             .collect();
         let monster = self
@@ -5802,6 +5829,34 @@ impl Simulator {
             locals: std::collections::BTreeMap::new(),
             state_log: if logged { vec![opening] } else { Vec::new() },
         });
+        Ok(Some(id))
+    }
+
+    /// The second half of a summon: the creature made by
+    /// [`Self::create_monster`] joins the fight and everything that hears of
+    /// an arrival hears of it.
+    fn admit_monster(&mut self, id: CreatureCombatId) -> Result<(), EngineError> {
+        let (model_id, slot) = {
+            let creature = self.creature(id)?;
+            (creature.model_id.clone(), creature.slot)
+        };
+        let model_id = &model_id;
+        let monster = self
+            .content
+            .monster(model_id)
+            .cloned()
+            .ok_or_else(|| unsupported_content(model_id))?;
+        // The creature takes its place at the end of the side as it joins, not
+        // where it stood while it was being made ready.
+        let combat = self.combat_mut()?;
+        if let Some(at) = combat
+            .creatures
+            .iter()
+            .position(|creature| creature.id == id)
+        {
+            let creature = combat.creatures.remove(at);
+            combat.creatures.push(creature);
+        }
         // A monster summoned into the fight joins the encounter's roster the
         // same way one it started with did, and one of a model already on it
         // adds nothing.
@@ -5818,6 +5873,25 @@ impl Simulator {
         let context = CommandContext::by(id).at(player_id);
         let mut joining_events = Vec::new();
         self.run_commands(&monster.on_added, &context, &mut joining_events)?;
+        // The room's history takes the arrival's model as it joins, where the
+        // list does not hold it already, so two creatures made in one order
+        // and brought in the other are written down in the order they joined.
+        if let Some(room) = self
+            .state
+            .run
+            .as_mut()
+            .and_then(crate::RunState::visit_mut)
+            .and_then(|visit| visit.rooms.last_mut())
+            && !room
+                .monsters
+                .iter()
+                .any(|seen| seen.combat_id == id || seen.model_id == *model_id)
+        {
+            room.monsters.push(crate::MonsterVisit {
+                combat_id: id,
+                model_id: model_id.clone(),
+            });
+        }
         // The creature-added pass, which the build runs once the creature is
         // standing and its own arrival has been settled.
         self.dispatch_hooks(
@@ -5835,8 +5909,7 @@ impl Simulator {
         if self.combat()?.side != CombatSide::Enemy {
             self.roll_enemy_move(id)?;
         }
-        self.refresh_intent_damage()?;
-        Ok(Some(id))
+        self.refresh_intent_damage()
     }
 
     /// The creature standing as this player's pet, alive or down.
@@ -11793,6 +11866,33 @@ impl Simulator {
                     return self.run_commands(then, &inner, events);
                 }
             }
+            CreatureCmd::Create {
+                monster,
+                slot,
+                then,
+            } => {
+                if let Some(made) = self.create_monster(monster, slot, None, context.owner)? {
+                    self.combat_mut()?.created_not_added.push(made);
+                    if !then.is_empty() {
+                        let inner = context.clone().at(made);
+                        return self.run_commands(then, &inner, events);
+                    }
+                }
+            }
+            CreatureCmd::AddCreated => {
+                let combat = self.combat_mut()?;
+                if combat.created_not_added.is_empty() {
+                    return Ok(false);
+                }
+                let made = combat.created_not_added.remove(0);
+                if self.combat_is_ending() {
+                    self.combat_mut()?
+                        .creatures
+                        .retain(|creature| creature.id != made);
+                    return Ok(false);
+                }
+                self.admit_monster(made)?;
+            }
             // The same over a rolled monster: the caller's own last roll is
             // dropped from the list, the monster-AI stream picks between what
             // is left, and what it settles on becomes the caller's last.
@@ -14182,9 +14282,19 @@ impl Simulator {
         screen_kind: ChoiceScreen,
         screen: &'static str,
     ) -> Result<Option<Vec<ChosenCard>>, EngineError> {
+        let mut reserved = self.reserve_choice_id_up_front(screen_kind)?;
         let candidates = self.selection_candidates(source, filters, only)?;
         if candidates.is_empty() {
             return Ok(Some(Vec::new()));
+        }
+        if !self.automated_selector
+            && !self.combat_is_ending()
+            && matches!(
+                screen_kind,
+                ChoiceScreen::RewardGrid | ChoiceScreen::CardBundle
+            )
+        {
+            reserved = Some(self.allocate_choice_id()?);
         }
         if !prefs.require_manual_confirmation && candidates.len() <= prefs.minimum {
             // A screen the build answers on its own, because the pile holds no
@@ -14217,9 +14327,18 @@ impl Simulator {
             ));
         }
         if let Some(block) = self.suspension_block {
+            // A screen refused where it stands is content being wrong, and the
+            // step it was refused in leaves the state as it found it, so an
+            // ID reserved on the way in goes back.
+            if reserved.is_some() {
+                self.release_choice_id()?;
+            }
             return Err(Self::suspension_refused(block, screen));
         }
-        let id = self.allocate_choice_id()?;
+        let id = match reserved {
+            Some(id) => id,
+            None => self.allocate_choice_id()?,
+        };
         // What was asked for, kept beside the screen: a deferred listener
         // pass harvests it to carry the screen to its site's join, and every
         // later suspension under a dispatch overwrites it. Nothing outside a
@@ -14267,6 +14386,38 @@ impl Simulator {
                 .suspended_choice = Some(choice);
         }
         Ok(None)
+    }
+
+    /// The hand, combat-pile and plain-grid screens reserve their choice id
+    /// before they look at what they would offer, so a screen that answers
+    /// itself (nothing to pick, or no more than it asks for) still uses one
+    /// up. The reward grid and the bundle screen reserve theirs once they know
+    /// there is something to offer, and the deck screens and the choose-a-card
+    /// screen only once a screen really goes up. Nothing is reserved where an
+    /// automated selector answers, or where a combat screen finds the fight
+    /// already over or ending.
+    fn reserve_choice_id_up_front(
+        &mut self,
+        screen_kind: ChoiceScreen,
+    ) -> Result<Option<ChoiceId>, EngineError> {
+        let reserves = !self.automated_selector
+            && match screen_kind {
+                ChoiceScreen::Hand => {
+                    self.state
+                        .combat
+                        .as_ref()
+                        .is_some_and(|combat| combat.in_progress)
+                        && !self.combat_is_ending()
+                }
+                ChoiceScreen::CombatPile => self.state.combat.is_some() && !self.combat_is_ending(),
+                ChoiceScreen::CardGrid => !self.combat_is_ending(),
+                _ => false,
+            };
+        if reserves {
+            self.allocate_choice_id().map(Some)
+        } else {
+            Ok(None)
+        }
     }
 
     /// The cards a screen offers, in the order it presents them.
@@ -19527,9 +19678,6 @@ impl Simulator {
                 Step::PhaseTwo => {
                     self.combat_mut()?.ending_player_turn_phase_one = false;
                     self.combat_mut()?.ending_player_turn_phase_two = true;
-                    // A handover of this fight's own is running now, and its
-                    // end takes the mark down like any other.
-                    self.combat_mut()?.phase_two_left_standing = false;
                     self.end_player_turn_phase_two(crate::EndTurnPhaseTwoStep::Flush)?;
                     CombatOutcome::Unsettled
                 }
@@ -19552,6 +19700,12 @@ impl Simulator {
                             &[crate::HookEvent::AfterTakingExtraTurn],
                             &HookContext::side(CombatSide::Player),
                         )?;
+                    }
+                    // Phase two ends with the switch. The mark comes down as
+                    // the handover returns, before whichever side is next has
+                    // its turn opened by the fight's own loop.
+                    self.combat_mut()?.ending_player_turn_phase_two = false;
+                    if extra {
                         self.start_turn(events)?;
                         self.push_checkpoint("combat.player_turn.start")?;
                     } else {
@@ -20039,6 +20193,30 @@ impl Simulator {
             return Ok(CombatOutcome::Won);
         }
         Ok(CombatOutcome::Unsettled)
+    }
+
+    /// The player gives the run up from the pause menu. The build kills every
+    /// player outright, with a forced kill nothing can prevent, and the run
+    /// ends there: a fight standing at the time ends lost, with the turns it
+    /// lasted written into the room's history, and nothing still owed runs.
+    /// A run that is already over has nothing to give up.
+    pub fn abandon(&mut self) -> Result<(), EngineError> {
+        if self.state.terminal.is_some() {
+            return Ok(());
+        }
+        if let Some(combat) = self.state.combat.as_ref() {
+            let player_id = combat.player.creature_id;
+            let player = self.creature_mut(player_id)?;
+            player.current_hp = 0;
+            player.powers.clear();
+            player.death_handled = true;
+            self.record_turns_taken();
+        }
+        self.pending_loss = false;
+        self.state.run_player.current_hp = 0;
+        self.state.terminal = Some(RunResult::Abandoned);
+        self.state.combat = None;
+        self.rebuild_boundary()
     }
 
     /// The run is over and lost: the player is down, the fight goes with them,
@@ -28705,6 +28883,18 @@ impl Simulator {
         let id = ChoiceId::from(combat.next_choice_id);
         combat.next_choice_id += 1;
         Ok(id)
+    }
+
+    /// Hands back the choice ID allocated last, for a screen refused before
+    /// it went up.
+    fn release_choice_id(&mut self) -> Result<(), EngineError> {
+        if let Some(run) = &mut self.state.run {
+            run.next_choice_id = run.next_choice_id.saturating_sub(1);
+            return Ok(());
+        }
+        let combat = self.combat_mut()?;
+        combat.next_choice_id = combat.next_choice_id.saturating_sub(1);
+        Ok(())
     }
 
     fn allocate_reward_set_id(&mut self) -> Result<RewardSetId, EngineError> {

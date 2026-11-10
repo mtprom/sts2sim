@@ -8,14 +8,14 @@ use std::io::{self, Write};
 use serde_json::Value;
 use sha2::{Digest as _, Sha256};
 
-use crate::{HashWriter, Record, ReplayError, ReplayErrorKind};
+use crate::{HashWriter, PROJECTION_VERSION, Record, ReplayError, ReplayErrorKind};
 
 pub(super) fn validate(record: &Record) -> Result<(), ReplayError> {
     if record.kind != "state.observe" {
         return Err(ReplayError::new(0, ReplayErrorKind::NotObservation));
     }
     let payload = &record.payload;
-    if payload["projection_version"].as_u64() != Some(1) {
+    if payload["projection_version"].as_u64() != Some(PROJECTION_VERSION) {
         return Err(ReplayError::new(0, ReplayErrorKind::UnsupportedProjection));
     }
     let state = payload
