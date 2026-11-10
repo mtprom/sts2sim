@@ -47,7 +47,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use sts2_rng::{MegaRandom, PlayerRngSet, RunRngSet, splitmix64};
+use sts2_rng::{MegaRandom, PlayerRngSet, Rng, RunRngSet, RunStream, splitmix64};
 
 use crate::model::{CombatState, ConformanceOrigin, GameState};
 use crate::run::{MapCoord, MapPointType, RelicRarity, RoomDefinition, RunState};
@@ -64,6 +64,18 @@ pub const BELIEF_MODEL_VERSION: &str = "combat-v0";
 /// how [`ActBeliefState::sample`] fills the holes, under the same rule.
 pub const ACT_BELIEF_MODEL_VERSION: &str = "act-v0.5";
 
+/// The version of the combat belief model with monster foresight: what
+/// `combat-v0` erases, except the monster AI stream, which every sample
+/// carries at its true position.
+///
+/// Enemy move choice is the only thing that stream decides (random move
+/// branches and spawn picks), and the real game's monster AI is seeded, so a
+/// player who knows the seed's stream (as the Monster Action Predictor mod
+/// shows) knows every enemy's future moves. Draw order and every other
+/// stream stay erased. A search over such a sample sees the enemies' future
+/// exactly and the player's own draws only as a distribution.
+pub const FORESIGHT_BELIEF_MODEL_VERSION: &str = "combat-v0+monster-ai";
+
 /// A combat decision point with its hidden state erased: what a fair analyst
 /// is allowed to stand on.
 ///
@@ -76,6 +88,9 @@ pub const ACT_BELIEF_MODEL_VERSION: &str = "act-v0.5";
 pub struct BeliefState {
     state: GameState,
     content: Arc<ContentRegistry>,
+    /// The true monster AI stream, where the belief keeps enemy foresight.
+    /// See [`FORESIGHT_BELIEF_MODEL_VERSION`].
+    monster_ai: Option<Rng>,
 }
 
 impl BeliefState {
@@ -99,7 +114,28 @@ impl BeliefState {
         Ok(Self {
             state,
             content: simulator.content_handle(),
+            monster_ai: None,
         })
+    }
+
+    /// Erases a combat decision point as [`Self::from_simulator`] does, but
+    /// keeps the monster AI stream at its true position in every sample, so
+    /// enemy moves unfold exactly as they will in the real fight. Model
+    /// [`FORESIGHT_BELIEF_MODEL_VERSION`].
+    pub fn from_simulator_with_foresight(simulator: &Simulator) -> Result<Self, EngineError> {
+        let mut belief = Self::from_simulator(simulator)?;
+        belief.monster_ai = Some(simulator.state().rng.stream(RunStream::MonsterAi).clone());
+        Ok(belief)
+    }
+
+    /// Which belief model this state samples under.
+    #[must_use]
+    pub const fn model_version(&self) -> &'static str {
+        if self.monster_ai.is_some() {
+            FORESIGHT_BELIEF_MODEL_VERSION
+        } else {
+            BELIEF_MODEL_VERSION
+        }
     }
 
     /// The canonical key over what this belief state was built from. Two
@@ -133,6 +169,9 @@ impl BeliefState {
         // sampled world's future randomness is analysis randomness.
         state.rng = RunRngSet::new(format!("ANALYSIS{:016X}", splitmix64(&mut mix)));
         state.player_rng = PlayerRngSet::new(splitmix64(&mut mix));
+        if let Some(monster_ai) = &self.monster_ai {
+            *state.rng.stream_mut(RunStream::MonsterAi) = monster_ai.clone();
+        }
         Simulator::from_scenario(state, Arc::clone(&self.content))
     }
 }

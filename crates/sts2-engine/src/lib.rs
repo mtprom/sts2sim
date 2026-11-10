@@ -14,7 +14,10 @@ mod setup;
 mod simulator;
 
 pub use ascension::*;
-pub use belief::{ACT_BELIEF_MODEL_VERSION, ActBeliefState, BELIEF_MODEL_VERSION, BeliefState};
+pub use belief::{
+    ACT_BELIEF_MODEL_VERSION, ActBeliefState, BELIEF_MODEL_VERSION, BeliefState,
+    FORESIGHT_BELIEF_MODEL_VERSION,
+};
 pub use command::*;
 pub use model::*;
 pub use run::*;

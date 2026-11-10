@@ -353,3 +353,110 @@ fn a_sample_agrees_on_a_card_the_fight_rolled_up() {
     );
     assert_eq!(sample.legal_actions(), original.legal_actions());
 }
+
+/// The enemies' move states, in creature order: what foresight must keep.
+fn enemy_moves(simulator: &Simulator) -> Vec<String> {
+    simulator
+        .state()
+        .combat
+        .as_ref()
+        .map(|combat| {
+            combat
+                .creatures
+                .iter()
+                .filter(|creature| creature.side == sts2_engine::CombatSide::Enemy)
+                .map(|creature| creature.move_state.clone())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Ends turns (or answers whatever screen stands) until the fight is over or
+/// `turns` turns have passed, collecting the enemies' moves after each step.
+fn end_turns(mut simulator: Simulator, turns: usize) -> Vec<Vec<String>> {
+    let mut seen = Vec::new();
+    for _ in 0..turns * 8 {
+        if simulator
+            .state()
+            .combat
+            .as_ref()
+            .is_none_or(|combat| combat.has_ended)
+            || simulator.state().terminal.is_some()
+            || seen.len() >= turns
+        {
+            break;
+        }
+        let actions = simulator.legal_actions();
+        let action = actions
+            .iter()
+            .find(|action| matches!(action, Action::EndTurn { .. }))
+            .or_else(|| actions.first())
+            .cloned()
+            .expect("a live fight offers an action");
+        let ended = matches!(action, Action::EndTurn { .. });
+        simulator.step_quietly(&action).unwrap();
+        if ended {
+            seen.push(enemy_moves(&simulator));
+        }
+    }
+    seen
+}
+
+#[test]
+fn foresight_keeps_the_monster_ai_stream_and_erases_the_rest() {
+    let original = first_combat();
+    let fair = BeliefState::from_simulator(&original).unwrap();
+    let foresight = BeliefState::from_simulator_with_foresight(&original).unwrap();
+    assert_eq!(fair.model_version(), sts2_engine::BELIEF_MODEL_VERSION);
+    assert_eq!(
+        foresight.model_version(),
+        sts2_engine::FORESIGHT_BELIEF_MODEL_VERSION
+    );
+    let true_ai = original.state().rng.stream(sts2_rng::RunStream::MonsterAi);
+    for rollout in 0..4 {
+        let sample = foresight.sample(11, rollout).unwrap();
+        assert_eq!(
+            sample.state().rng.stream(sts2_rng::RunStream::MonsterAi),
+            true_ai,
+            "every foresight sample carries the true monster AI stream"
+        );
+        assert_ne!(
+            sample.state().rng.stream(sts2_rng::RunStream::Shuffle),
+            original.state().rng.stream(sts2_rng::RunStream::Shuffle),
+            "the shuffle stream stays erased"
+        );
+        assert_eq!(sample.agent_observation(), original.agent_observation());
+        assert_eq!(
+            sample.state().origin,
+            ConformanceOrigin::Analysis,
+            "a foresight sample is still analysis"
+        );
+    }
+    assert_ne!(
+        fair.sample(11, 0)
+            .unwrap()
+            .state()
+            .rng
+            .stream(sts2_rng::RunStream::MonsterAi),
+        true_ai,
+        "the fair model erases the monster AI stream"
+    );
+}
+
+#[test]
+fn foresight_samples_see_the_enemies_move_as_the_real_fight_does() {
+    let original = first_combat();
+    let truth = end_turns(original.clone(), 5);
+    let foresight = BeliefState::from_simulator_with_foresight(&original).unwrap();
+    for rollout in 0..4 {
+        let sample = foresight.sample(3, rollout).unwrap();
+        let seen = end_turns(sample, 5);
+        let shared = truth.len().min(seen.len());
+        assert!(shared > 0, "the fight lasts at least one enemy turn");
+        assert_eq!(
+            seen[..shared],
+            truth[..shared],
+            "enemy moves unfold as in the real fight whatever the draws"
+        );
+    }
+}
