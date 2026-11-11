@@ -1552,6 +1552,22 @@ impl Simulator {
         Ok(ObservationKey(sink.0.finalize().into()))
     }
 
+    /// A cheaper key for the nodes of one fight's search: the same view as
+    /// [`observation_key`](Self::observation_key) with the act map left out
+    /// while a combat stands, since no play inside a fight can change it.
+    /// Two states one fight's search can reach get the same key exactly when
+    /// they get the same `observation_key`; across fights, or outside one,
+    /// use `observation_key`. Serializing the map was a third of the key.
+    pub fn combat_observation_key(&self) -> Result<ObservationKey, EngineError> {
+        let mut view = self.observation_key_view();
+        if self.state.combat.is_some() {
+            view.base.map = None;
+        }
+        let mut sink = HashWriter(Sha256::new());
+        serde_json::to_writer(&mut sink, &view).map_err(EngineError::serialization)?;
+        Ok(ObservationKey(sink.0.finalize().into()))
+    }
+
     /// The digest of the borrowed observation mirror as it stands, before
     /// the key's fold: what `keys.rs` pins against the owned observation so
     /// the mirror cannot drift from it. Not a key.
