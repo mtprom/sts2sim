@@ -1,4 +1,30 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::hash::{BuildHasherDefault, Hasher};
+
+/// A [`ModelId`] carries its own FNV-1a hash, so a map keyed by one takes
+/// that hash as it is instead of running `SipHash` over it on every lookup:
+/// the registry is looked up on every hook dispatch, which made `SipHash` a
+/// quarter of a step.
+#[derive(Clone, Copy, Default)]
+pub struct PrehashedHasher(u64);
+
+impl Hasher for PrehashedHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            self.0 = (self.0 ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+
+    fn write_u64(&mut self, value: u64) {
+        self.0 ^= value;
+    }
+}
+
+type IdMap<V> = HashMap<ModelId, V, BuildHasherDefault<PrehashedHasher>>;
 
 /// The move an illusion holds while it is dead and waiting to come back.
 const REVIVE_MOVE: &str = "REVIVE_MOVE";
@@ -84,13 +110,13 @@ struct RegisteredPower {
 /// that name the run's content in a declared order stay B-trees.
 #[derive(Clone, Debug, Default)]
 pub struct ContentRegistry {
-    cards: HashMap<ModelId, CardDefinition>,
-    monsters: HashMap<ModelId, MonsterDefinition>,
-    powers: HashMap<ModelId, RegisteredPower>,
-    relics: HashMap<ModelId, crate::RelicDefinition>,
-    potions: HashMap<ModelId, crate::PotionDefinition>,
-    enchantments: HashMap<ModelId, crate::EnchantmentDefinition>,
-    orbs: HashMap<ModelId, crate::OrbDefinition>,
+    cards: IdMap<CardDefinition>,
+    monsters: IdMap<MonsterDefinition>,
+    powers: IdMap<RegisteredPower>,
+    relics: IdMap<crate::RelicDefinition>,
+    potions: IdMap<crate::PotionDefinition>,
+    enchantments: IdMap<crate::EnchantmentDefinition>,
+    orbs: IdMap<crate::OrbDefinition>,
     encounters: BTreeMap<ModelId, crate::EncounterDefinition>,
     events: BTreeMap<ModelId, crate::EventDefinition>,
     /// A merchant stocks the playing character's card pool and the player's own
@@ -675,25 +701,31 @@ impl ContentRegistry {
     /// carry.
     #[must_use]
     pub fn listener_hooks(&self, listener: &Listener) -> &[crate::ModifierHook] {
-        match listener.source {
-            ListenerSource::Power => self.power_listener_hooks(&listener.model_id),
+        self.hooks_of(listener.source, &listener.model_id)
+    }
+
+    /// The hooks a listener of `source` standing for `model_id` declares.
+    #[must_use]
+    pub fn hooks_of(&self, source: ListenerSource, model_id: &ModelId) -> &[crate::ModifierHook] {
+        match source {
+            ListenerSource::Power => self.power_listener_hooks(model_id),
             ListenerSource::Relic => self
-                .relic(&listener.model_id)
+                .relic(model_id)
                 .map_or(&[], |definition| definition.hooks.as_slice()),
             ListenerSource::Monster => self
-                .monster(&listener.model_id)
+                .monster(model_id)
                 .map_or(&[], |definition| definition.hooks.as_slice()),
             ListenerSource::CombatCard(_) | ListenerSource::DeckCard(_) => self
-                .card(&listener.model_id)
+                .card(model_id)
                 .map_or(&[], |definition| definition.hooks.as_slice()),
             ListenerSource::PotionSlot(_) => self
-                .potion(&listener.model_id)
+                .potion(model_id)
                 .map_or(&[], |definition| definition.hooks.as_slice()),
             // No orb in the pinned build answers a listener event: what an orb
             // does it does through its own passive and evoke.
             ListenerSource::Orb(_) => &[],
             ListenerSource::CombatCardEnchantment(_) | ListenerSource::DeckCardEnchantment(_) => {
-                self.enchantment(&listener.model_id)
+                self.enchantment(model_id)
                     .map_or(&[], |definition| definition.hooks.as_slice())
             }
         }
@@ -24358,7 +24390,7 @@ impl Simulator {
         for (index, event) in events.iter().enumerate() {
             self.dispatch_hook_pass(SuspendedHookPass {
                 event: *event,
-                listeners: self.hook_listeners(*event)?,
+                listeners: self.declaring_listeners(*event)?,
                 next: 0,
                 context: context.clone(),
             })?;
@@ -24603,8 +24635,18 @@ impl Simulator {
     ) -> Result<(), EngineError> {
         let registry = Arc::clone(&self.content);
         while pass.next < pass.listeners.len() {
-            let listener = pass.listeners[pass.next].clone();
+            let index = pass.next;
             pass.next += 1;
+            // Most of a pass's list declares nothing for its event; those are
+            // passed over before anything is copied out of the list.
+            if !registry
+                .listener_hooks(&pass.listeners[index])
+                .iter()
+                .any(|hook| hook.event == pass.event)
+            {
+                continue;
+            }
+            let listener = pass.listeners[index].clone();
             // What a listener declares is read off the registry and what keeps
             // it live is read off the state, so the cheaper of the two goes
             // first: most of a pass's list is the piles, and a card that
@@ -25504,6 +25546,34 @@ impl Simulator {
         reason = "the listener order is one block per source, in the build's own order"
     )]
     fn hook_listeners(&self, event: HookEvent) -> Result<Vec<Listener>, EngineError> {
+        self.listeners_for(event, false)
+    }
+
+    /// The same list cut to the listeners whose model declares a hook for
+    /// `event`, in the same order, built without copying out the rest. A
+    /// pass walking the full list passes over every other listener before
+    /// it reads anything off it, so the two lists run the same bodies.
+    fn declaring_listeners(&self, event: HookEvent) -> Result<Vec<Listener>, EngineError> {
+        self.listeners_for(event, true)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one block per kind of listener, in the build's order"
+    )]
+    fn listeners_for(
+        &self,
+        event: HookEvent,
+        declaring: bool,
+    ) -> Result<Vec<Listener>, EngineError> {
+        let keep = |source: ListenerSource, model_id: &ModelId| {
+            !declaring
+                || self
+                    .content
+                    .hooks_of(source, model_id)
+                    .iter()
+                    .any(|hook| hook.event == event)
+        };
         // A combat-scope pass over a fight that is over or ending, and not still
         // starting, reaches nobody at all. Whether the fight is ending is worked
         // out fresh as the walk begins: the last primary enemy being down is
@@ -25524,20 +25594,24 @@ impl Simulator {
         // relics, then the potion slots. A combat-scope pass reaches nobody at
         // all, because the list it walks is the fight's.
         if event.scope() == ListenerScope::RunWithoutCombat {
-            return Ok(self.out_of_combat_listeners());
+            let mut listeners = self.out_of_combat_listeners();
+            listeners.retain(|listener| keep(listener.source, &listener.model_id));
+            return Ok(listeners);
         }
         if self.state.combat.is_none() {
             if event.scope() == ListenerScope::Combat {
                 return Ok(Vec::new());
             }
-            return Ok(self.out_of_combat_listeners());
+            let mut listeners = self.out_of_combat_listeners();
+            listeners.retain(|listener| keep(listener.source, &listener.model_id));
+            return Ok(listeners);
         }
         let combat = self.combat()?;
         let player_id = combat.player.creature_id;
         let mut listeners: Vec<Listener> = Vec::new();
         if event.scope() == ListenerScope::Run {
             for (index, fingerprint) in self.state.run_player.deck.iter().enumerate() {
-                push_deck_card_listeners(&mut listeners, player_id, index, fingerprint);
+                push_deck_card_listeners(&mut listeners, player_id, index, fingerprint, &keep);
             }
         }
         let ordered = combat
@@ -25551,24 +25625,32 @@ impl Simulator {
                     .filter(|creature| creature.side == CombatSide::Enemy),
             );
         for creature in ordered {
-            listeners.extend(creature.powers.iter().map(|power| Listener {
-                owner: creature.id,
-                source: ListenerSource::Power,
-                // Two instances of one power are two listeners, and each one
-                // answers for itself: what stands on the list is the instance
-                // rather than the model.
-                power_instance: Some(power.instance),
-                model_id: power.model_id.clone(),
-            }));
+            listeners.extend(
+                creature
+                    .powers
+                    .iter()
+                    .filter(|power| keep(ListenerSource::Power, &power.model_id))
+                    .map(|power| Listener {
+                        owner: creature.id,
+                        source: ListenerSource::Power,
+                        // Two instances of one power are two listeners, and each one
+                        // answers for itself: what stands on the list is the instance
+                        // rather than the model.
+                        power_instance: Some(power.instance),
+                        model_id: power.model_id.clone(),
+                    }),
+            );
             if creature.id != player_id {
                 // A creature that is not a player puts its monster on the list
                 // in its own right, right behind its own powers.
-                listeners.push(Listener {
-                    owner: creature.id,
-                    source: ListenerSource::Monster,
-                    power_instance: None,
-                    model_id: creature.model_id.clone(),
-                });
+                if keep(ListenerSource::Monster, &creature.model_id) {
+                    listeners.push(Listener {
+                        owner: creature.id,
+                        source: ListenerSource::Monster,
+                        power_instance: None,
+                        model_id: creature.model_id.clone(),
+                    });
+                }
                 continue;
             }
             listeners.extend(
@@ -25576,7 +25658,7 @@ impl Simulator {
                     .run_player
                     .relics
                     .iter()
-                    .filter(|relic| !relic.melted)
+                    .filter(|relic| !relic.melted && keep(ListenerSource::Relic, &relic.model_id))
                     .map(|relic| Listener {
                         owner: creature.id,
                         source: ListenerSource::Relic,
@@ -25588,22 +25670,32 @@ impl Simulator {
             // empty slot has nothing in it to listen.
             listeners.extend(self.state.run_player.potions.iter().enumerate().filter_map(
                 |(slot, held)| {
-                    held.as_ref().map(|model_id| Listener {
-                        owner: creature.id,
-                        source: ListenerSource::PotionSlot(slot),
-                        power_instance: None,
-                        model_id: model_id.clone(),
-                    })
+                    held.as_ref()
+                        .filter(|model_id| keep(ListenerSource::PotionSlot(slot), model_id))
+                        .map(|model_id| Listener {
+                            owner: creature.id,
+                            source: ListenerSource::PotionSlot(slot),
+                            power_instance: None,
+                            model_id: model_id.clone(),
+                        })
                 },
             ));
             // The whole orb queue, front first, behind the belt and in front of
             // the piles.
-            listeners.extend(combat.player.orbs.orbs.iter().map(|orb| Listener {
-                owner: creature.id,
-                source: ListenerSource::Orb(orb.id),
-                power_instance: None,
-                model_id: orb.model_id.clone(),
-            }));
+            listeners.extend(
+                combat
+                    .player
+                    .orbs
+                    .orbs
+                    .iter()
+                    .filter(|orb| keep(ListenerSource::Orb(orb.id), &orb.model_id))
+                    .map(|orb| Listener {
+                        owner: creature.id,
+                        source: ListenerSource::Orb(orb.id),
+                        power_instance: None,
+                        model_id: orb.model_id.clone(),
+                    }),
+            );
             for pile in [
                 PileName::Hand,
                 PileName::Draw,
@@ -25614,13 +25706,23 @@ impl Simulator {
                 // The card, and then right behind it its enchantment where the
                 // card carries one.
                 for card in pile_of(&combat.player.piles, pile) {
-                    listeners.push(Listener {
-                        owner: creature.id,
-                        source: ListenerSource::CombatCard(card.id),
-                        power_instance: None,
-                        model_id: card.fingerprint.model_id.clone(),
-                    });
-                    if let Some(enchantment) = &card.fingerprint.enchantment {
+                    if keep(
+                        ListenerSource::CombatCard(card.id),
+                        &card.fingerprint.model_id,
+                    ) {
+                        listeners.push(Listener {
+                            owner: creature.id,
+                            source: ListenerSource::CombatCard(card.id),
+                            power_instance: None,
+                            model_id: card.fingerprint.model_id.clone(),
+                        });
+                    }
+                    if let Some(enchantment) = &card.fingerprint.enchantment
+                        && keep(
+                            ListenerSource::CombatCardEnchantment(card.id),
+                            &enchantment.model_id,
+                        )
+                    {
                         listeners.push(Listener {
                             owner: creature.id,
                             source: ListenerSource::CombatCardEnchantment(card.id),
@@ -25642,7 +25744,7 @@ impl Simulator {
         let owner = CreatureCombatId::from(0);
         let mut listeners: Vec<Listener> = Vec::new();
         for (index, fingerprint) in self.state.run_player.deck.iter().enumerate() {
-            push_deck_card_listeners(&mut listeners, owner, index, fingerprint);
+            push_deck_card_listeners(&mut listeners, owner, index, fingerprint, &|_, _| true);
         }
         listeners.extend(
             self.state
@@ -30595,14 +30697,22 @@ fn push_deck_card_listeners(
     owner: CreatureCombatId,
     index: usize,
     fingerprint: &crate::CardFingerprint,
+    keep: &dyn Fn(ListenerSource, &ModelId) -> bool,
 ) {
-    listeners.push(Listener {
-        power_instance: None,
-        owner,
-        source: ListenerSource::DeckCard(index),
-        model_id: fingerprint.model_id.clone(),
-    });
-    if let Some(enchantment) = &fingerprint.enchantment {
+    if keep(ListenerSource::DeckCard(index), &fingerprint.model_id) {
+        listeners.push(Listener {
+            power_instance: None,
+            owner,
+            source: ListenerSource::DeckCard(index),
+            model_id: fingerprint.model_id.clone(),
+        });
+    }
+    if let Some(enchantment) = &fingerprint.enchantment
+        && keep(
+            ListenerSource::DeckCardEnchantment(index),
+            &enchantment.model_id,
+        )
+    {
         listeners.push(Listener {
             power_instance: None,
             owner,
