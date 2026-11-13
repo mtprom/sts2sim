@@ -1260,3 +1260,79 @@ fn wraith_form_pays_dexterity_every_turn() {
         assert_eq!(power_amount(&simulator, 0, "POWER.WRAITH_FORM_POWER"), 1);
     }
 }
+
+// --- what the card face shows ---------------------------------------------
+
+/// The face the observation shows for the first card of the hand with this id,
+/// and the face the play action for it carries.
+fn hand_faces(
+    simulator: &Simulator,
+    model_id: &str,
+) -> (sts2_engine::CardFace, sts2_engine::CardFace) {
+    let wanted = id(model_id);
+    let observed = simulator
+        .agent_observation()
+        .hand
+        .iter()
+        .find(|handle| handle.fingerprint.model_id == wanted)
+        .map(|handle| handle.face.clone())
+        .unwrap_or_else(|| panic!("{model_id} is not in the hand"));
+    let offered = simulator
+        .legal_actions()
+        .iter()
+        .find_map(|action| match action {
+            Action::PlayCard { card, .. } if card.fingerprint.model_id == wanted => {
+                Some(card.face.clone())
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("{model_id} was not legal"));
+    (observed, offered)
+}
+
+/// Sly printed on a card shows on its face, in the hand and on the play
+/// action, the same as Sly an effect granted.
+#[test]
+fn printed_sly_shows_on_the_face() {
+    for (model_id, sly) in [
+        ("CARD.TACTICIAN", true),
+        ("CARD.REFLEX", true),
+        ("CARD.FLICK_FLACK", true),
+        ("CARD.UNTOUCHABLE", true),
+        ("CARD.DEFLECT", false),
+    ] {
+        for upgrade in [0, 1] {
+            let simulator = fight(&[(model_id, upgrade)]);
+            let (observed, offered) = hand_faces(&simulator, model_id);
+            assert_eq!(observed.sly, sly, "{model_id}+{upgrade} in the hand");
+            assert_eq!(offered.sly, sly, "{model_id}+{upgrade} on the play");
+        }
+    }
+}
+
+/// Retain printed on a card, or added by its upgrade, shows on its face.
+#[test]
+fn printed_retain_shows_on_the_face() {
+    for (model_id, upgrade, retain) in [
+        ("CARD.SNAKEBITE", 0, true),
+        ("CARD.SNAKEBITE", 1, true),
+        ("CARD.CALCULATED_GAMBLE", 0, false),
+        ("CARD.CALCULATED_GAMBLE", 1, true),
+        ("CARD.DEFLECT", 0, false),
+    ] {
+        let simulator = fight(&[(model_id, upgrade)]);
+        let (observed, offered) = hand_faces(&simulator, model_id);
+        assert_eq!(observed.retain, retain, "{model_id}+{upgrade} in the hand");
+        assert_eq!(offered.retain, retain, "{model_id}+{upgrade} on the play");
+    }
+}
+
+/// A Sly a hand trick grants for the turn still shows on the face.
+#[test]
+fn granted_sly_still_shows_on_the_face() {
+    let mut simulator = fight(&[("CARD.HAND_TRICK", 0), ("CARD.DEFLECT", 0)]);
+    assert!(!hand_faces(&simulator, "CARD.DEFLECT").0.sly);
+    play(&mut simulator, "CARD.HAND_TRICK");
+    let (observed, offered) = hand_faces(&simulator, "CARD.DEFLECT");
+    assert!(observed.sly && offered.sly);
+}

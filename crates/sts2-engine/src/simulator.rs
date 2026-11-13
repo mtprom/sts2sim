@@ -219,6 +219,17 @@ impl ContentRegistry {
         self.enchantment(&fingerprint.enchantment.as_ref()?.model_id)
     }
 
+    /// A card's face as the player sees it: the copy's own and this-turn
+    /// keywords, plus Sly and Retain printed on the card (or its upgrade or
+    /// enchantment), which the copy's flags alone leave out.
+    #[must_use]
+    pub fn card_face(&self, card: &crate::CardInstance) -> crate::CardFace {
+        let mut face = crate::CardFace::of(card);
+        face.sly |= self.card_has_keyword(&card.fingerprint, crate::CardKeyword::Sly);
+        face.retain |= self.card_has_keyword(&card.fingerprint, crate::CardKeyword::Retain);
+        face
+    }
+
     /// Whether the card's keywords hold this one once its upgrade and its
     /// enchantment have both had their say.
     ///
@@ -1710,13 +1721,13 @@ impl Simulator {
                 energy_spent_this_turn: combat.player.energy_spent_this_turn,
                 orbs_channeled_this_combat: combat.player.orbs_channeled_this_combat.clone(),
             },
-            hand: card_handles(&combat.player.piles.hand),
+            hand: card_handles(&self.content, &combat.player.piles.hand),
             hand_previews: self.card_previews.clone(),
             draw_pile_size: combat.player.piles.draw.len(),
-            draw_pile: sorted_pile_cards(&combat.player.piles.draw),
-            discard: card_handles(&combat.player.piles.discard),
-            exhaust: card_handles(&combat.player.piles.exhaust),
-            play: card_handles(&combat.player.piles.play),
+            draw_pile: sorted_pile_cards(&self.content, &combat.player.piles.draw),
+            discard: card_handles(&self.content, &combat.player.piles.discard),
+            exhaust: card_handles(&self.content, &combat.player.piles.exhaust),
+            play: card_handles(&self.content, &combat.player.piles.play),
             orbs: Some(combat.player.orbs.clone()),
             creatures: combat
                 .creatures
@@ -1851,13 +1862,13 @@ impl Simulator {
                 energy_spent_this_turn: combat.player.energy_spent_this_turn,
                 orbs_channeled_this_combat: &combat.player.orbs_channeled_this_combat,
             },
-            hand: card_handle_views(&combat.player.piles.hand),
+            hand: card_handle_views(&self.content, &combat.player.piles.hand),
             hand_previews: &self.card_previews,
             draw_pile_size: combat.player.piles.draw.len(),
-            draw_pile: sorted_pile_card_views(&combat.player.piles.draw),
-            discard: card_handle_views(&combat.player.piles.discard),
-            exhaust: card_handle_views(&combat.player.piles.exhaust),
-            play: card_handle_views(&combat.player.piles.play),
+            draw_pile: sorted_pile_card_views(&self.content, &combat.player.piles.draw),
+            discard: card_handle_views(&self.content, &combat.player.piles.discard),
+            exhaust: card_handle_views(&self.content, &combat.player.piles.exhaust),
+            play: card_handle_views(&self.content, &combat.player.piles.play),
             orbs: Some(&combat.player.orbs),
             creatures: combat
                 .creatures
@@ -14517,7 +14528,7 @@ impl Simulator {
                                 index,
                                 card_id: card.id,
                                 fingerprint: card.fingerprint.clone(),
-                                face: crate::CardFace::of(card),
+                                face: self.content.card_face(card),
                             },
                             ChosenCard::Combat(card.clone()),
                         )
@@ -28182,7 +28193,7 @@ impl Simulator {
                 index,
                 card_id: card.id,
                 fingerprint: card.fingerprint.clone(),
-                face: crate::CardFace::of(card),
+                face: self.content.card_face(card),
             };
             match self.card_target(definition, &card.fingerprint) {
                 TargetType::AnyEnemy => {
@@ -29473,12 +29484,15 @@ fn sort_pile_canonically(cards: &mut [crate::CardInstance]) {
 /// screen's canonical order rather than the pile's own, and without instance
 /// identities — which copy of a same-looking pair sits where is not theirs
 /// to know.
-fn sorted_pile_cards(cards: &[crate::CardInstance]) -> Vec<crate::PileCard> {
+fn sorted_pile_cards(
+    content: &ContentRegistry,
+    cards: &[crate::CardInstance],
+) -> Vec<crate::PileCard> {
     let mut views: Vec<crate::PileCard> = cards
         .iter()
         .map(|card| crate::PileCard {
             fingerprint: card.fingerprint.clone(),
-            face: crate::CardFace::of(card),
+            face: content.card_face(card),
         })
         .collect();
     sort_card_views(&mut views, |view| &view.fingerprint.model_id);
@@ -29782,7 +29796,10 @@ fn key_handle_views(cards: &[CardHandle]) -> Vec<PileCardView<'_>> {
         .collect()
 }
 
-fn card_handle_views(cards: &[crate::CardInstance]) -> Vec<CardHandleView<'_>> {
+fn card_handle_views<'a>(
+    content: &ContentRegistry,
+    cards: &'a [crate::CardInstance],
+) -> Vec<CardHandleView<'a>> {
     cards
         .iter()
         .enumerate()
@@ -29790,7 +29807,7 @@ fn card_handle_views(cards: &[crate::CardInstance]) -> Vec<CardHandleView<'_>> {
             index,
             card_id: card.id,
             fingerprint: &card.fingerprint,
-            face: crate::CardFace::of(card),
+            face: content.card_face(card),
         })
         .collect()
 }
@@ -29798,19 +29815,22 @@ fn card_handle_views(cards: &[crate::CardInstance]) -> Vec<CardHandleView<'_>> {
 /// The same canonical order [`sorted_pile_cards`] draws — the views
 /// serialize to the same JSON, so the same sort keys — without cloning the
 /// fingerprints.
-fn sorted_pile_card_views(cards: &[crate::CardInstance]) -> Vec<PileCardView<'_>> {
+fn sorted_pile_card_views<'a>(
+    content: &ContentRegistry,
+    cards: &'a [crate::CardInstance],
+) -> Vec<PileCardView<'a>> {
     let mut views: Vec<PileCardView<'_>> = cards
         .iter()
         .map(|card| PileCardView {
             fingerprint: &card.fingerprint,
-            face: crate::CardFace::of(card),
+            face: content.card_face(card),
         })
         .collect();
     sort_card_views(&mut views, |view| &view.fingerprint.model_id);
     views
 }
 
-fn card_handles(cards: &[crate::CardInstance]) -> Vec<CardHandle> {
+fn card_handles(content: &ContentRegistry, cards: &[crate::CardInstance]) -> Vec<CardHandle> {
     cards
         .iter()
         .enumerate()
@@ -29818,7 +29838,7 @@ fn card_handles(cards: &[crate::CardInstance]) -> Vec<CardHandle> {
             index,
             card_id: card.id,
             fingerprint: card.fingerprint.clone(),
-            face: crate::CardFace::of(card),
+            face: content.card_face(card),
         })
         .collect()
 }
