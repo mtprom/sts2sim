@@ -6131,8 +6131,9 @@ pub struct VisibleCreature {
 /// [`CardPreview`], with the aimed number against each enemy the play can
 /// name. Version 9 retains the concrete card-selection screen and its
 /// non-card alternatives, so a consumer can reproduce the exact offer
-/// context and positional indexes.
-pub const AGENT_OBSERVATION_VERSION: u32 = 9;
+/// context and positional indexes. Version 10 shows Sly and Retain printed on
+/// a card on its face, not only ones an effect granted.
+pub const AGENT_OBSERVATION_VERSION: u32 = 10;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AgentObservation {
