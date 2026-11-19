@@ -101,9 +101,12 @@ fn a_reward_set_survives_the_proceed_and_dies_on_the_next_point() {
     );
 }
 
+/// The first won fight's screen that offers a card. A fight's screen, not
+/// Neow's: on this seed a Neow relic opens card rewards of its own.
 fn offered_card_reward() -> (Simulator, Action) {
     let simulator = walk_until(fresh_run(), |simulator| {
-        simulator.legal_actions().iter().any(|action| {
+        simulator.state().combat.as_ref().is_some_and(|combat| combat.reward_set.is_some())
+            && simulator.legal_actions().iter().any(|action| {
             matches!(action, Action::ClaimReward { fingerprint, .. } if !fingerprint.offered_cards.is_empty())
         })
     });
