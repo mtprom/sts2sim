@@ -777,7 +777,11 @@ fn memento_mori_damage_does_not_scale_with_discards() {
         play(&mut simulator, "CARD.MEMENTO_MORI");
         assert_eq!(creature(&simulator, 1).current_hp, 39 - base);
 
-        let mut simulator = fight(&[("CARD.SURVIVOR", 0), ("CARD.MEMENTO_MORI", upgrade)]);
+        let mut simulator = fight(&[
+            ("CARD.SURVIVOR", 0),
+            ("CARD.MEMENTO_MORI", upgrade),
+            ("CARD.SLICE", 0),
+        ]);
         play(&mut simulator, "CARD.SURVIVOR");
         choose(&mut simulator, "CARD.MEMENTO_MORI");
         assert_eq!(
