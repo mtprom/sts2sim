@@ -51,7 +51,7 @@ fn mighty_cards_add_dazed_at_random_positions_after_their_effect() {
             combat
                 .creatures
                 .iter()
-                .find(|creature| creature.combat_id.0 == 0)
+                .find(|creature| creature.id.get() == 0)
                 .unwrap()
                 .block,
             block
@@ -60,7 +60,7 @@ fn mighty_cards_add_dazed_at_random_positions_after_their_effect() {
             combat
                 .creatures
                 .iter()
-                .find(|creature| creature.combat_id.0 == 1)
+                .find(|creature| creature.id.get() == 1)
                 .unwrap()
                 .current_hp,
             39 - damage

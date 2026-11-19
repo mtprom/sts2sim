@@ -7250,7 +7250,7 @@ fn a_book_repair_knife_does_not_heal_for_a_doomed_ally() {
         .unwrap()
         .creatures
         .iter_mut()
-        .find(|creature| creature.combat_id.0 == 1)
+        .find(|creature| creature.id.get() == 1)
         .unwrap()
         .side = sts2_engine::CombatSide::Player;
     let mut simulator =
@@ -7269,7 +7269,7 @@ fn a_book_repair_knife_does_not_heal_for_a_doomed_ally() {
             .unwrap()
             .creatures
             .iter()
-            .any(|creature| creature.combat_id.0 == 1 && creature.current_hp > 0)
+            .any(|creature| creature.id.get() == 1 && creature.current_hp > 0)
     );
 }
 
