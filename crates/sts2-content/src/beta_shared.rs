@@ -265,15 +265,29 @@ pub(crate) fn relics() -> Vec<RelicDefinition> {
             )],
             ..relics::obtained_only("RELIC.BYRDINE", RelicRarity::Event)
         },
-        // TODO(package 4): ModifyAttackHitCount for Thumbscrew; Wuppy's
-        // persistent HP, restore option and pre-block damage interception.
+        // TODO(package 4): ModifyAttackHitCount for Thumbscrew.
         RelicDefinition {
             on_obtained: vec![Command::Unsupported(id("RELIC.THUMBSCREW"))],
             ..relics::obtained_only("RELIC.THUMBSCREW", RelicRarity::Event)
         },
         RelicDefinition {
-            on_obtained: vec![Command::Unsupported(id("RELIC.WUPPY"))],
+            counter_property: Some("CurrentHp".to_owned()),
+            second_counter_property: Some("MaxHp".to_owned()),
+            counter_kind: Some(sts2_engine::CounterKind::Ledger),
+            initial_counter: 60,
+            on_obtained: vec![Command::Relic(
+                sts2_engine::RelicCmd::SetListeningSecondCounter(Amount::Fixed(60)),
+            )],
             adds_pet: true,
+            adds_rest_site_option: Some(sts2_engine::RestSiteOffer::of(
+                sts2_engine::RestSiteOption::Restore,
+            )),
+            // TODO(package 4): spawn using CurrentHp/MaxHp, synchronize HP
+            // changes, and redirect powered attacks before the owner's block.
+            hooks: vec![ModifierHook::every_turn(
+                HookEvent::BeforeCombatStart,
+                vec![Command::Unsupported(id("POWER.WUPPYS_LOYALTY_POWER"))],
+            )],
             ..relics::obtained_only("RELIC.WUPPY", RelicRarity::Event)
         },
         RelicDefinition {

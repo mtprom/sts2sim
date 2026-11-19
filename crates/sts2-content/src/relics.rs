@@ -1474,6 +1474,9 @@ fn event_relics() -> Vec<RelicDefinition> {
             adds_pet: true,
             counter_property: Some("SwoopsPlayed".to_owned()),
             counter_kind: Some(sts2_engine::CounterKind::Ledger),
+            adds_rest_site_option: Some(sts2_engine::RestSiteOffer::of(
+                sts2_engine::RestSiteOption::Evolve,
+            )),
             rolled_skin: Some(skin_of_four()),
             on_obtained: vec![Command::Card(CardCmd::TransformDeckCards {
                 cards: CardSelector::DeckCardsOfModel(id("CARD.BYRDONIS_EGG")),
@@ -1508,8 +1511,6 @@ fn event_relics() -> Vec<RelicDefinition> {
                     HookCondition::PlayedCardIs(id("CARD.BYRD_SWOOP")),
                 ])),
             ],
-            // TODO(package 4): EVOLVE rest option at SwoopsPlayed >= 6;
-            // replace with Byrdine, preserving Skin as Hair.
             ..obtained_only("RELIC.BYRDPIP", RelicRarity::Event)
         }),
         // A chosen cheese is a maximum HP for every fight that ends.

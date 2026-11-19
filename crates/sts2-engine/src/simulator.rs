@@ -7189,6 +7189,24 @@ impl Simulator {
                 });
                 finish_room = false;
             }
+            EventEffect::ObtainWuppy { max_hp } => {
+                if !matches!(max_hp, 30 | 60) {
+                    return Err(EngineError::new(ErrorCode::InvalidConfig)
+                        .with_detail("wuppy_max_hp", max_hp.to_string()));
+                }
+                let model = "RELIC.WUPPY".parse().expect("static model ID");
+                self.run_out_of_combat(&Command::Relic(RelicCmd::Obtain(model)))?;
+                if let Some(relic) = self
+                    .state
+                    .run_player
+                    .relics
+                    .iter_mut()
+                    .find(|relic| relic.model_id.entry() == "WUPPY")
+                {
+                    relic.counter = max_hp;
+                    relic.second_counter = max_hp;
+                }
+            }
             EventEffect::ObtainRolledRelic => {
                 let rarity =
                     roll_relic_rarity(self.state.player_rng.stream_mut(PlayerStream::Rewards));
@@ -9079,6 +9097,17 @@ impl Simulator {
                 _ => None,
             };
             let Some(offer) = offer else { continue };
+            if offer.option == crate::RestSiteOption::Evolve
+                && self
+                    .state
+                    .run_player
+                    .relics
+                    .iter()
+                    .find(|relic| relic.model_id == listener.model_id)
+                    .is_none_or(|relic| relic.counter < 6)
+            {
+                continue;
+            }
             // A Girya stops answering once it has been lifted its three times,
             // and the option is not added.
             if let Some(limit) = offer.while_counter_below
@@ -9108,6 +9137,9 @@ impl Simulator {
     /// cannot be taken.
     fn rest_site_option_is_enabled(&self, option: crate::RestSiteOption) -> bool {
         match option {
+            crate::RestSiteOption::Restore => self.state.run_player.relics.iter().any(|relic| {
+                relic.model_id.entry() == "WUPPY" && relic.counter < relic.second_counter
+            }),
             // The deck holds at least one upgradable card.
             crate::RestSiteOption::Smith => {
                 self.state.run_player.deck.iter().any(|fingerprint| {
@@ -9183,6 +9215,47 @@ impl Simulator {
             // One more lift on the Girya.
             crate::RestSiteOption::Lift => {
                 self.raise_relic_counter("RELIC.GIRYA", 1);
+                true
+            }
+            crate::RestSiteOption::Evolve => {
+                let original = "RELIC.BYRDPIP".parse().expect("static model ID");
+                let Some(relic) = self
+                    .state
+                    .run_player
+                    .relics
+                    .iter()
+                    .find(|relic| relic.model_id == original)
+                else {
+                    return Ok(());
+                };
+                let hair = relic
+                    .saved_strings
+                    .iter()
+                    .find(|(key, _)| key == "Skin")
+                    .map_or("version1", |(_, value)| value.as_str())
+                    .replace("version", "hair/v");
+                let replacement = "RELIC.BYRDINE".parse().expect("static model ID");
+                self.run_out_of_combat(&Command::Relic(RelicCmd::Replace {
+                    original,
+                    replacement,
+                }))?;
+                if let Some(relic) = self
+                    .state
+                    .run_player
+                    .relics
+                    .iter_mut()
+                    .find(|relic| relic.model_id.entry() == "BYRDINE")
+                {
+                    relic.saved_strings.push(("Hair".to_owned(), hair));
+                }
+                true
+            }
+            crate::RestSiteOption::Restore => {
+                for relic in &mut self.state.run_player.relics {
+                    if relic.model_id.entry() == "WUPPY" {
+                        relic.counter = relic.second_counter;
+                    }
+                }
                 true
             }
         };

@@ -838,6 +838,88 @@ fn waterfall_locks_negotiation_below_70_and_gives_an_unupgraded_rare_card() {
 }
 
 #[test]
+fn helping_wuppy_immediately_gives_60_hp_and_an_injury() {
+    let mut simulator = Visit::new("EVENT.WUPPY_IN_TROUBLE").hp(39, 80).enter();
+    choose(
+        &mut simulator,
+        "WUPPY_IN_TROUBLE.pages.INITIAL.options.HELP_IMMEDIATELY",
+    );
+    let wuppy = simulator
+        .state()
+        .run_player
+        .relics
+        .iter()
+        .find(|relic| relic.model_id == id("RELIC.WUPPY"))
+        .unwrap();
+    assert_eq!((wuppy.counter, wuppy.second_counter), (60, 60));
+    assert_eq!(simulator.state().run_player.current_hp, 39);
+    assert!(
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .any(|card| card.model_id == id("CARD.INJURY"))
+    );
+}
+
+#[test]
+fn cautious_wuppy_has_30_hp_and_truncates_five_percent_current_hp_loss() {
+    for (hp, remaining) in [(19, 19), (39, 38), (40, 38)] {
+        let mut simulator = Visit::new("EVENT.WUPPY_IN_TROUBLE").hp(hp, 80).enter();
+        choose(
+            &mut simulator,
+            "WUPPY_IN_TROUBLE.pages.INITIAL.options.BE_CAUTIOUS",
+        );
+        assert_eq!(simulator.state().run_player.current_hp, remaining);
+        let wuppy = simulator
+            .state()
+            .run_player
+            .relics
+            .iter()
+            .find(|relic| relic.model_id == id("RELIC.WUPPY"))
+            .unwrap();
+        assert_eq!((wuppy.counter, wuppy.second_counter), (30, 30));
+        assert!(
+            !simulator
+                .state()
+                .run_player
+                .deck
+                .iter()
+                .any(|card| card.model_id == id("CARD.INJURY"))
+        );
+    }
+}
+
+#[test]
+fn ignoring_wuppy_offers_one_potion_without_a_companion() {
+    let mut simulator = Visit::new("EVENT.WUPPY_IN_TROUBLE").enter();
+    choose(
+        &mut simulator,
+        "WUPPY_IN_TROUBLE.pages.INITIAL.options.IGNORE",
+    );
+    let rewards = &simulator
+        .state()
+        .run
+        .as_ref()
+        .unwrap()
+        .reward_set
+        .as_ref()
+        .unwrap()
+        .rewards;
+    assert_eq!(rewards.len(), 1);
+    assert_eq!(rewards[0].fingerprint.reward_type, "potion");
+    assert!(
+        !simulator
+            .state()
+            .run_player
+            .relics
+            .iter()
+            .any(|relic| relic.model_id == id("RELIC.WUPPY"))
+    );
+}
+
+#[test]
 fn a_luminous_choir_discounts_its_tribute_as_the_room_is_entered() {
     // The tribute opens at a hundred and fifty and is discounted by anything
     // from nothing to forty-nine, so it lands somewhere in a hundred and a

@@ -349,6 +349,7 @@ pub fn registry_at(character: &ModelId, ascension: u8) -> Arc<ContentRegistry> {
         beta_events::shrine_of_the_warlord(),
         beta_events::thermae_nonupeipe(),
         beta_events::waterfall_of_obvious_secrets(),
+        beta_events::wuppy_in_trouble(character),
         events::darv(),
         events::doors_of_light_and_dark(),
         events::tea_master(),
@@ -436,9 +437,6 @@ pub fn registry_at(character: &ModelId, ascension: u8) -> Arc<ContentRegistry> {
         ),
     ];
     for definition in transcribed_events {
-        content.add_event(definition);
-    }
-    for definition in beta_events::blocked_events() {
         content.add_event(definition);
     }
 

@@ -5608,6 +5608,69 @@ fn a_girya_is_lifted_three_times() {
     assert_eq!(rest_options(&spent), ["HEAL", "SMITH"]);
 }
 
+#[test]
+fn six_swoops_unlock_evolve_and_preserve_the_pet_skin_and_upgrade() {
+    for count in [5, 6] {
+        let mut state = run_holding(&["RELIC.BYRDPIP"]).state().clone();
+        state.run_player.deck.push(card("CARD.BYRD_SWOOP", 1));
+        let index = state
+            .run_player
+            .relics
+            .iter()
+            .position(|relic| relic.model_id == id("RELIC.BYRDPIP"))
+            .unwrap();
+        state.run_player.relics[index].counter = count;
+        state.run_player.relics[index].saved_strings =
+            vec![("Skin".to_owned(), "version3".to_owned())];
+        let mut simulator =
+            Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        walk_to(&mut simulator, 1);
+        assert_eq!(rest_options(&simulator).contains(&"EVOLVE"), count == 6);
+        if count == 6 {
+            simulator.step(rest_option(&simulator, "EVOLVE")).unwrap();
+            let byrdine = &simulator.state().run_player.relics[index];
+            assert_eq!(byrdine.model_id, id("RELIC.BYRDINE"));
+            assert!(
+                byrdine
+                    .saved_strings
+                    .contains(&("Hair".to_owned(), "hair/v3".to_owned()))
+            );
+            assert!(
+                simulator
+                    .state()
+                    .run_player
+                    .deck
+                    .iter()
+                    .any(|card| card.model_id == id("CARD.GOD_BYRD") && card.upgrade_level == 1)
+            );
+        }
+    }
+}
+
+#[test]
+fn restore_is_disabled_at_full_hp_and_revives_a_dead_wuppy_to_its_maximum() {
+    for hp in [0, 20, 30] {
+        let mut state = run_holding(&["RELIC.WUPPY"]).state().clone();
+        let wuppy = state
+            .run_player
+            .relics
+            .iter_mut()
+            .find(|relic| relic.model_id == id("RELIC.WUPPY"))
+            .unwrap();
+        wuppy.counter = hp;
+        wuppy.second_counter = 30;
+        let mut simulator =
+            Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        walk_to(&mut simulator, 1);
+        assert!(rest_options(&simulator).contains(&"RESTORE"));
+        assert_eq!(offered_options(&simulator).contains(&"RESTORE"), hp < 30);
+        if hp < 30 {
+            simulator.step(rest_option(&simulator, "RESTORE")).unwrap();
+            assert_eq!(relic_counter(&simulator, "RELIC.WUPPY"), 30);
+        }
+    }
+}
+
 /// A meat cleaver's cook takes two cards out of the deck for five more maximum
 /// HP, and backing out of its screen leaves the rest site exactly as it stood.
 #[test]

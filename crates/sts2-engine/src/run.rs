@@ -1599,6 +1599,10 @@ pub enum EventEffect {
     /// HP the option costs outright, which nothing can block.
     LoseHp(EventAmount),
     ObtainRelic(ModelId),
+    /// Wuppy is created with the event option's maximum HP before it is kept.
+    ObtainWuppy {
+        max_hp: i32,
+    },
     /// A relic an ancient set up as it offered it, and the card that setup
     /// rolled: a dusty tome picks its card when the page is built, and the
     /// relic carries it from then on.
@@ -2173,6 +2177,10 @@ pub enum RestSiteOption {
     Kindle,
     /// Lift, which Girya adds while it has lifts left.
     Lift,
+    /// Byrdpip evolves after six Swoops.
+    Evolve,
+    /// Fully restore the event companion's persistent HP.
+    Restore,
 }
 
 impl RestSiteOption {
@@ -2189,6 +2197,8 @@ impl RestSiteOption {
             Self::Hatch => "HATCH",
             Self::Kindle => "KINDLE",
             Self::Lift => "LIFT",
+            Self::Evolve => "EVOLVE",
+            Self::Restore => "RESTORE",
         }
     }
 }

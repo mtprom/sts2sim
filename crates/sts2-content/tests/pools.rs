@@ -933,7 +933,7 @@ fn the_defect_relic_pool_is_the_eight_the_character_carries() {
 /// three that stand in the shared pool as well.
 #[test]
 #[allow(clippy::too_many_lines, reason = "one line per relic of the pool")]
-fn the_event_relic_pool_is_the_hundred_and_forty_two_only_an_event_deals() {
+fn the_event_relic_pool_is_the_hundred_and_fifty_one_only_an_event_deals() {
     assert_eq!(
         relic_pool("RELIC_POOL.EVENT_RELIC_POOL"),
         [

@@ -158,16 +158,46 @@ pub(crate) fn thermae_nonupeipe() -> EventDefinition {
     )
 }
 
-pub(crate) fn blocked_events() -> Vec<EventDefinition> {
-    vec![
-        // TODO(package 4): relic with preset persistent HP (60 or 30),
-        // CurrentHp * 0.05 damage rounded up, and Wuppy interception/restore.
-        event(
-            "EVENT.WUPPY_IN_TROUBLE",
+pub(crate) fn wuppy_in_trouble(character: &sts2_core::ModelId) -> EventDefinition {
+    let candidates = crate::potions::character_potion_pool(character)
+        .into_iter()
+        .chain(crate::potions::shared_potion_pool())
+        .collect();
+    event(
+        "EVENT.WUPPY_IN_TROUBLE",
+        EventCondition::All(vec![
             EventCondition::NoEventPet,
-            EventGeneration::Unsupported,
-        ),
-    ]
+            EventCondition::CurrentHpAbove(0),
+        ]),
+        EventGeneration::Fixed(vec![
+            option(
+                "WUPPY_IN_TROUBLE.pages.INITIAL.options.HELP_IMMEDIATELY",
+                "Help immediately",
+                vec![add("CARD.INJURY"), EventEffect::ObtainWuppy { max_hp: 60 }],
+            ),
+            option(
+                "WUPPY_IN_TROUBLE.pages.INITIAL.options.BE_CAUTIOUS",
+                "Be cautious",
+                vec![
+                    // Creature.LoseHpInternal truncates the decimal five percent.
+                    EventEffect::Run(vec![Command::Creature(sts2_engine::CreatureCmd::Damage {
+                        target: sts2_engine::CreatureSelector::Owner,
+                        amount: Amount::Quotient {
+                            of: Box::new(Amount::counting(Count::OwnerCurrentHp)),
+                            by: 20,
+                        },
+                        props: sts2_engine::ValueProps::UNBLOCKABLE,
+                    })]),
+                    EventEffect::ObtainWuppy { max_hp: 30 },
+                ],
+            ),
+            option(
+                "WUPPY_IN_TROUBLE.pages.INITIAL.options.IGNORE",
+                "Ignore",
+                vec![EventEffect::OfferRolledPotion { candidates }],
+            ),
+        ]),
+    )
 }
 
 pub(crate) fn waterfall_of_obvious_secrets() -> EventDefinition {
