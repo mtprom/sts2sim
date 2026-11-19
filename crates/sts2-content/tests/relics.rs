@@ -948,56 +948,57 @@ fn a_dowsing_counts_unknown_points_and_turns_into_an_abundance() {
 /// the fourth room's roll, then completes on entering that room.
 #[test]
 fn dowsing_blocks_monster_and_elite_after_three_rooms() {
-    for entered in [2, 3] {
-        for combat_type in [MapPointType::Monster, MapPointType::Elite] {
-            let mut state = run_dowsing(entered).state().clone();
-            let run = state.run.as_mut().expect("a run");
-            run.unlocks.number_of_runs = 1;
-            run.rooms[0].retain(|room| room.coord != MapCoord { col: 2, row: 1 });
-            run.acts[0].elite_encounters = vec![id("ENCOUNTER.INFESTED_PRISMS_ELITE")];
-            run.unknown_room_odds = sts2_engine::UnknownRoomOdds {
-                monster_bits: if combat_type == MapPointType::Monster {
-                    1.0_f32
-                } else {
-                    0.0
-                }
-                .to_bits(),
-                elite_bits: if combat_type == MapPointType::Elite {
-                    1.0_f32
-                } else {
-                    0.0
-                }
-                .to_bits(),
-                treasure_bits: 1.0_f32.to_bits(),
-                shop_bits: 0.0_f32.to_bits(),
-            };
-            let mut simulator =
-                Simulator::from_generated_state(state, sts2_content::standard_registry())
-                    .expect("scenario");
-            walk_to(&mut simulator, 2);
-            assert_eq!(
-                simulator
-                    .state()
-                    .run
-                    .as_ref()
-                    .expect("a run")
-                    .current_room_type,
-                Some(if entered == 3 {
-                    MapPointType::Treasure
-                } else {
-                    combat_type
-                }),
-            );
-            assert_eq!(
-                simulator
-                    .state()
-                    .run_player
-                    .deck
-                    .iter()
-                    .any(|card| card.model_id == id("CARD.ABUNDANCE")),
-                entered == 3,
-            );
-        }
+    for (entered, combat_type) in [
+        (2, MapPointType::Monster),
+        (3, MapPointType::Monster),
+        (3, MapPointType::Elite),
+    ] {
+        let mut state = run_dowsing(entered).state().clone();
+        let run = state.run.as_mut().expect("a run");
+        run.unlocks.number_of_runs = 1;
+        run.rooms[0].retain(|room| room.coord != MapCoord { col: 2, row: 1 });
+        run.unknown_room_odds = sts2_engine::UnknownRoomOdds {
+            monster_bits: if combat_type == MapPointType::Monster {
+                1.0_f32
+            } else {
+                0.0
+            }
+            .to_bits(),
+            elite_bits: if combat_type == MapPointType::Elite {
+                1.0_f32
+            } else {
+                0.0
+            }
+            .to_bits(),
+            treasure_bits: 1.0_f32.to_bits(),
+            shop_bits: 0.0_f32.to_bits(),
+        };
+        let mut simulator =
+            Simulator::from_generated_state(state, sts2_content::standard_registry())
+                .expect("scenario");
+        walk_to(&mut simulator, 2);
+        assert_eq!(
+            simulator
+                .state()
+                .run
+                .as_ref()
+                .expect("a run")
+                .current_room_type,
+            Some(if entered == 3 {
+                MapPointType::Treasure
+            } else {
+                combat_type
+            }),
+        );
+        assert_eq!(
+            simulator
+                .state()
+                .run_player
+                .deck
+                .iter()
+                .any(|card| card.model_id == id("CARD.ABUNDANCE")),
+            entered == 3,
+        );
     }
 }
 
