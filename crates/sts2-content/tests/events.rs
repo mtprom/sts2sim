@@ -858,6 +858,44 @@ fn thermae_charges_88_for_a_towel_or_all_gold_for_robes() {
 }
 
 #[test]
+fn thermae_drinking_costs_31_hp_and_three_guilty_for_the_preselected_relic() {
+    let mut simulator = Visit::new("EVENT.THERMAE_NONUPEIPE")
+        .gold(200)
+        .hp(60, 80)
+        .deck(&[
+            "CARD.STRIKE_IRONCLAD",
+            "CARD.STRIKE_IRONCLAD",
+            "CARD.STRIKE_IRONCLAD",
+            "CARD.DEFEND_IRONCLAD",
+            "CARD.DEFEND_IRONCLAD",
+            "CARD.DEFEND_IRONCLAD",
+        ])
+        .enter();
+    let offered = match page(&simulator)[2].effects.last().unwrap() {
+        EventEffect::ObtainRelic(model) => model.clone(),
+        other => panic!("expected the settled relic, found {other:?}"),
+    };
+    assert_ne!(offered, id("RELIC.LOOMING_FRUIT"));
+    choose(
+        &mut simulator,
+        "THERMAE_NONUPEIPE.pages.INITIAL.options.DRINK_WATERS",
+    );
+    assert_eq!(simulator.state().run_player.current_hp, 29);
+    assert_eq!(simulator.state().run_player.gold, 200);
+    assert!(holds_relic(&simulator, &offered.to_string()));
+    assert_eq!(
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .filter(|card| card.model_id == id("CARD.GUILTY"))
+            .count(),
+        3
+    );
+}
+
+#[test]
 fn waterfall_locks_negotiation_below_70_and_gives_an_unupgraded_rare_card() {
     for gold in [69, 70] {
         let mut simulator = Visit::new("EVENT.WATERFALL_OF_OBVIOUS_SECRETS")
