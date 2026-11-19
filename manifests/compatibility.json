@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "compatibility_id": "sts2-v0.111.0-41cef1ea-models-1568834832",
+  "compatibility_id": "sts2-v0.113.1-d09d48e5-models-1748280997",
   "game": {
-    "version": "v0.111.0",
-    "commit": "41cef1ea",
-    "model_id_hash": 1568834832
+    "version": "v0.113.1",
+    "commit": "d09d48e5",
+    "model_id_hash": 1748280997
   },
   "support_policy": {
     "player_counts": [
