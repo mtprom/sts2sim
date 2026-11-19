@@ -21,7 +21,7 @@ fn a_potion_choice_does_not_suspend_back_attack_intent_modifiers() {
             .energy(3, 3)
             .potions(vec![Some(id("POTION.ATTACK_POTION"))])
             .enemy(1, id("MONSTER.CRUSHER"), 209, 209, "THRASH_MOVE")
-            .enemy(2, id("MONSTER.ROCKET"), 199, 199, "TARGETING_RETICLE_MOVE")
+            .enemy(2, id("MONSTER.ROCKET"), 199, 199, "CALCULATING_MOVE")
             .power(0, id("POWER.SURROUNDED_POWER"), 1, PowerType::Debuff)
             .power(1, id("POWER.BACK_ATTACK_LEFT_POWER"), 1, PowerType::Buff)
             .power(2, id("POWER.BACK_ATTACK_RIGHT_POWER"), 1, PowerType::Buff)

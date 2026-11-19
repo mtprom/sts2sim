@@ -807,11 +807,11 @@ fn memento_mori_selects_the_lowest_hp_without_a_roll() {
                 .card(PileName::Hand, 0, card("CARD.MEMENTO_MORI", 0), 0)
                 .build(sts2_content::standard_registry())
                 .expect("the scenario builds");
-        assert!(simulator.state().combat.as_ref().unwrap().player.piles.hand[0].sly);
+        assert!(hand_faces(&simulator, "CARD.MEMENTO_MORI").0.sly);
         play(&mut simulator, "CARD.MEMENTO_MORI");
         assert_eq!(creature(&simulator, 1).current_hp, expected_first);
         assert_eq!(creature(&simulator, 2).current_hp, expected_second);
-        assert_eq!(simulator.state().combat.as_ref().unwrap().player.energy, 0);
+        assert_eq!(simulator.state().combat.as_ref().expect("a fight").player.energy, 0);
     }
 }
 

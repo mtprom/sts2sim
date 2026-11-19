@@ -18823,6 +18823,10 @@ impl Simulator {
                 .iter()
                 .flat_map(|pile| pile_of(&combat.player.piles, *pile).iter())
                 .filter(|card| card.from_deck())
+                .filter(|card| {
+                    self.content.card(&card.fingerprint.model_id)
+                        .is_some_and(|definition| definition.rarity != crate::CardRarity::Quest)
+                })
                 .cloned()
                 .collect()
         };
