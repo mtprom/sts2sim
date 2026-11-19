@@ -77,8 +77,8 @@ fn a_cinder_stampede_plays_into_a_kill_still_rolls_the_card_it_burns() {
     end_the_turn(&mut standing);
     assert_eq!(
         card_selection_rolls(&standing),
-        1,
-        "a Cinder the beetle survives rolls once for the card it burns"
+        2,
+        "Stampede's pick and the Cinder's burn are one roll each on this stream"
     );
 
     let mut lethal = a_stampede_holding_a_cinder(6);
@@ -90,7 +90,7 @@ fn a_cinder_stampede_plays_into_a_kill_still_rolls_the_card_it_burns() {
     );
     assert_eq!(
         card_selection_rolls(&lethal),
-        1,
+        2,
         "and the kill does not excuse the roll the rest of its body makes"
     );
 }

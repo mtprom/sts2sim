@@ -1029,8 +1029,12 @@ mod tests {
         let mut rng = Rng::new(42);
         let mut values = [0, 1, 2, 3, 4, 5, 6, 7];
         rng.shuffle(&mut values);
-        assert_eq!(values, [7, 1, 6, 3, 5, 4, 2, 0]);
-        assert_eq!(rng.counter(), 7);
+        assert_eq!(values, [1, 3, 7, 6, 5, 2, 0, 4]);
+        // One draw seeds the child generator the swaps run on.
+        assert_eq!(rng.counter(), 1);
+        let mut empty: [u8; 0] = [];
+        rng.shuffle(&mut empty);
+        assert_eq!(rng.counter(), 2, "an empty list still costs its seed draw");
     }
 
     #[test]
