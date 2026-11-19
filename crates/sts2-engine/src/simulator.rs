@@ -10654,6 +10654,7 @@ impl Simulator {
         // this owner — so that is what the tests are asked against.
         let mut hook_context = self.hook_context.clone();
         hook_context.value.target = Some(owner);
+        hook_context.side = Some(self.combat()?.side);
         // The after-applied step carries no player choice context, so a power
         // that brings another with it cannot stop to ask a question about it.
         self.without_suspension("a power's after-applied step", true, |simulator| {
@@ -16738,6 +16739,14 @@ impl Simulator {
                     })
                 })
                 .unwrap_or(0),
+            Count::SourcePlayEnergySpent => {
+                let combat = self.combat()?;
+                if combat.played_card_was_chosen && combat.played_card == context.card {
+                    combat.played_card_energy_spent
+                } else {
+                    0
+                }
+            }
             Count::SourceCardEnergyCost => context
                 .card
                 .and_then(|card_id| {
@@ -18824,7 +18833,8 @@ impl Simulator {
                 .flat_map(|pile| pile_of(&combat.player.piles, *pile).iter())
                 .filter(|card| card.from_deck())
                 .filter(|card| {
-                    self.content.card(&card.fingerprint.model_id)
+                    self.content
+                        .card(&card.fingerprint.model_id)
                         .is_some_and(|definition| definition.rarity != crate::CardRarity::Quest)
                 })
                 .cloned()

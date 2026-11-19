@@ -7,14 +7,24 @@ fn id(value: &str) -> sts2_core::ModelId {
 }
 
 fn creature(simulator: &Simulator, side: CombatSide) -> &Creature {
-    simulator.state().combat.as_ref().expect("a fight").creatures.iter()
-        .find(|creature| creature.side == side).expect("creature on side")
+    simulator
+        .state()
+        .combat
+        .as_ref()
+        .expect("a fight")
+        .creatures
+        .iter()
+        .find(|creature| creature.side == side)
+        .expect("creature on side")
 }
 
 fn end_turn(simulator: &mut Simulator) {
-    let action = simulator.legal_actions().iter()
+    let action = simulator
+        .legal_actions()
+        .iter()
         .find(|action| matches!(action, Action::EndTurn { .. }))
-        .cloned().expect("can end turn");
+        .cloned()
+        .expect("can end turn");
     simulator.step(action).expect("end turn");
 }
 
@@ -24,9 +34,14 @@ fn end_turn(simulator: &mut Simulator) {
 fn infested_prism_has_two_jabs_and_a_vulnerable_pulsate() {
     for ascension in [0, 9] {
         let mut simulator = ScenarioBuilder::new("PRISM113", id("ENCOUNTER.INFESTED_PRISMS_ELITE"))
-            .player_hp(400, 400).energy(3, 3).turn(1, 1)
+            .player_hp(400, 400)
+            .energy(3, 3)
+            .turn(1, 1)
             .enemy(1, id("MONSTER.INFESTED_PRISM"), 161, 161, "JAB_MOVE")
-            .build(sts2_content::registry_at(&id("CHARACTER.IRONCLAD"), ascension))
+            .build(sts2_content::registry_at(
+                &id("CHARACTER.IRONCLAD"),
+                ascension,
+            ))
             .expect("scenario");
         for next in ["JAB_MOVE_2", "WHIRLWIND_MOVE", "PULSATE_MOVE", "JAB_MOVE"] {
             end_turn(&mut simulator);
@@ -47,17 +62,67 @@ fn infested_prism_has_two_jabs_and_a_vulnerable_pulsate() {
 fn broken_plow_does_not_regain_strength() {
     for (thorns, strength) in [(0, 2), (1, 0)] {
         let mut scenario = ScenarioBuilder::new("PLOW113", id("ENCOUNTER.CEREMONIAL_BEAST_BOSS"))
-            .player_hp(400, 400).energy(3, 3).turn(1, 1)
+            .player_hp(400, 400)
+            .energy(3, 3)
+            .turn(1, 1)
             .enemy(1, id("MONSTER.CEREMONIAL_BEAST"), 252, 252, "PLOW_MOVE")
             .power(1, id("POWER.PLOW_POWER"), 1, PowerType::Buff);
         if thorns > 0 {
             scenario = scenario.power(0, id("POWER.THORNS_POWER"), thorns, PowerType::Buff);
         }
-        let mut simulator = scenario.build(sts2_content::standard_registry()).expect("scenario");
+        let mut simulator = scenario
+            .build(sts2_content::standard_registry())
+            .expect("scenario");
         end_turn(&mut simulator);
         assert_eq!(
             creature(&simulator, CombatSide::Enemy).power_amount("POWER.STRENGTH_POWER"),
             strength
         );
     }
+}
+
+/// Enemy Ritual applied during the player's turn does not arm the enemy-turn
+/// skip. A test card applies the power to isolate that timing rule.
+#[test]
+fn enemy_ritual_applied_on_player_turn_pays_on_the_next_enemy_turn() {
+    use sts2_engine::{Amount, CardFingerprint, Command, CreatureSelector, PileName, PowerCmd};
+
+    let mut content = (*sts2_content::standard_registry()).clone();
+    let mut applicator = content
+        .card(&id("CARD.STRIKE_IRONCLAD"))
+        .expect("strike")
+        .clone();
+    applicator.effects = vec![Command::Power(PowerCmd::Apply {
+        power: id("POWER.RITUAL_POWER"),
+        target: CreatureSelector::Target,
+        applier: Some(CreatureSelector::Owner),
+        amount: Amount::Fixed(2),
+        marks: None,
+    })];
+    content.add_card(applicator);
+    let mut simulator = ScenarioBuilder::new("RITUAL113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .player_hp(80, 80)
+        .energy(3, 3)
+        .turn(1, 1)
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 39, 39, "SHRINKER_MOVE")
+        .card(
+            PileName::Hand,
+            0,
+            CardFingerprint::base(id("CARD.STRIKE_IRONCLAD")),
+            1,
+        )
+        .build(std::sync::Arc::new(content))
+        .expect("scenario");
+    let action = simulator
+        .legal_actions()
+        .iter()
+        .find(|action| matches!(action, Action::PlayCard { .. }))
+        .cloned()
+        .expect("test applicator");
+    simulator.step(action).expect("apply ritual");
+    end_turn(&mut simulator);
+    assert_eq!(
+        creature(&simulator, CombatSide::Enemy).power_amount("POWER.STRENGTH_POWER"),
+        2
+    );
 }

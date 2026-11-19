@@ -199,14 +199,22 @@ fn combat(simulator: &Simulator) -> &sts2_engine::CombatState {
 #[test]
 fn a_hopper_cannot_steal_a_quest_card() {
     let mut simulator = ScenarioBuilder::new("QUESTTHEFT113", id("ENCOUNTER.THIEVING_HOPPER_WEAK"))
-        .player_hp(80, 80).energy(3, 3).turn(1, 1)
+        .player_hp(80, 80)
+        .energy(3, 3)
+        .turn(1, 1)
         .enemy(1, id("MONSTER.THIEVING_HOPPER"), 79, 79, "THIEVERY_MOVE")
         .card(PileName::Draw, 0, card("CARD.DOWSING"), 0)
-        .build(sts2_content::standard_registry()).expect("scenario");
+        .build(sts2_content::standard_registry())
+        .expect("scenario");
     end_turn(&mut simulator);
     assert_eq!(enemy(&simulator).power_amount("POWER.SWIPE_POWER"), 0);
-    assert!(combat(&simulator).player.piles.all_cards()
-        .any(|card| card.fingerprint.model_id == id("CARD.DOWSING")));
+    assert!(
+        combat(&simulator)
+            .player
+            .piles
+            .all_cards()
+            .any(|card| card.fingerprint.model_id == id("CARD.DOWSING"))
+    );
 }
 
 /// An escape: the hopper leaves on its own feet. Nothing about it is a death —

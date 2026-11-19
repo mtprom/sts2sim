@@ -1154,14 +1154,25 @@ fn expect_a_fight_discounts_held_non_x_attacks_until_played() {
     for held in &combat.player.piles.hand {
         assert_eq!(
             held.cost_until_played,
-            if held.fingerprint.model_id == id("CARD.STRIKE_IRONCLAD") { -2 } else { 0 }
+            if held.fingerprint.model_id == id("CARD.STRIKE_IRONCLAD") {
+                -2
+            } else {
+                0
+            }
         );
     }
     let before = energy(&simulator);
     play(&mut simulator, "CARD.STRIKE_IRONCLAD");
     assert_eq!(energy(&simulator), before, "the attack is free");
-    let played = simulator.state().combat.as_ref().expect("a fight")
-        .player.piles.discard.iter()
+    let played = simulator
+        .state()
+        .combat
+        .as_ref()
+        .expect("a fight")
+        .player
+        .piles
+        .discard
+        .iter()
         .find(|card| card.fingerprint.model_id == id("CARD.STRIKE_IRONCLAD"))
         .expect("played strike");
     assert_eq!(played.cost_until_played, 0);

@@ -1417,13 +1417,11 @@ fn burn_the_statuses_and_swing(damage: i32) -> Command {
     }
 }
 
-/// The energy spent this turn, less what this play itself paid: the card's own
-/// cost is taken back off while the card is standing in the play pile, which it
-/// always is while its body runs.
+/// The energy spent this turn, less this play's actual payment, not its cost.
 fn energy_spent_before_this_play() -> Amount {
     Amount::Sum(vec![
         Amount::counting(Count::OwnerEnergySpentThisTurn),
-        Amount::negating(Count::SourceCardEnergyCost),
+        Amount::negating(Count::SourcePlayEnergySpent),
     ])
 }
 

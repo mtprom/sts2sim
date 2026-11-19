@@ -2545,6 +2545,9 @@ pub enum Count {
     /// What the card that issued the command costs in energy right now, with
     /// everything standing over its own cost taken into account.
     SourceCardEnergyCost,
+    /// Energy actually charged to the currently resolving chosen play.
+    /// Free automatic plays spend zero, irrespective of the card's cost.
+    SourcePlayEnergySpent,
     /// The amount the pass the listener is answering carries, which is what a
     /// body answering a power's amount having changed reads.
     AnnouncedAmount,

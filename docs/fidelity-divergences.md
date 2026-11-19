@@ -224,3 +224,7 @@ the one that may be filtered out of the action list from the one that may not.
   Bone Shards and Sacrifice must identify their card when killing Osty.
   Brightest Flame also has a pre-existing numerical mismatch: the simulator
   loses 1 max HP, but both reference builds lose 2.
+- TODO(package 4): distinguish real `CardPlay` damage from a card's other
+  effects when Lethality counts the current Attack; Shrink must ignore a
+  player's death when removing itself on its applier's death. The generic
+  applier-death cleanup currently does not distinguish a player applier.
