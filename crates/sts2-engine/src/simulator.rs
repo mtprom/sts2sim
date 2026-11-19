@@ -17019,7 +17019,10 @@ impl Simulator {
                 self.hook_context
                     .died_to_doom
                     .iter()
-                    .filter(|id| Some(**id) != context.owner)
+                    .filter(|id| {
+                        self.creature(**id)
+                            .is_ok_and(|creature| creature.side == CombatSide::Enemy)
+                    })
                     .count(),
             )
             .expect("creature count fits game integer"),
@@ -28563,8 +28566,8 @@ impl Simulator {
                 | None => {}
             }
         }
-        // A relic can refuse a play the same way, off the count it keeps for
-        // itself rather than off the combat's.
+        // Play limits count started plays, including an autoplay that has not
+        // finished yet, rather than a relic-local completion counter.
         for relic in self.state.run_player.relics.iter().filter(|r| !r.melted) {
             let Some(allowed) = self
                 .content
@@ -28573,7 +28576,10 @@ impl Simulator {
             else {
                 continue;
             };
-            if relic.counter >= allowed {
+            if i32::try_from(combat.player.first_plays_started_this_turn)
+                .expect("play count fits game integer")
+                >= allowed
+            {
                 return false;
             }
         }

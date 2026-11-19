@@ -4012,7 +4012,7 @@ fn the_ancients_that_stock_the_hand_from_a_pile() {
     assert_eq!(
         held.temporary_costs
             .last()
-            .expect("and made free for the turn")
+            .expect("and made free for the combat")
             .cost,
         0
     );
@@ -4055,6 +4055,14 @@ fn a_jeweled_mask_prefers_a_power_that_is_not_innate() {
         free("CARD.ENTROPY"),
         Some(None),
         "drawn as innate, at its own cost"
+    );
+    let power = hand
+        .iter()
+        .find(|card| card.fingerprint.model_id == id("CARD.INFLAME"))
+        .expect("the mask chose Inflame");
+    assert!(
+        !power.temporary_costs.last().unwrap().clears_when_turn_ends,
+        "the mask's discount lasts throughout combat"
     );
 }
 
@@ -4247,10 +4255,11 @@ fn spiked_gauntlets_charge_more_for_a_power() {
     );
 }
 
-/// A brilliant scarf makes the fifth card of every turn free.
+/// A brilliant scarf makes the sixth card of every turn free.
 #[test]
-fn a_brilliant_scarf_makes_the_fifth_card_free() {
+fn a_brilliant_scarf_makes_the_sixth_card_free() {
     let hand = [
+        ("CARD.DEFEND_IRONCLAD", 0),
         ("CARD.DEFEND_IRONCLAD", 0),
         ("CARD.DEFEND_IRONCLAD", 0),
         ("CARD.DEFEND_IRONCLAD", 0),
@@ -4258,16 +4267,16 @@ fn a_brilliant_scarf_makes_the_fifth_card_free() {
         ("CARD.DEFEND_IRONCLAD", 0),
     ];
     let mut simulator = fight_tough(&["RELIC.BRILLIANT_SCARF"], &hand);
-    for _ in 0..4 {
+    for _ in 0..5 {
         assert_eq!(hand_cost(&simulator, "CARD.DEFEND_IRONCLAD"), 1);
         play(&mut simulator, "CARD.DEFEND_IRONCLAD");
     }
     assert_eq!(
         hand_cost(&simulator, "CARD.DEFEND_IRONCLAD"),
         0,
-        "the fifth is free"
+        "the sixth is free"
     );
-    assert_eq!(relic_counter(&simulator, "RELIC.BRILLIANT_SCARF"), 4);
+    assert_eq!(relic_counter(&simulator, "RELIC.BRILLIANT_SCARF"), 5);
 
     // A card nobody chose is not counted: a havoc plays the top of the draw
     // pile itself, and the scarf's own body skips an auto-play.
@@ -4305,6 +4314,33 @@ fn a_velvet_choker_allows_six_cards_a_turn() {
             .iter()
             .any(|action| matches!(action, Action::PlayCard { .. })),
         "and the next turn starts the count over"
+    );
+}
+
+/// The choker counts a play before its body can start an autoplay.
+#[test]
+fn a_velvet_choker_stops_an_autoplay_started_by_the_sixth_card() {
+    let mut hand = vec![("CARD.DEFEND_IRONCLAD", 0); 5];
+    hand.push(("CARD.HAVOC", 0));
+    let mut simulator = fight_tough(&["RELIC.VELVET_CHOKER"], &hand);
+    for _ in 0..5 {
+        play(&mut simulator, "CARD.DEFEND_IRONCLAD");
+    }
+    play(&mut simulator, "CARD.HAVOC");
+    assert_eq!(
+        simulator.state().combat.as_ref().unwrap().player.first_plays_started_this_turn,
+        6,
+        "Havoc is the sixth started play; its autoplay is refused"
+    );
+}
+
+/// Opening Retain is a power now, rather than a first-hand flush exception.
+#[test]
+fn a_ringing_triangle_applies_retain_hand_when_combat_is_entered() {
+    let simulator = fight_from_run(&["RELIC.RINGING_TRIANGLE"]);
+    assert_eq!(
+        power_amount(&simulator, 0, "POWER.RETAIN_HAND_POWER"),
+        1
     );
 }
 

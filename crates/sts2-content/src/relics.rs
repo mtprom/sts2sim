@@ -171,7 +171,7 @@ pub fn necrobinder_relics() -> Vec<RelicDefinition> {
             ],
             ..obtained_only("RELIC.BONE_FLUTE", RelicRarity::Common)
         },
-        // A book repair knife heals three for every creature but its owner a
+        // A book repair knife heals three for every enemy a
         // doom kill took down, and only for the deaths that counted.
         RelicDefinition {
             hooks: vec![ModifierHook::every_turn(
@@ -3960,7 +3960,10 @@ fn bronze_scales() -> RelicDefinition {
 /// A ringing triangle keeps the opening hand.
 fn ringing_triangle() -> RelicDefinition {
     RelicDefinition {
-        keeps_first_hand: true,
+        hooks: vec![ModifierHook::every_turn(
+            HookEvent::AfterRoomEntered,
+            vec![own_power("POWER.RETAIN_HAND_POWER", Amount::Fixed(1))],
+        )],
         ..obtained_only("RELIC.RINGING_TRIANGLE", RelicRarity::Shop)
     }
 }
@@ -4236,7 +4239,10 @@ fn walked_relics() -> Vec<RelicDefinition> {
         // A juzu bracelet keeps a monster off an unknown map point, and stops
         // being offered once there is little map left for it to work on.
         RelicDefinition {
-            removes_unknown_room_types: vec![sts2_engine::ResolvedRoom::Monster],
+            removes_unknown_room_types: vec![
+                sts2_engine::ResolvedRoom::Monster,
+                sts2_engine::ResolvedRoom::Elite,
+            ],
             spawn_condition: Some(RelicSpawnCondition::BeforeAct3TreasureChest),
             ..obtained_only("RELIC.JUZU_BRACELET", RelicRarity::Common)
         },
@@ -5115,13 +5121,12 @@ fn cost_relics() -> Vec<RelicDefinition> {
             hooks: vec![pays_an_energy(1)],
             ..obtained_only("RELIC.SPIKED_GAUNTLETS", RelicRarity::Ancient)
         },
-        // A brilliant scarf makes the fifth card of every turn free, which is
-        // the count standing at four when the cost is worked out.
+        // A brilliant scarf makes the sixth chosen card of every turn free.
         RelicDefinition {
             card_cost_rule: Some(sts2_engine::RelicCostRule {
                 rule: sts2_engine::CardCostRule::FreeInHandOrPlay,
                 amount: 0,
-                when_counter_is: Some(4),
+                when_counter_is: Some(5),
             }),
             hooks: counts_the_turns_plays(true),
             ..obtained_only("RELIC.BRILLIANT_SCARF", RelicRarity::Ancient)
@@ -5516,7 +5521,7 @@ fn counting_relics() -> Vec<RelicDefinition> {
             ..obtained_only("RELIC.CROSSBOW", RelicRarity::Ancient)
         },
         // A jeweled mask pulls one power out of the draw pile into the opening
-        // hand, free for the turn. It passes over an Innate power, which the
+        // hand, free for the combat. It passes over an Innate power, which the
         // opening hand would hold anyway, unless every power there is one.
         RelicDefinition {
             hooks: vec![ModifierHook::every_turn(
@@ -5537,7 +5542,7 @@ fn counting_relics() -> Vec<RelicDefinition> {
                         then: vec![
                             Command::Card(sts2_engine::CardCmd::SetTemporaryCost {
                                 cards: sts2_engine::CardSelector::Chosen,
-                                lifetime: sts2_engine::TemporaryCost::free_this_turn(),
+                                lifetime: sts2_engine::TemporaryCost::free_this_combat(),
                             }),
                             Command::CardPile(CardPileCmd::MoveToPile {
                                 cards: sts2_engine::CardSelector::Chosen,

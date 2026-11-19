@@ -588,7 +588,7 @@ fn possession(model_id: &str, stat: &str) -> PowerDefinition {
 fn reacting_powers() -> Vec<PowerDefinition> {
     vec![
         flex_potion_power(),
-        ambergris_power(),
+        extra_turn_power(),
         // An illusion holds the field when it dies and comes back whole, and
         // marks its owner a minion as it lands.
         PowerDefinition {
@@ -993,14 +993,14 @@ fn flex_potion_power() -> PowerDefinition {
 /// The extra turn an Ambergris drunk in a fight buys. While any of it is left
 /// its owner is owed another turn as theirs ends, and each turn taken that way
 /// spends one.
-fn ambergris_power() -> PowerDefinition {
+fn extra_turn_power() -> PowerDefinition {
     PowerDefinition {
         grants_an_extra_turn: true,
         hooks: vec![ModifierHook::every_turn(
             HookEvent::AfterTakingExtraTurn,
             vec![decrement()],
         )],
-        ..counter("POWER.AMBERGRIS_POWER", PowerType::Buff)
+        ..counter("POWER.EXTRA_TURN_POWER", PowerType::Buff)
     }
 }
 
