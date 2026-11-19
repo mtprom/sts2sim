@@ -930,6 +930,51 @@ fn waterfall_locks_negotiation_below_70_and_gives_an_unupgraded_rare_card() {
 }
 
 #[test]
+fn being_nice_at_the_waterfall_adds_a_base_dingy_dagger_without_payment() {
+    let mut simulator = Visit::new("EVENT.WATERFALL_OF_OBVIOUS_SECRETS")
+        .gold(70)
+        .enter();
+    choose(
+        &mut simulator,
+        "WATERFALL_OF_OBVIOUS_SECRETS.pages.INITIAL.options.ENTER",
+    );
+    choose(
+        &mut simulator,
+        "WATERFALL_OF_OBVIOUS_SECRETS.pages.ENTER.options.BE_NICE",
+    );
+    let dagger = simulator.state().run_player.deck.last().unwrap();
+    assert_eq!(dagger.model_id, id("CARD.DINGY_DAGGER"));
+    assert_eq!(dagger.upgrade_level, 0);
+    assert_eq!(simulator.state().run_player.gold, 70);
+}
+
+#[test]
+fn beating_up_the_waterfall_gremlin_obtains_a_relic_and_two_guilty() {
+    let mut simulator = Visit::new("EVENT.WATERFALL_OF_OBVIOUS_SECRETS")
+        .bag(&["RELIC.LANTERN"])
+        .enter();
+    choose(
+        &mut simulator,
+        "WATERFALL_OF_OBVIOUS_SECRETS.pages.INITIAL.options.ENTER",
+    );
+    choose(
+        &mut simulator,
+        "WATERFALL_OF_OBVIOUS_SECRETS.pages.ENTER.options.BEAT_UP",
+    );
+    assert!(holds_relic(&simulator, "RELIC.LANTERN"));
+    assert_eq!(
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .filter(|card| card.model_id == id("CARD.GUILTY"))
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn helping_wuppy_immediately_gives_60_hp_and_an_injury() {
     let mut simulator = Visit::new("EVENT.WUPPY_IN_TROUBLE").hp(39, 80).enter();
     choose(
