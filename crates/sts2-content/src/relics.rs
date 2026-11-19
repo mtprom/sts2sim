@@ -1729,7 +1729,7 @@ fn event_relics() -> Vec<RelicDefinition> {
                     cards: sts2_engine::CardSelector::StablyShuffledFromDeck {
                         filter: sts2_engine::CardFilter::Upgradable,
                         take: Amount::Fixed(2),
-                        stream: sts2_engine::ShuffleStream::Niche,
+                        stream: sts2_engine::ShuffleStream::NonCombatGeneration,
                     },
                 }),
             ],
@@ -1747,7 +1747,7 @@ fn event_relics() -> Vec<RelicDefinition> {
                 vec![Command::Rewards(RewardsCmd::EnchantCardOptions {
                     enchantment: id("ENCHANTMENT.NIMBLE"),
                     amount: Amount::Fixed(2),
-                    one_rolled_on_the_niche_stream: false,
+                    one_rolled_on_the_rewards_stream: false,
                 })],
             )],
             ..obtained_only("RELIC.FRESNEL_LENS", RelicRarity::Event)
@@ -2148,7 +2148,7 @@ fn shop_relics() -> Vec<RelicDefinition> {
             ..obtained_only("RELIC.PUNCH_DAGGER", RelicRarity::Shop)
         }),
         // A royal stamp makes one card of the deck innate and retained. The
-        // build shuffles the candidates on the niche stream before it hands
+        // build shuffles the candidates on the non-combat-generation stream before it hands
         // them to the screen, and the screen sorts them straight back into deck
         // order, so what the shuffle comes to is the dice it read.
         upon_pickup(RelicDefinition {
@@ -2156,7 +2156,7 @@ fn shop_relics() -> Vec<RelicDefinition> {
                 enchantment: id("ENCHANTMENT.ROYALLY_APPROVED"),
                 amount: 1,
                 filter: CardFilter::Any,
-                shuffled_on: Some(sts2_engine::ShuffleStream::Niche),
+                shuffled_on: Some(sts2_engine::ShuffleStream::NonCombatGeneration),
                 prefs: SelectorPrefs::exactly(1),
                 then: vec![Command::Card(CardCmd::Enchant {
                     cards: CardSelector::Chosen,
@@ -2167,7 +2167,7 @@ fn shop_relics() -> Vec<RelicDefinition> {
             ..obtained_only("RELIC.ROYAL_STAMP", RelicRarity::Shop)
         }),
         // A wing charm puts one Swift on one card of every card reward, rolled
-        // on the niche stream out of the ones it can go on.
+        // on the player's rewards stream out of the ones it can go on.
         RelicDefinition {
             hooks: vec![
                 ModifierHook::every_turn(
@@ -2175,7 +2175,7 @@ fn shop_relics() -> Vec<RelicDefinition> {
                     vec![Command::Rewards(RewardsCmd::EnchantCardOptions {
                         enchantment: id("ENCHANTMENT.SWIFT"),
                         amount: Amount::Fixed(1),
-                        one_rolled_on_the_niche_stream: true,
+                        one_rolled_on_the_rewards_stream: true,
                     })],
                 )
                 .when(HookCondition::Always),
@@ -3625,8 +3625,8 @@ fn red_skull() -> RelicDefinition {
 }
 
 /// A war paint and a whetstone are the same relic over two card types: two of
-/// the deck's upgradable cards of that type, stably shuffled on the niche
-/// stream, upgraded the moment the relic is taken.
+/// the deck's upgradable cards of that type, stably shuffled on the
+/// player's non-combat-generation stream, upgraded the moment the relic is taken.
 fn upgrades_two_of_the_deck(model_id: &str, card_type: sts2_engine::CardType) -> RelicDefinition {
     taken_effect(
         model_id,
@@ -3635,7 +3635,7 @@ fn upgrades_two_of_the_deck(model_id: &str, card_type: sts2_engine::CardType) ->
             cards: sts2_engine::CardSelector::StablyShuffledFromDeck {
                 filter: sts2_engine::CardFilter::UpgradableOfType(card_type),
                 take: Amount::Fixed(2),
-                stream: sts2_engine::ShuffleStream::Niche,
+                stream: sts2_engine::ShuffleStream::NonCombatGeneration,
             },
         })],
     )
@@ -4942,7 +4942,7 @@ fn given_relics() -> Vec<RelicDefinition> {
             ..obtained_only("RELIC.BLOOD_SOAKED_ROSE", RelicRarity::Ancient)
         }),
         // Two curses for three apparitions. The curses are two different
-        // ones, rolled on the niche stream.
+        // ones, rolled on the player's non-combat-generation stream.
         upon_pickup(RelicDefinition {
             on_obtained: vec![
                 Command::CardPile(CardPileCmd::AddCursesToDeck {
@@ -5032,13 +5032,13 @@ fn given_relics() -> Vec<RelicDefinition> {
             ..obtained_only("RELIC.YUMMY_COOKIE", RelicRarity::Ancient)
         }),
         // A sand castle upgrades six of the deck's upgradable cards, shuffled
-        // on the run's niche stream rather than chosen.
+        // on the player's non-combat-generation stream rather than chosen.
         upon_pickup(RelicDefinition {
             on_obtained: vec![Command::Card(sts2_engine::CardCmd::Upgrade {
                 cards: sts2_engine::CardSelector::StablyShuffledFromDeck {
                     filter: sts2_engine::CardFilter::Upgradable,
                     take: Amount::Fixed(6),
-                    stream: sts2_engine::ShuffleStream::Niche,
+                    stream: sts2_engine::ShuffleStream::NonCombatGeneration,
                 },
             })],
             ..obtained_only("RELIC.SAND_CASTLE", RelicRarity::Ancient)
@@ -5446,7 +5446,7 @@ fn counting_relics() -> Vec<RelicDefinition> {
                         cards: sts2_engine::CardSelector::StablyShuffledFromDeck {
                             filter: sts2_engine::CardFilter::Upgradable,
                             take: Amount::Fixed(4),
-                            stream: sts2_engine::ShuffleStream::Niche,
+                            stream: sts2_engine::ShuffleStream::NonCombatGeneration,
                         },
                     })],
                 }],
@@ -5471,7 +5471,7 @@ fn counting_relics() -> Vec<RelicDefinition> {
                             then: vec![Command::Card(sts2_engine::CardCmd::Upgrade {
                                 cards: sts2_engine::CardSelector::RolledFromDeck {
                                     filter: sts2_engine::CardFilter::Upgradable,
-                                    stream: sts2_engine::ShuffleStream::Niche,
+                                    stream: sts2_engine::ShuffleStream::NonCombatGeneration,
                                 },
                             })],
                         },
@@ -5787,7 +5787,7 @@ fn transforming_relics() -> Vec<RelicDefinition> {
             on_obtained: vec![transforms_from_the_deck(
                 3,
                 vec![rolls_a_replacement(
-                    sts2_engine::TransformStream::Niche,
+                    sts2_engine::TransformStream::Transformations,
                     true,
                     true,
                 )],
@@ -5799,7 +5799,7 @@ fn transforming_relics() -> Vec<RelicDefinition> {
             on_obtained: vec![transforms_from_the_deck(
                 1,
                 vec![rolls_a_replacement(
-                    sts2_engine::TransformStream::Niche,
+                    sts2_engine::TransformStream::Transformations,
                     false,
                     true,
                 )],
@@ -5818,7 +5818,7 @@ fn transforming_relics() -> Vec<RelicDefinition> {
                     ],
                 },
                 replacement: sts2_engine::CardTransformReplacement::Rolled {
-                    stream: sts2_engine::TransformStream::Niche,
+                    stream: sts2_engine::TransformStream::Transformations,
                     upgraded: false,
                 },
                 one_at_a_time: false,
@@ -6174,14 +6174,14 @@ fn creates(count: usize, rarity: CardRarity) -> CardCreation {
 fn enchanting_ancients() -> Vec<RelicDefinition> {
     vec![
         // A beautiful bracelet puts two Swift on four cards of the deck it
-        // picks itself: whatever Swift can go on, shuffled on the niche
-        // stream, and the first four.
+        // picks itself: whatever Swift can go on, shuffled on the player's
+        // non-combat-generation stream, and the first four.
         RelicDefinition {
             on_obtained: vec![Command::Card(CardCmd::Enchant {
                 cards: CardSelector::ShuffledDeckCardsEnchantableBy {
                     enchantment: id("ENCHANTMENT.SWIFT"),
                     take: Amount::Fixed(4),
-                    stream: sts2_engine::ShuffleStream::Niche,
+                    stream: sts2_engine::ShuffleStream::NonCombatGeneration,
                 },
                 enchantment: id("ENCHANTMENT.SWIFT"),
                 amount: Amount::Fixed(2),
@@ -6234,7 +6234,7 @@ fn enchanting_ancients() -> Vec<RelicDefinition> {
                 vec![Command::Rewards(RewardsCmd::EnchantCardOptions {
                     enchantment: id("ENCHANTMENT.GLAM"),
                     amount: Amount::Fixed(1),
-                    one_rolled_on_the_niche_stream: false,
+                    one_rolled_on_the_rewards_stream: false,
                 })],
             )],
             ..obtained_only("RELIC.GLITTER", RelicRarity::Ancient)
@@ -6276,7 +6276,7 @@ fn enchanting_ancients() -> Vec<RelicDefinition> {
                         then: vec![Command::Rewards(RewardsCmd::EnchantCardOptions {
                             enchantment: id("ENCHANTMENT.GLAM"),
                             amount: Amount::Fixed(1),
-                            one_rolled_on_the_niche_stream: false,
+                            one_rolled_on_the_rewards_stream: false,
                         })],
                     }],
                 ),

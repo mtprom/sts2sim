@@ -7572,7 +7572,7 @@ impl Simulator {
             // The upgradable deck cards, sorted and then shuffled on the
             // event's own stream, and the first few upgraded.
             EventEffect::UpgradeShuffledDeckCards { count } => {
-                let mut upgradable: Vec<(ModelId, u8, usize)> = self
+                let mut upgradable: Vec<(&crate::CardFingerprint, usize)> = self
                     .state
                     .run_player
                     .deck
@@ -7581,21 +7581,21 @@ impl Simulator {
                     .filter(|(_, card)| {
                         self.fingerprint_passes(card, &[crate::CardFilter::Upgradable])
                     })
-                    .map(|(index, card)| (card.model_id.clone(), card.upgrade_level, index))
+                    .map(|(index, card)| (card, index))
                     .collect();
-                // A stable shuffle sorts before it shuffles, and what a card
-                // sorts by is its model ID and then the upgrade it is standing
-                // at.
+                // A stable shuffle sorts before it shuffles.
                 crate::netsort::sort(&mut upgradable, &|left, right| {
-                    left.0.cmp(&right.0).then(left.1.cmp(&right.1))
+                    compare_deck_cards(left.0, right.0)
                 });
+                let mut upgradable: Vec<usize> =
+                    upgradable.into_iter().map(|(_, index)| index).collect();
                 let model_id = self.event_model_id()?;
                 let mut rng = self.event_rng(&model_id);
                 rng.load_counter(self.event_rng_counter()?);
                 rng.shuffle(&mut upgradable);
                 self.set_event_rng_counter(rng.counter())?;
                 upgradable.truncate(count);
-                for (.., index) in upgradable {
+                for index in upgradable {
                     self.upgrade_deck_card(index);
                 }
             }
@@ -11507,7 +11507,7 @@ impl Simulator {
                 let count =
                     usize::try_from(self.resolve_amount(count, context)?.max(0)).unwrap_or(0);
                 let options = self.potion_options_for_run(false)?;
-                let rng = self.state.rng.stream_mut(RunStream::CombatPotionGeneration);
+                let rng = self.random_potion_stream(false);
                 let rolled = roll_potions(rng, &options, count, "potion_generation")?;
                 let first_new_slot = self.state.run_player.potions.len().saturating_sub(count);
                 for (index, (model_id, _)) in rolled.into_iter().enumerate() {
@@ -11590,10 +11590,10 @@ impl Simulator {
             Command::Rewards(RewardsCmd::EnchantCardOptions {
                 enchantment,
                 amount,
-                one_rolled_on_the_niche_stream,
+                one_rolled_on_the_rewards_stream,
             }) => {
                 let amount = self.resolve_amount(amount, context)?;
-                self.enchant_card_options(enchantment, amount, *one_rolled_on_the_niche_stream)?;
+                self.enchant_card_options(enchantment, amount, *one_rolled_on_the_rewards_stream)?;
                 Ok(false)
             }
             Command::Rewards(RewardsCmd::AddCardOption { card_type }) => {
@@ -11647,12 +11647,13 @@ impl Simulator {
                 Ok(false)
             }
             // The bones' own offer: the list shuffled on the player's own
-            // rewards stream, the first few offered, and no skipping.
+            // non-combat-generation stream, the first few offered, and no
+            // skipping.
             Command::Rewards(RewardsCmd::OfferShuffledRelics { relics, count }) => {
                 let mut shuffled = relics.clone();
                 self.state
                     .player_rng
-                    .stream_mut(PlayerStream::Rewards)
+                    .stream_mut(PlayerStream::NonCombatGeneration)
                     .shuffle(&mut shuffled);
                 shuffled.truncate(*count);
                 let offered = shuffled
@@ -13700,7 +13701,8 @@ impl Simulator {
                 }
             }
             // The curse draw: what the pool allows a modifier to make, ordered
-            // by model ID, drawn on the niche stream without replacement.
+            // by model ID, drawn on the player's non-combat-generation stream
+            // without replacement.
             CardPileCmd::AddCursesToDeck { pool, count } => {
                 let mut available: Vec<ModelId> = self
                     .content
@@ -13715,7 +13717,10 @@ impl Simulator {
                     .unwrap_or_default();
                 available.sort();
                 for _ in 0..*count {
-                    let rng = self.state.rng.stream_mut(RunStream::Niche);
+                    let rng = self
+                        .state
+                        .player_rng
+                        .stream_mut(PlayerStream::NonCombatGeneration);
                     let Some(index) = rng.next_index(available.len()).map_err(|error| {
                         EngineError::new(ErrorCode::InternalInvariant)
                             .with_detail("curse_draw", error.to_string())
@@ -14228,9 +14233,7 @@ impl Simulator {
                 // order, so what the shuffle comes to is the dice it read.
                 if let Some(stream) = shuffled_on {
                     let mut shuffled = candidates.clone();
-                    self.state
-                        .rng
-                        .stream_mut(shuffle_stream_of(*stream))
+                    self.shuffle_stream_mut(*stream)
                         .shuffle(&mut shuffled);
                 }
                 only = Some(candidates);
@@ -17301,11 +17304,26 @@ impl Simulator {
             self.set_event_rng_counter(rng.counter())?;
             return Ok(());
         }
-        self.state
-            .rng
-            .stream_mut(shuffle_stream_of(stream))
-            .shuffle(values);
+        self.shuffle_stream_mut(stream).shuffle(values);
         Ok(())
+    }
+
+    /// The run or player stream a selector named. The event's own is not one
+    /// of them: it is carried by the room the body is running in, so a caller
+    /// that may meet it goes through `shuffle_on` or `roll_on_shuffle_stream`.
+    fn shuffle_stream_mut(&mut self, stream: crate::ShuffleStream) -> &mut Rng {
+        match stream {
+            crate::ShuffleStream::CombatCardSelection => {
+                self.state.rng.stream_mut(RunStream::CombatCardSelection)
+            }
+            crate::ShuffleStream::NonCombatGeneration => self
+                .state
+                .player_rng
+                .stream_mut(PlayerStream::NonCombatGeneration),
+            crate::ShuffleStream::Shuffle | crate::ShuffleStream::Event => {
+                self.state.rng.stream_mut(RunStream::Shuffle)
+            }
+        }
     }
 
     /// One index rolled on whichever stream a selector named, the event's own
@@ -17323,10 +17341,7 @@ impl Simulator {
             self.set_event_rng_counter(rng.counter())?;
             rolled
         } else {
-            self.state
-                .rng
-                .stream_mut(shuffle_stream_of(stream))
-                .next_index(count)
+            self.shuffle_stream_mut(stream).next_index(count)
         };
         rolled
             .map_err(|error| {
@@ -18443,11 +18458,18 @@ impl Simulator {
                 stream,
             } => {
                 let take = usize::try_from(self.resolve_amount(take, context)?.max(0)).unwrap_or(0);
-                let mut candidates = self.pile_cards_passing(*pile, *filter, *fallback)?;
+                let mut candidates = self.pile_cards_passing(*pile, *filter, None)?;
+                // The build shuffles the preferred list even when it is empty,
+                // and a shuffle always reads one draw, so falling back costs a
+                // draw of its own before the fallback list is shuffled.
+                if candidates.is_empty()
+                    && let Some(fallback) = fallback
+                {
+                    self.shuffle_stream_mut(*stream).shuffle(&mut candidates);
+                    candidates = self.pile_cards_passing(*pile, *fallback, None)?;
+                }
                 sort_pile_canonically(&mut candidates);
-                self.state
-                    .rng
-                    .stream_mut(shuffle_stream_of(*stream))
+                self.shuffle_stream_mut(*stream)
                     .shuffle(&mut candidates);
                 candidates.truncate(take);
                 Ok(candidates.into_iter().map(ChosenCard::Combat).collect())
@@ -18470,15 +18492,11 @@ impl Simulator {
                     .filter(|(_, fingerprint)| self.fingerprint_passes(fingerprint, &[*filter]))
                     .map(|(index, fingerprint)| (index, fingerprint.clone()))
                     .collect();
-                // Cards compare by model, then by upgrade level, and by nothing
-                // else. Two that compare equal come out wherever the build's
+                // Two cards that compare equal come out wherever the build's
                 // own unstable sort leaves them, which is what decides which of
                 // two identical cards is the one taken.
                 crate::netsort::sort(&mut candidates, &|left, right| {
-                    left.1
-                        .model_id
-                        .cmp(&right.1.model_id)
-                        .then(left.1.upgrade_level.cmp(&right.1.upgrade_level))
+                    compare_deck_cards(&left.1, &right.1)
                 });
                 self.shuffle_on(*stream, &mut candidates)?;
                 candidates.truncate(take);
@@ -18691,9 +18709,7 @@ impl Simulator {
                     .map(|(index, fingerprint)| (index, fingerprint.clone()))
                     .collect();
                 let index = self
-                    .state
-                    .rng
-                    .stream_mut(shuffle_stream_of(*stream))
+                    .shuffle_stream_mut(*stream)
                     .next_index(candidates.len())
                     .map_err(|error| {
                         EngineError::new(ErrorCode::InternalInvariant)
@@ -18735,7 +18751,7 @@ impl Simulator {
                 }
                 Ok(chosen)
             }
-            CardSelector::ShuffleRolledFromPile { pile, filter } => {
+            CardSelector::SelectionRolledFromPile { pile, filter } => {
                 let candidates: Vec<CardInstance> = pile_of(&self.combat()?.player.piles, *pile)
                     .iter()
                     .filter(|card| self.instance_passes(card, &[*filter]))
@@ -18744,7 +18760,7 @@ impl Simulator {
                 let index = self
                     .state
                     .rng
-                    .stream_mut(RunStream::Shuffle)
+                    .stream_mut(RunStream::CombatCardSelection)
                     .next_index(candidates.len())
                     .map_err(|error| {
                         EngineError::new(ErrorCode::InternalInvariant)
@@ -26490,20 +26506,15 @@ impl Simulator {
             crate::CardTransformReplacement::Rolled { stream, upgraded } => {
                 let options = self.transformation_options(original, in_combat)?;
                 let index = match stream {
-                    crate::TransformStream::Niche => self
-                        .state
-                        .rng
-                        .stream_mut(RunStream::Niche)
-                        .next_index(options.len()),
                     crate::TransformStream::Transformations => self
                         .state
                         .player_rng
                         .stream_mut(PlayerStream::Transformations)
                         .next_index(options.len()),
-                    crate::TransformStream::CombatCardSelection => self
+                    crate::TransformStream::CombatCardGeneration => self
                         .state
                         .rng
-                        .stream_mut(RunStream::CombatCardSelection)
+                        .stream_mut(RunStream::CombatCardGeneration)
                         .next_index(options.len()),
                     crate::TransformStream::Event => {
                         let model_id = self.event_model_id()?;
@@ -26803,13 +26814,24 @@ impl Simulator {
         Ok(self.content.potion_options(character, in_combat))
     }
 
-    /// A random potion rolled inside a fight, and its out-of-combat siblings:
-    /// the roll a content body makes on the combat-potion-generation stream.
+    /// A random potion a content body rolls: inside a fight on the run's
+    /// combat-potion-generation stream, outside one (Entropic Brew, Delicate
+    /// Frond) on the player's non-combat-generation stream.
     fn create_random_potion(&mut self, in_combat: bool) -> Result<ModelId, EngineError> {
         let options = self.potion_options_for_run(in_combat)?;
-        let rng = self.state.rng.stream_mut(RunStream::CombatPotionGeneration);
+        let rng = self.random_potion_stream(in_combat);
         let mut drawn = roll_potions(rng, &options, 1, "potion_generation")?;
         Ok(drawn.remove(0).0)
+    }
+
+    fn random_potion_stream(&mut self, in_combat: bool) -> &mut Rng {
+        if in_combat {
+            self.state.rng.stream_mut(RunStream::CombatPotionGeneration)
+        } else {
+            self.state
+                .player_rng
+                .stream_mut(PlayerStream::NonCombatGeneration)
+        }
     }
 
     /// A reward added from inside a reward pass. A listener only reaches one of
@@ -26875,8 +26897,8 @@ impl Simulator {
             }
             let picked = self
                 .state
-                .rng
-                .stream_mut(RunStream::Niche)
+                .player_rng
+                .stream_mut(PlayerStream::Rewards)
                 .next_int(i32::try_from(candidates.len()).unwrap_or(i32::MAX))
                 .map_err(|error| {
                     EngineError::new(ErrorCode::InternalInvariant)
@@ -27212,8 +27234,8 @@ impl Simulator {
             }
             PendingReward::CardOfferOfOtherColours { colours } => {
                 // The pools other than the owner's own are sorted by model ID
-                // and then walked by a Fisher-Yates over the niche stream, and
-                // the first few are taken.
+                // and then shuffled on the player's non-combat-generation
+                // stream, and the first few are taken.
                 // The owner's own card pool, which is the pool the run's own
                 // reward spec is built around.
                 let own = self
@@ -27228,8 +27250,8 @@ impl Simulator {
                     .collect();
                 pools.sort();
                 self.state
-                    .rng
-                    .stream_mut(RunStream::Niche)
+                    .player_rng
+                    .stream_mut(PlayerStream::NonCombatGeneration)
                     .shuffle(&mut pools);
                 pools.truncate(colours);
                 let mut cards = Vec::with_capacity(pools.len());
@@ -29454,30 +29476,83 @@ fn generate_reward_potion(
     Ok(drawn.remove(0).0)
 }
 
-/// Which run stream a selector named. The event's own is not one of them: it is
-/// carried by the room the body is running in, so a caller that may meet it
-/// goes through `roll_on_shuffle_stream` instead.
-const fn shuffle_stream_of(stream: crate::ShuffleStream) -> RunStream {
-    match stream {
-        crate::ShuffleStream::CombatCardSelection => RunStream::CombatCardSelection,
-        crate::ShuffleStream::Niche => RunStream::Niche,
-        crate::ShuffleStream::Shuffle | crate::ShuffleStream::Event => RunStream::Shuffle,
-    }
-}
 
 /// A stable shuffle's own sort: a pile is put in canonical order before it is
 /// shuffled, so that the shuffle does not depend on the order it was in.
 fn sort_pile_canonically(cards: &mut [crate::CardInstance]) {
-    crate::netsort::sort(cards, &|left, right| {
-        left.fingerprint
-            .model_id
-            .cmp(&right.fingerprint.model_id)
-            .then(
-                left.fingerprint
-                    .upgrade_level
-                    .cmp(&right.fingerprint.upgrade_level),
-            )
-    });
+    crate::netsort::sort(cards, &compare_combat_cards);
+}
+
+/// How the build orders two combat cards before a stable shuffle: model ID,
+/// upgrade level, enchantment ID, affliction ID (none first), resolved energy
+/// cost, base replay count, then the dynamic variables' base values. Cards
+/// equal on all of it land wherever the build's unstable sort leaves them.
+fn compare_combat_cards(
+    left: &crate::CardInstance,
+    right: &crate::CardInstance,
+) -> std::cmp::Ordering {
+    let resolved_cost = |card: &crate::CardInstance| {
+        if card.costs_x {
+            card.captured_x
+        } else {
+            card.energy_cost.max(0)
+        }
+    };
+    let enchantment = |card: &crate::CardFingerprint| {
+        card.enchantment
+            .as_ref()
+            .map(|enchantment| enchantment.model_id.clone())
+    };
+    left.fingerprint
+        .model_id
+        .cmp(&right.fingerprint.model_id)
+        .then(
+            left.fingerprint
+                .upgrade_level
+                .cmp(&right.fingerprint.upgrade_level),
+        )
+        .then_with(|| enchantment(&left.fingerprint).cmp(&enchantment(&right.fingerprint)))
+        .then_with(|| left.affliction.cmp(&right.affliction))
+        .then(resolved_cost(left).cmp(&resolved_cost(right)))
+        .then(left.replay_count.cmp(&right.replay_count))
+        .then_with(|| {
+            dynamic_base_values(&left.fingerprint, left.damage_bonus)
+                .cmp(&dynamic_base_values(&right.fingerprint, right.damage_bonus))
+        })
+}
+
+/// The same order over two run-deck cards, which carry no affliction, no
+/// combat cost change and no replay of their own, so after the enchantment
+/// only the dynamic variables can tell them apart.
+fn compare_deck_cards(
+    left: &crate::CardFingerprint,
+    right: &crate::CardFingerprint,
+) -> std::cmp::Ordering {
+    let enchantment = |card: &crate::CardFingerprint| {
+        card.enchantment
+            .as_ref()
+            .map(|enchantment| enchantment.model_id.clone())
+    };
+    left.model_id
+        .cmp(&right.model_id)
+        .then(left.upgrade_level.cmp(&right.upgrade_level))
+        .then_with(|| enchantment(left).cmp(&enchantment(right)))
+        .then_with(|| dynamic_base_values(left, 0).cmp(&dynamic_base_values(right, 0)))
+}
+
+/// The dynamic-variable base values two cards of one model and upgrade can
+/// differ in, in the build's ordinal key order (`Block` before `Damage`).
+///
+/// shortcut: only the variables this engine grows are read — a saved
+/// `CurrentBlock` or `CurrentDamage` and the combat copy's damage bonus; any
+/// other per-copy variable change compares equal. Upgrade once content
+/// grows a variable that is stored somewhere else.
+fn dynamic_base_values(card: &crate::CardFingerprint, damage_bonus: i32) -> (i64, i64) {
+    let saved = |name: &str| card.properties.get(name).and_then(Value::as_i64).unwrap_or(0);
+    (
+        saved("CurrentBlock"),
+        saved("CurrentDamage") + i64::from(damage_bonus),
+    )
 }
 
 /// A hidden-order pile as a player sees it: what it holds, in the view

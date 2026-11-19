@@ -2514,7 +2514,7 @@ fn juggling_power() -> PowerDefinition {
 }
 
 /// A stampede plays that many attacks out of its owner's hand once they have
-/// stopped acting, each one rolled off the shuffle stream.
+/// stopped acting, each one rolled off the combat card-selection stream.
 fn stampede_power() -> PowerDefinition {
     PowerDefinition {
         hooks: vec![ModifierHook::every_turn(
@@ -2523,7 +2523,7 @@ fn stampede_power() -> PowerDefinition {
                 times: stacks(),
                 then: vec![Command::Card(CardCmd::AutoPlay {
                     at_the_bodys_target: false,
-                    cards: CardSelector::ShuffleRolledFromPile {
+                    cards: CardSelector::SelectionRolledFromPile {
                         pile: sts2_engine::PileName::Hand,
                         filter: sts2_engine::CardFilter::PlayableOfType(
                             sts2_engine::CardType::Attack,
@@ -4438,7 +4438,7 @@ pub fn underdocks_powers() -> Vec<PowerDefinition> {
                 filter: CardFilter::Any,
                 then: vec![Command::Card(CardCmd::TransformToRolled {
                     cards: CardSelector::Chosen,
-                    stream: sts2_engine::TransformStream::CombatCardSelection,
+                    stream: sts2_engine::TransformStream::CombatCardGeneration,
                 })],
             })],
         )],
