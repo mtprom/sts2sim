@@ -661,7 +661,7 @@ fn a_waterlogged_scriptorium_locks_what_the_purse_cannot_reach() {
     );
 
     let mut rich = Visit::new("EVENT.WATERLOGGED_SCRIPTORIUM")
-        .gold(99)
+        .gold(120)
         .deck(&["CARD.STRIKE_IRONCLAD", "CARD.DEFEND_IRONCLAD", "CARD.BASH"])
         .enter();
     assert_eq!(
@@ -680,6 +680,37 @@ fn a_waterlogged_scriptorium_locks_what_the_purse_cannot_reach() {
         .and_then(|run| run.suspended_choice.as_ref())
         .expect("the enchantment screen is standing");
     assert_eq!((choice.minimum, choice.maximum), (2, 2));
+}
+
+#[test]
+fn light_upgrades_one_card_the_player_chooses() {
+    let mut simulator = Visit::new("EVENT.DOORS_OF_LIGHT_AND_DARK").enter();
+    choose(
+        &mut simulator,
+        "DOORS_OF_LIGHT_AND_DARK.pages.INITIAL.options.LIGHT",
+    );
+    assert!(
+        simulator.state().run_player.deck.iter().all(|card| card.upgrade_level == 0),
+        "no random upgrades happen before the choice"
+    );
+    let choice = simulator.state().run.as_ref().unwrap().suspended_choice.as_ref().unwrap();
+    assert_eq!((choice.minimum, choice.maximum), (1, 1));
+    assert_eq!(choice.candidates.len(), 2);
+}
+
+#[test]
+fn breathing_techniques_costs_25_and_adds_one_enlightenment() {
+    let mut simulator = Visit::new("EVENT.ZEN_WEAVER").gold(125).enter();
+    choose(
+        &mut simulator,
+        "ZEN_WEAVER.pages.INITIAL.options.BREATHING_TECHNIQUES",
+    );
+    assert_eq!(simulator.state().run_player.gold, 100);
+    assert_eq!(
+        simulator.state().run_player.deck.iter()
+            .filter(|card| card.model_id == id("CARD.ENLIGHTENMENT")).count(),
+        1
+    );
 }
 
 #[test]
