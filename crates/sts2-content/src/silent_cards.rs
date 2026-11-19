@@ -483,9 +483,9 @@ fn daggers_and_blades() -> Vec<CardDefinition> {
                 CardType::Power,
                 TargetType::SelfTarget,
                 1,
-                vec![buff("POWER.PHANTOM_BLADES_POWER", 9)],
+                vec![buff("POWER.PHANTOM_BLADES_POWER", 8)],
             ),
-            vec![buff("POWER.PHANTOM_BLADES_POWER", 12)],
+            vec![buff("POWER.PHANTOM_BLADES_POWER", 11)],
         ),
         // A storm of steel counts the hand, puts all of it down, and hands back
         // that many Shivs. The count is taken before the discard, so a storm
@@ -773,8 +773,7 @@ fn the_middle_pool() -> Vec<CardDefinition> {
             ),
             vec![escape_plan(5)],
         ),
-        // Expertise draws two cards, three upgraded, and each of them is kept
-        // through the end of this turn.
+        // Expertise draws, then retains the whole hand for this turn.
         upgrading(
             card(
                 "CARD.EXPERTISE",
@@ -928,23 +927,27 @@ fn the_middle_pool() -> Vec<CardDefinition> {
             ),
             1,
         ),
-        // A memento mori is worth four more for every card put down this turn.
-        upgrading(
+        // Memento Mori hits the first lowest-HP hittable enemy, without a roll.
+        sly(upgrading(
             card(
                 "CARD.MEMENTO_MORI",
                 CardType::Attack,
-                TargetType::AnyEnemy,
-                1,
-                vec![multi_attack(
-                    Amount::per(9, 4, Count::OwnerCardsDiscardedThisTurn),
-                    Amount::Fixed(1),
-                )],
+                TargetType::RandomEnemy,
+                3,
+                vec![Command::Damage(DamageCmd::Attack {
+                    amount: Amount::Fixed(19),
+                    hits: Amount::Fixed(1),
+                    target: CreatureSelector::WeakestOpponent,
+                    props: ValueProps::NONE,
+                })],
             ),
-            vec![multi_attack(
-                Amount::per(11, 5, Count::OwnerCardsDiscardedThisTurn),
-                Amount::Fixed(1),
-            )],
-        ),
+            vec![Command::Damage(DamageCmd::Attack {
+                amount: Amount::Fixed(23),
+                hits: Amount::Fixed(1),
+                target: CreatureSelector::WeakestOpponent,
+                props: ValueProps::NONE,
+            })],
+        )),
         // A murder is worth one more for every card drawn this fight.
         upgrading_cost(
             card(
@@ -1146,9 +1149,9 @@ fn the_late_pool() -> Vec<CardDefinition> {
                 CardType::Power,
                 TargetType::SelfTarget,
                 2,
-                vec![buff("POWER.SPEEDSTER_POWER", 2)],
+                vec![buff("POWER.SPEEDSTER_POWER", 3)],
             ),
-            vec![buff("POWER.SPEEDSTER_POWER", 2)],
+            vec![buff("POWER.SPEEDSTER_POWER", 3)],
         )),
         upgrading(
             card(
@@ -1329,15 +1332,11 @@ fn escape_plan(amount: i32) -> Command {
     }
 }
 
-/// Expertise, played: that many cards drawn, each of them retained for this
-/// turn only.
+/// Expertise draws first, then retains the entire hand for this turn.
 fn expertise(count: i32) -> Command {
     Command::Drawn {
         count: Amount::Fixed(count),
-        then: vec![Command::Card(CardCmd::ApplySingleTurnKeyword {
-            cards: CardSelector::Chosen,
-            keyword: sts2_engine::CardKeyword::Retain,
-        })],
+        then: vec![buff("POWER.RETAIN_HAND_POWER", 1)],
     }
 }
 

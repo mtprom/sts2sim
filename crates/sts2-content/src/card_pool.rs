@@ -281,7 +281,7 @@ pub(crate) const SILENT_POOL: [(&str, CardType, CardRarity, i32); 80] = [
         "CARD.MEMENTO_MORI",
         CardType::Attack,
         CardRarity::Uncommon,
-        1,
+        3,
     ),
     ("CARD.MIRAGE", CardType::Skill, CardRarity::Uncommon, 1),
     ("CARD.MURDER", CardType::Attack, CardRarity::Rare, 3),

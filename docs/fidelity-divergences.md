@@ -205,3 +205,14 @@ rather than an inert asymmetry.
 The distinction is the whole point of this document: the shelf answers both
 clicks the same way, and only where the recorder writes its record separates
 the one that may be filtered out of the action list from the one that may not.
+# v0.113.1 combat-port hook gaps
+
+- Phantom Blades damage is 8 (11 upgraded), but its Shiv Retain grant still
+  mutates individual cards permanently. TODO(package 4): implement dynamic
+  `TryModifyKeywordsInCombat` so removing the power removes only its grant,
+  including on existing, generated, and upgraded Shivs. A scenario removing the
+  power while holding an otherwise non-retaining Shiv distinguishes this.
+- TODO(package 4): move Draw Cards Next Turn cleanup immediately after hand-draw
+  modification; schedule Nightmare copy cleanup at turn end; defer Juggling's
+  remembered clone until after the triggering card resolves. These timing
+  changes need engine scheduling rather than different content values.

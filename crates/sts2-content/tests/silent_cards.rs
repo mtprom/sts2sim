@@ -268,12 +268,12 @@ fn the_plain_powers_lay_down_what_they_say() {
         ("CARD.INFINITE_BLADES", "POWER.INFINITE_BLADES_POWER", 1, 1),
         ("CARD.MASTER_PLANNER", "POWER.MASTER_PLANNER_POWER", 1, 1),
         ("CARD.NOXIOUS_FUMES", "POWER.NOXIOUS_FUMES_POWER", 2, 3),
-        ("CARD.PHANTOM_BLADES", "POWER.PHANTOM_BLADES_POWER", 9, 12),
+        ("CARD.PHANTOM_BLADES", "POWER.PHANTOM_BLADES_POWER", 8, 11),
         ("CARD.SERPENT_FORM", "POWER.SERPENT_FORM_POWER", 4, 6),
         ("CARD.SHADOWMELD", "POWER.SHADOWMELD_POWER", 1, 1),
         ("CARD.SIDESTEP", "POWER.ENERGY_NEXT_TURN_POWER", 1, 2),
         ("CARD.SNEAKY", "POWER.SNEAKY_POWER", 1, 2),
-        ("CARD.SPEEDSTER", "POWER.SPEEDSTER_POWER", 2, 2),
+        ("CARD.SPEEDSTER", "POWER.SPEEDSTER_POWER", 3, 3),
         (
             "CARD.TOOLS_OF_THE_TRADE",
             "POWER.TOOLS_OF_THE_TRADE_POWER",
@@ -470,9 +470,7 @@ fn escape_plan_pays_block_only_for_a_skill() {
     }
 }
 
-/// Expertise draws two cards, three upgraded, and each of them is kept through
-/// the end of this turn only: the cards drawn stay in hand as the turn ends,
-/// and the slice that was already held goes down with the flush.
+/// Expertise draws two (three upgraded) and retains the entire hand this turn.
 #[test]
 fn expertise_draws_and_keeps_what_it_drew_for_the_turn() {
     for (upgrade, drawn) in [(0, 2), (1, 3)] {
@@ -513,7 +511,7 @@ fn expertise_draws_and_keeps_what_it_drew_for_the_turn() {
             drawn_ids.iter().all(|id| held.contains(id)),
             "the drawn cards were kept: {drawn_ids:?} in {held:?}"
         );
-        assert!(!held.contains(&1), "the card already held was not");
+        assert!(held.contains(&1), "the card already held is retained too");
     }
 }
 
@@ -771,10 +769,10 @@ fn flechettes_swing_once_per_skill_in_hand() {
     }
 }
 
-/// A memento mori is worth more for every card put down this turn.
+/// Memento Mori's damage is fixed, regardless of discards this turn.
 #[test]
 fn memento_mori_counts_what_has_been_discarded() {
-    for (upgrade, base, per) in [(0, 9, 4), (1, 11, 5)] {
+    for (upgrade, base) in [(0, 19), (1, 23)] {
         let mut simulator = fight(&[("CARD.MEMENTO_MORI", upgrade)]);
         play(&mut simulator, "CARD.MEMENTO_MORI");
         assert_eq!(creature(&simulator, 1).current_hp, 39 - base);
@@ -787,7 +785,33 @@ fn memento_mori_counts_what_has_been_discarded() {
         play(&mut simulator, "CARD.SURVIVOR");
         choose(&mut simulator, "CARD.SLICE");
         play(&mut simulator, "CARD.MEMENTO_MORI");
-        assert_eq!(creature(&simulator, 1).current_hp, 39 - (base + per));
+        assert_eq!(creature(&simulator, 1).current_hp, 39 - base);
+    }
+}
+
+/// Memento Mori costs three, is Sly, and hits the first lowest-HP enemy
+/// without consuming combat-target RNG.
+#[test]
+fn memento_mori_selects_the_lowest_hp_without_a_roll() {
+    for (first_hp, second_hp, expected_first, expected_second) in
+        [(39, 30, 39, 11), (30, 30, 11, 30)]
+    {
+        let mut simulator =
+            ScenarioBuilder::new(SEED, id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+                .played_as(id("CHARACTER.SILENT"))
+                .energy(3, 3)
+                .turn(1, 1)
+                .rng_counter(RunStream::CombatTargets, 0)
+                .enemy(1, id("MONSTER.SHRINKER_BEETLE"), first_hp, 39, "SHRINKER_MOVE")
+                .enemy(2, id("MONSTER.SHRINKER_BEETLE"), second_hp, 39, "SHRINKER_MOVE")
+                .card(PileName::Hand, 0, card("CARD.MEMENTO_MORI", 0), 0)
+                .build(sts2_content::standard_registry())
+                .expect("the scenario builds");
+        assert!(simulator.state().combat.as_ref().unwrap().player.piles.hand[0].sly);
+        play(&mut simulator, "CARD.MEMENTO_MORI");
+        assert_eq!(creature(&simulator, 1).current_hp, expected_first);
+        assert_eq!(creature(&simulator, 2).current_hp, expected_second);
+        assert_eq!(simulator.state().combat.as_ref().unwrap().player.energy, 0);
     }
 }
 
