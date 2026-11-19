@@ -745,6 +745,60 @@ fn the_museum_breakout_costs_ten_max_hp_after_two_dialogue_pages() {
 }
 
 #[test]
+fn museum_take_obtains_the_displayed_relic_and_one_curse_or_names_the_missing_hook() {
+    for model in [
+        "RELIC.OBSIDIAN_VICE",
+        "RELIC.THUMBSCREW",
+        "RELIC.TORMENTOUS_COLLAR",
+    ] {
+        let mut simulator = Visit::new("EVENT.MUSEUM_OF_TORTURE").act(1).enter();
+        for page in ["INITIAL", "LOCKED"] {
+            choose(
+                &mut simulator,
+                &format!("MUSEUM_OF_TORTURE.pages.{page}.options.CONTINUE"),
+            );
+        }
+        // Each of the three CalculateVars outcomes is a valid display state.
+        let mut state = simulator.state().clone();
+        let Some(ActiveRoom::Event { options, .. }) =
+            state.run.as_mut().unwrap().active_room.as_mut()
+        else {
+            panic!("the museum's display is standing")
+        };
+        options[0].effects[0] = EventEffect::ObtainRelic(id(model));
+        let mut simulator =
+            Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        let result = simulator.step(Action::ChooseEvent {
+            index: 0,
+            option_id: "MUSEUM_OF_TORTURE.pages.DISPLAY.options.TAKE".to_owned(),
+        });
+        if model == "RELIC.THUMBSCREW" {
+            assert_eq!(result.unwrap_err().details["model_id"], model);
+        } else {
+            result.unwrap();
+            assert!(holds_relic(&simulator, model));
+            let registry = sts2_content::standard_registry();
+            assert_eq!(
+                simulator
+                    .state()
+                    .run_player
+                    .deck
+                    .iter()
+                    .filter(|card| registry.card(&card.model_id).unwrap().rarity
+                        == sts2_engine::CardRarity::Curse)
+                    .count(),
+                1
+            );
+            assert_eq!(
+                simulator.state().run_player.max_hp,
+                80,
+                "taking the relic is not breaking out"
+            );
+        }
+    }
+}
+
+#[test]
 fn the_shrine_gives_the_selected_mighty_card_or_wings_and_clumsy() {
     for (option, card) in [
         ("TAKE_WEAPON", "CARD.MIGHTY_WEAPON"),
