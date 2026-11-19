@@ -600,5 +600,8 @@ fn a_fallen_merc_makes_the_fat_gremlin_first_and_lets_it_in_last() {
         ],
         "the sneaky gremlin joined first, the fat one was made first"
     );
-    assert!(combat.created_not_added.is_empty());
+    assert_eq!(
+        combat.created_not_added,
+        Vec::<sts2_core::CreatureCombatId>::new()
+    );
 }
