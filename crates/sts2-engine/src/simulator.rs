@@ -19008,6 +19008,10 @@ impl Simulator {
     fn fingerprint_passes(&self, fingerprint: &CardFingerprint, filters: &[CardFilter]) -> bool {
         let definition = self.content.card(&fingerprint.model_id);
         filters.iter().all(|filter| match filter {
+            CardFilter::NonXOfType(card_type) => {
+                self.content.card_type_of(fingerprint) == Some(*card_type)
+                    && definition.is_some_and(|definition| !definition.costs_x)
+            }
             // A filter that asks about a copy rather than about a model is
             // answered by `instance_passes`; nothing that only has the
             // fingerprint can tell.

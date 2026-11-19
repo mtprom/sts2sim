@@ -64,23 +64,18 @@ pub(crate) fn card(
     }
 }
 
-/// What an Expect a Fight blocks for: its base, and its extra for every point
-/// of its owner's strength, with strength below zero counted as none.
-fn expect_a_fight_block(base: i32, extra: i32) -> Command {
-    Command::Creature(CreatureCmd::GainBlock {
-        target: CreatureSelector::Owner,
-        amount: Amount::Sum(vec![
-            Amount::Fixed(base),
-            Amount::Product {
-                left: Box::new(Amount::Fixed(extra)),
-                right: Box::new(Amount::Greatest(vec![
-                    Amount::Fixed(0),
-                    Amount::counting(Count::OwnerPower(id("POWER.STRENGTH_POWER"))),
-                ])),
+/// Fixed block, then one less energy on non-X attacks currently held, until played.
+fn expect_a_fight(amount: i32) -> Vec<Command> {
+    vec![
+        block(amount),
+        Command::Card(CardCmd::AddCostUntilPlayed {
+            cards: CardSelector::Pile {
+                pile: PileName::Hand,
+                filter: CardFilter::NonXOfType(CardType::Attack),
             },
-        ]),
-        props: ValueProps::NONE,
-    })
+            amount: Amount::Fixed(-1),
+        }),
+    ]
 }
 
 /// Whether a card gains block, which every card declares for itself rather
@@ -1033,17 +1028,16 @@ fn pool_listeners_and_piles() -> Vec<CardDefinition> {
             ),
             vec![second_wind(7)],
         ),
-        // Expecting a fight is block: fifteen, and five more for every point
-        // of strength its owner holds. Strength below zero counts as none.
+        // Expect a Fight blocks and discounts the non-X attacks already held.
         upgrading(
             card(
                 "CARD.EXPECT_A_FIGHT",
                 CardType::Skill,
                 TargetType::SelfTarget,
                 3,
-                vec![expect_a_fight_block(15, 5)],
+                expect_a_fight(15),
             ),
-            vec![expect_a_fight_block(16, 8)],
+            expect_a_fight(20),
         ),
         // A battle trance draws deep and stops the well for the turn.
         upgrading(
@@ -1262,22 +1256,30 @@ fn burning_cards() -> Vec<CardDefinition> {
             ),
             evil_eye(11),
         ),
-        // A forgotten ritual pays its energy outright and burns.
+        // Forgotten Ritual requires an earlier exhaust; its own exhaust is later.
         exhausting(upgrading(
             card(
                 "CARD.FORGOTTEN_RITUAL",
                 CardType::Skill,
                 TargetType::SelfTarget,
                 1,
-                vec![energy(3)],
+                forgotten_ritual(3),
             ),
-            vec![energy(4)],
+            forgotten_ritual(4),
         )),
         // A drum of battle draws when it is played and pays energy when it
         // burns, however it comes to burn. The energy is its own var, so the
         // upgraded copy pays one more.
         drum_of_battle(),
     ]
+}
+
+fn forgotten_ritual(amount: i32) -> Vec<Command> {
+    vec![Command::When {
+        condition: Condition::OwnerExhaustedACardThisTurn,
+        then: vec![energy(amount)],
+        otherwise: Vec::new(),
+    }]
 }
 
 /// Evil Eye works its block up once, or twice when something has burned this

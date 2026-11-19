@@ -2202,6 +2202,8 @@ fn any_card() -> CardFilter {
 pub enum CardFilter {
     Any,
     OfType(CardType),
+    /// Cards of this type whose printed energy cost is not X.
+    NonXOfType(CardType),
     /// Every card that is not of this type, which is what a Second Wind burns
     /// through.
     NotOfType(CardType),

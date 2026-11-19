@@ -842,19 +842,26 @@ fn an_evil_eye_pays_twice_once_something_has_burned() {
     }
 }
 
-/// A forgotten ritual pays its energy whether or not anything has burned this
-/// turn, and burns itself for having been played.
+/// Forgotten Ritual only pays after an earlier exhaust, not its own cleanup.
 #[test]
-fn a_forgotten_ritual_pays_outright() {
+fn a_forgotten_ritual_requires_an_earlier_exhaust() {
     for (upgrade, gained) in [(0, 3), (1, 4)] {
         let mut simulator = fight(&[("CARD.FORGOTTEN_RITUAL", upgrade)]);
         let before = energy(&simulator);
         play(&mut simulator, "CARD.FORGOTTEN_RITUAL");
-        assert_eq!(energy(&simulator), before - 1 + gained);
+        assert_eq!(energy(&simulator), before - 1);
         assert_eq!(
             pile(&simulator, PileName::Exhaust),
             ["CARD.FORGOTTEN_RITUAL"]
         );
+        let mut simulator = fight(&[
+            ("CARD.FORGOTTEN_RITUAL", upgrade),
+            ("CARD.FORGOTTEN_RITUAL", upgrade),
+        ]);
+        play(&mut simulator, "CARD.FORGOTTEN_RITUAL");
+        let before = energy(&simulator);
+        play(&mut simulator, "CARD.FORGOTTEN_RITUAL");
+        assert_eq!(energy(&simulator), before - 1 + gained);
     }
 }
 
@@ -1092,12 +1099,10 @@ fn second_wind_burns_the_skills_and_pays_block_for_each() {
     }
 }
 
-/// Expecting a fight blocks for fifteen and five more per point of strength,
-/// sixteen and eight once upgraded. Strength below zero counts as none, and it
-/// costs three at both levels.
+/// Expect a Fight blocks for 15 (20 upgraded), independent of Strength.
 #[test]
-fn expect_a_fight_blocks_more_for_every_point_of_strength() {
-    for (upgrade, strength, block) in [(0, 0, 15), (0, 2, 25), (0, -2, 15), (1, 0, 16), (1, 2, 32)]
+fn expect_a_fight_blocks_independently_of_strength() {
+    for (upgrade, strength, block) in [(0, 0, 15), (0, 2, 15), (0, -2, 15), (1, 0, 20), (1, 2, 20)]
     {
         let mut scenario = ScenarioBuilder::new(SEED, id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
             .player_hp(80, 80)
@@ -1130,6 +1135,36 @@ fn expect_a_fight_blocks_more_for_every_point_of_strength() {
         );
         assert_eq!(before - energy(&simulator), 3);
     }
+}
+
+/// Expect a Fight discounts only held non-X Attacks, stacks, and the next
+/// play consumes the modifier rather than making the discount permanent.
+#[test]
+fn expect_a_fight_discounts_held_non_x_attacks_until_played() {
+    let mut simulator = fight(&[
+        ("CARD.EXPECT_A_FIGHT", 0),
+        ("CARD.EXPECT_A_FIGHT", 0),
+        ("CARD.STRIKE_IRONCLAD", 0),
+        ("CARD.WHIRLWIND", 0),
+        ("CARD.DEFEND_IRONCLAD", 0),
+    ]);
+    play(&mut simulator, "CARD.EXPECT_A_FIGHT");
+    play(&mut simulator, "CARD.EXPECT_A_FIGHT");
+    let combat = simulator.state().combat.as_ref().expect("a fight");
+    for held in &combat.player.piles.hand {
+        assert_eq!(
+            held.cost_until_played,
+            if held.fingerprint.model_id == id("CARD.STRIKE_IRONCLAD") { -2 } else { 0 }
+        );
+    }
+    let before = energy(&simulator);
+    play(&mut simulator, "CARD.STRIKE_IRONCLAD");
+    assert_eq!(energy(&simulator), before, "the attack is free");
+    let played = simulator.state().combat.as_ref().expect("a fight")
+        .player.piles.discard.iter()
+        .find(|card| card.fingerprint.model_id == id("CARD.STRIKE_IRONCLAD"))
+        .expect("played strike");
+    assert_eq!(played.cost_until_played, 0);
 }
 
 /// A battle trance draws and then stops the well; the next turn's own opening
