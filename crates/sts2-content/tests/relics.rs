@@ -4488,8 +4488,17 @@ fn juzu_excludes_both_monster_and_elite_unknown_room_rolls() {
             };
             let mut simulator =
                 Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
-            walk_to(&mut simulator, 2);
-            assert_eq!(simulator.state().combat.is_some(), !held);
+            let step = simulator.step(Action::ChooseMap {
+                destination: MapCoord { col: 2, row: 1 },
+            });
+            if elite && !held {
+                // The absent pre-generated elite room makes the positive
+                // control fail explicitly, naming the elite that was rolled.
+                assert_eq!(step.unwrap_err().details["room_type"], "elite");
+            } else {
+                step.unwrap();
+                assert_eq!(simulator.state().combat.is_some(), !held);
+            }
         }
     }
 }
@@ -7253,8 +7262,7 @@ fn a_book_repair_knife_does_not_heal_for_a_doomed_ally() {
         .find(|creature| creature.id.get() == 1)
         .unwrap()
         .side = sts2_engine::CombatSide::Player;
-    let mut simulator =
-        Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+    let mut simulator = Simulator::from_scenario(state, sts2_content::standard_registry()).unwrap();
     end_turn(&mut simulator);
     assert_eq!(
         player(&simulator).current_hp,

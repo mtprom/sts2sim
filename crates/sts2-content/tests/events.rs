@@ -1935,7 +1935,7 @@ fn every_event_an_act_can_offer_is_registered() {
 #[test]
 #[allow(clippy::too_many_lines, reason = "one walk per page")]
 fn the_pages_a_recording_walked_are_walked_here_too() {
-    // Doors of light and dark: two upgrades off a sorted-then-shuffled deck, or
+    // Doors of light and dark: one chosen upgrade, or
     // one card removed for nothing.
     let mut light = Visit::new("EVENT.DOORS_OF_LIGHT_AND_DARK")
         .deck(&["CARD.STRIKE_IRONCLAD", "CARD.DEFEND_IRONCLAD", "CARD.BASH"])
@@ -1944,6 +1944,13 @@ fn the_pages_a_recording_walked_are_walked_here_too() {
         &mut light,
         "DOORS_OF_LIGHT_AND_DARK.pages.INITIAL.options.LIGHT",
     );
+    let selection = light
+        .legal_actions()
+        .iter()
+        .find(|action| matches!(action, Action::ChooseCards { .. }))
+        .cloned()
+        .expect("Light asks for one upgrade");
+    light.step(selection).unwrap();
     assert_eq!(
         light
             .state()
@@ -1952,7 +1959,7 @@ fn the_pages_a_recording_walked_are_walked_here_too() {
             .iter()
             .filter(|card| card.upgrade_level > 0)
             .count(),
-        2
+        1
     );
     let mut dark = Visit::new("EVENT.DOORS_OF_LIGHT_AND_DARK")
         .deck(&["CARD.STRIKE_IRONCLAD", "CARD.DEFEND_IRONCLAD", "CARD.BASH"])
