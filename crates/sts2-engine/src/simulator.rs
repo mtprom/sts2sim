@@ -4407,20 +4407,26 @@ impl Simulator {
     }
 
     /// Stocks a merchant: five character cards with one on sale, two colorless
-    /// cards, three relics, three potions, and a card removal. Card and relic
-    /// rarities roll on the rewards stream while every pick and price rolls on
-    /// the shops stream, in that exact interleaving.
+    /// cards, three relics, three potions, and a card removal. Everything rolls
+    /// on the shops stream, in the build's order: the relics, then the
+    /// potions, then the cards, and the on-sale slot last. The shelf still
+    /// lists cards, relics, potions.
     fn generate_shop_room(&mut self) -> Result<RoomDefinition, EngineError> {
         let spec = self.run_merchant()?.cloned().ok_or_else(|| {
             EngineError::new(ErrorCode::UnsupportedContent)
                 .with_detail("room_type", "shop")
                 .with_detail("model_id", "MERCHANT")
         })?;
+        let mut goods: Vec<crate::ShopOffer> = Vec::new();
+        self.stock_merchant_relics(&spec, &mut goods)?;
+        self.stock_merchant_potions(&spec, &mut goods)?;
         let mut offers: Vec<crate::ShopOffer> = Vec::new();
         let mut stocked: Vec<ModelId> = Vec::new();
         self.stock_merchant_cards(&spec, &mut offers, &mut stocked)?;
-        self.stock_merchant_relics(&spec, &mut offers)?;
-        self.stock_merchant_potions(&spec, &mut offers)?;
+        for mut offer in goods {
+            offer.index = offers.len();
+            offers.push(offer);
+        }
         let removals_used = self
             .state
             .run
@@ -4433,8 +4439,8 @@ impl Simulator {
         })
     }
 
-    /// Five character cards, one of them discounted, then one uncommon and one
-    /// rare colorless card.
+    /// Five character cards, then one uncommon and one rare colorless card,
+    /// and then one character card put on sale.
     fn stock_merchant_cards(
         &mut self,
         spec: &crate::MerchantSpec,
@@ -4448,36 +4454,34 @@ impl Simulator {
             crate::CardType::Skill,
             crate::CardType::Power,
         ];
-        let sale_index = self
-            .shops_rng()
-            .next_index(CHARACTER_CARD_TYPES.len())
-            .map_err(|error| shop_error(&error))?
-            .expect("card type list is nonempty");
-        for (index, card_type) in CHARACTER_CARD_TYPES.into_iter().enumerate() {
-            let base = self.stock_one_merchant_card(spec, offers, stocked, card_type)?;
-            if index == sale_index {
-                // Putting a slot on sale prices it a second time, over the
-                // card's own rarity price rather than over what the first roll
-                // came to, and halves it. The sale slot therefore reads the
-                // shops stream twice and the second roll is the one the player
-                // sees.
-                let price = self.roll_price(base, 0.95, 1.05)? / 2;
-                if let Some(offer) = offers.last_mut() {
-                    offer.base_price = price;
-                    offer.price = price;
-                }
-            }
+        let first = offers.len();
+        let mut bases = Vec::with_capacity(CHARACTER_CARD_TYPES.len());
+        for card_type in CHARACTER_CARD_TYPES {
+            bases.push(self.stock_one_merchant_card(spec, offers, stocked, card_type)?);
         }
 
         for rarity in [crate::CardRarity::Uncommon, crate::CardRarity::Rare] {
             self.stock_one_colorless_card(spec, offers, stocked, rarity)?;
         }
 
+        let sale_index = self
+            .shops_rng()
+            .next_index(CHARACTER_CARD_TYPES.len())
+            .map_err(|error| shop_error(&error))?
+            .expect("card type list is nonempty");
+        // Putting a slot on sale prices it a second time, over the card's own
+        // rarity price rather than over what the first roll came to, and
+        // halves it. The second roll is the one the player sees.
+        let price = self.roll_price(bases[sale_index], 0.95, 1.05)? / 2;
+        let offer = &mut offers[first + sale_index];
+        offer.base_price = price;
+        offer.price = price;
+
         Ok(())
     }
 
-    /// One character-card slot: a rarity rolled on the rewards stream, a pick
-    /// and a price on the shops stream.
+    /// One character-card slot: a rarity, a pick, an upgrade roll and a price,
+    /// all on the shops stream.
     fn stock_one_merchant_card(
         &mut self,
         spec: &crate::MerchantSpec,
@@ -4488,7 +4492,7 @@ impl Simulator {
         let offset = self.state.run_player.odds.card_rarity_offset();
         let ascension = self.ascension();
         let rolled = roll_card_rarity(
-            self.state.player_rng.stream_mut(PlayerStream::Rewards),
+            self.state.player_rng.stream_mut(PlayerStream::Shops),
             crate::RarityOdds::Shop,
             Some(offset),
             ascension,
@@ -4564,7 +4568,7 @@ impl Simulator {
         )
     }
 
-    /// One slot per entry of `rarities`: a rarity rolled on the rewards stream
+    /// One slot per entry of `rarities`: a rarity rolled on the shops stream
     /// unless the slot names one, and then a pull from the back of the bag past
     /// the shelf's own relics.
     fn stock_merchant_relics_of(
@@ -4578,7 +4582,7 @@ impl Simulator {
         for named in rarities {
             let rarity = match named {
                 Some(rarity) => *rarity,
-                None => roll_relic_rarity(self.state.player_rng.stream_mut(PlayerStream::Rewards)),
+                None => roll_relic_rarity(self.shops_rng()),
             };
             let mut banned = spec.relics_banned_from_shops.clone();
             banned.extend(already_stocked.iter().cloned());
@@ -5120,7 +5124,7 @@ impl Simulator {
     }
 
     /// Draws one card the merchant has not stocked yet, then burns the upgrade
-    /// roll every merchant card makes on the rewards stream.
+    /// roll every merchant card makes, both on the shops stream.
     fn pick_merchant_card(
         &mut self,
         pool: &[crate::MerchantCard],
@@ -5137,9 +5141,7 @@ impl Simulator {
             .next_index(available.len())
             .map_err(|error| shop_error(&error))?
             .ok_or_else(|| shop_error(&"no card matches the merchant slot"))?;
-        self.state
-            .player_rng
-            .stream_mut(PlayerStream::Rewards)
+        self.shops_rng()
             .next_float(0.0, 1.0)
             .expect("ordered unit range is valid");
         Ok(available[index].clone())
