@@ -18466,8 +18466,7 @@ impl Simulator {
                     candidates = self.pile_cards_passing(*pile, *fallback, None)?;
                 }
                 sort_pile_canonically(&mut candidates);
-                self.shuffle_stream_mut(*stream)
-                    .shuffle(&mut candidates);
+                self.shuffle_stream_mut(*stream).shuffle(&mut candidates);
                 candidates.truncate(take);
                 Ok(candidates.into_iter().map(ChosenCard::Combat).collect())
             }
@@ -29494,7 +29493,6 @@ fn generate_reward_potion(
     Ok(drawn.remove(0).0)
 }
 
-
 /// A stable shuffle's own sort: a pile is put in canonical order before it is
 /// shuffled, so that the shuffle does not depend on the order it was in.
 fn sort_pile_canonically(cards: &mut [crate::CardInstance]) {
@@ -29566,7 +29564,12 @@ fn compare_deck_cards(
 /// other per-copy variable change compares equal. Upgrade once content
 /// grows a variable that is stored somewhere else.
 fn dynamic_base_values(card: &crate::CardFingerprint, damage_bonus: i32) -> (i64, i64) {
-    let saved = |name: &str| card.properties.get(name).and_then(Value::as_i64).unwrap_or(0);
+    let saved = |name: &str| {
+        card.properties
+            .get(name)
+            .and_then(Value::as_i64)
+            .unwrap_or(0)
+    };
     (
         saved("CurrentBlock"),
         saved("CurrentDamage") + i64::from(damage_bonus),
