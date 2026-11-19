@@ -37,6 +37,32 @@ fn my_shinies_truncates_gold_per_hit_and_scales_each_hit_with_strength() {
 }
 
 #[test]
+fn my_shinies_applies_intangible_to_each_gold_bought_hit_not_the_total() {
+    let mut simulator = scenario(&[("CARD.MY_SHINIES", 0)], &[], 100)
+        .gold(61)
+        .power(
+            0,
+            id("POWER.STRENGTH_POWER"),
+            4,
+            sts2_engine::PowerType::Buff,
+        )
+        .power(
+            1,
+            id("POWER.INTANGIBLE_POWER"),
+            1,
+            sts2_engine::PowerType::Buff,
+        )
+        .build(sts2_content::standard_registry())
+        .unwrap();
+    play(&mut simulator, "CARD.MY_SHINIES");
+    assert_eq!(
+        simulator.state().combat.as_ref().unwrap().creatures[1].current_hp,
+        97,
+        "three hits are each capped at one, rather than one aggregate hit"
+    );
+}
+
+#[test]
 fn mighty_cards_add_dazed_at_random_positions_after_their_effect() {
     for (model, upgraded, block, damage, dazed) in [
         ("CARD.MIGHTY_SHIELD", 0, 20, 0, 3),
