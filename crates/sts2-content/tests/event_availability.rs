@@ -213,6 +213,60 @@ fn an_event_this_act_cannot_offer_is_passed_over_and_counted() {
     assert_eq!(later.lands_on().0, "EVENT.SYMBIOTE");
 }
 
+#[test]
+fn museum_is_only_in_the_second_act_and_thermae_requires_gold_and_wounds() {
+    for act in 0..3 {
+        let mut walk = Walk::new(&["EVENT.MUSEUM_OF_TORTURE", "EVENT.TRIAL"]);
+        walk.act = act;
+        assert_eq!(
+            walk.lands_on().0,
+            if act == 1 {
+                "EVENT.MUSEUM_OF_TORTURE"
+            } else {
+                "EVENT.TRIAL"
+            }
+        );
+    }
+    for (gold, hp, allowed) in [(175, 60, false), (176, 61, false), (176, 60, true)] {
+        let mut walk = Walk::new(&["EVENT.THERMAE_NONUPEIPE", "EVENT.TRIAL"]);
+        walk.gold = gold;
+        walk.current_hp = hp;
+        assert_eq!(
+            walk.lands_on().0,
+            if allowed {
+                "EVENT.THERMAE_NONUPEIPE"
+            } else {
+                "EVENT.TRIAL"
+            }
+        );
+    }
+}
+
+#[test]
+fn shrine_and_thermae_are_excluded_when_their_ancient_owns_the_act() {
+    for (event, ancient) in [
+        ("EVENT.SHRINE_OF_THE_WARLORD", "EVENT.TANX"),
+        ("EVENT.THERMAE_NONUPEIPE", "EVENT.NONUPEIPE"),
+    ] {
+        let mut walk = Walk::new(&[event, "EVENT.TRIAL"]);
+        walk.gold = 200;
+        walk.current_hp = 60;
+        let mut state = walk.simulator().state().clone();
+        state.run.as_mut().unwrap().acts[0].ancient = id(ancient);
+        let mut simulator =
+            Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        simulator
+            .step(Action::ChooseMap {
+                destination: MapCoord { col: 0, row: 1 },
+            })
+            .unwrap();
+        assert!(matches!(
+            simulator.state().run.as_ref().unwrap().active_room.as_ref(),
+            Some(ActiveRoom::Event { model_id, .. }) if *model_id == id("EVENT.TRIAL")
+        ));
+    }
+}
+
 /// A punch-off wants six floors walked, and the floor count is the map points
 /// the run has walked. The point being walked onto joins that count only
 /// once the room in front of it has been built, and the walk over the act's

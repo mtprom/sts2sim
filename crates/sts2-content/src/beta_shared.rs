@@ -170,6 +170,10 @@ fn heal(amount: Amount) -> Command {
     })
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one declarative entry per beta event relic"
+)]
 pub(crate) fn relics() -> Vec<RelicDefinition> {
     vec![
         RelicDefinition {
@@ -243,6 +247,7 @@ pub(crate) fn relics() -> Vec<RelicDefinition> {
         RelicDefinition {
             adds_pet: true,
             spawns_pets: true,
+            has_upon_pickup_effect: true,
             on_obtained: vec![Command::Card(CardCmd::TransformDeckCards {
                 cards: CardSelector::DeckCardsOfModel(id("CARD.BYRD_SWOOP")),
                 replacement: sts2_engine::CardTransformReplacement::Named {

@@ -4370,11 +4370,131 @@ fn mighty_wings_uses_total_powered_damage_and_triggers_per_hit() {
 
 #[test]
 fn byrdpip_counts_swoops_and_caps_the_persistent_count_at_six() {
-    let mut simulator = fight_tough(&["RELIC.BYRDPIP"], &vec![("CARD.BYRD_SWOOP", 0); 7]);
+    let mut simulator = fight_tough(&["RELIC.BYRDPIP"], &[("CARD.BYRD_SWOOP", 0); 7]);
     for _ in 0..7 {
         play(&mut simulator, "CARD.BYRD_SWOOP");
     }
     assert_eq!(relic_counter(&simulator, "RELIC.BYRDPIP"), 6);
+}
+
+#[test]
+fn a_bath_towel_heals_eight_only_on_the_opening_turn() {
+    let mut towel = fight_from_run(&["RELIC.BATH_TOWEL"]);
+    let mut plain = fight_from_run(&[]);
+    assert_eq!(player(&towel).current_hp, player(&plain).current_hp + 8);
+    end_turn(&mut towel);
+    end_turn(&mut plain);
+    assert_eq!(player(&towel).current_hp, player(&plain).current_hp + 8);
+}
+
+#[test]
+fn bath_robes_heal_to_full_before_a_boss_and_are_spent_once() {
+    for used in [false, true] {
+        let mut state = run_holding(&["RELIC.BATH_ROBES"]).state().clone();
+        state
+            .run_player
+            .relics
+            .iter_mut()
+            .find(|relic| relic.model_id == id("RELIC.BATH_ROBES"))
+            .unwrap()
+            .latched = used;
+        state.run.as_mut().unwrap().maps[0]
+            .points
+            .iter_mut()
+            .find(|point| point.coord.col == 3)
+            .unwrap()
+            .point_type = MapPointType::Boss;
+        let mut simulator =
+            Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        walk_to(&mut simulator, 3);
+        assert_eq!(player(&simulator).current_hp, if used { 40 } else { 80 });
+        assert!(
+            simulator
+                .state()
+                .run_player
+                .relics
+                .iter()
+                .find(|relic| relic.model_id == id("RELIC.BATH_ROBES"))
+                .unwrap()
+                .latched
+        );
+    }
+}
+
+#[test]
+fn a_tormentous_collar_weakens_elites_for_two_turns_only_on_opening() {
+    let mut state = run_holding(&["RELIC.TORMENTOUS_COLLAR"]).state().clone();
+    state.run.as_mut().unwrap().maps[0]
+        .points
+        .iter_mut()
+        .find(|point| point.coord.col == 3)
+        .unwrap()
+        .point_type = MapPointType::Elite;
+    let mut simulator =
+        Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+    walk_to(&mut simulator, 3);
+    assert_eq!(power_amount(&simulator, 1, "POWER.WEAK_POWER"), 2);
+    end_turn(&mut simulator);
+    end_turn(&mut simulator);
+    assert_eq!(power_amount(&simulator, 1, "POWER.WEAK_POWER"), 0);
+}
+
+#[test]
+fn juzu_excludes_both_monster_and_elite_unknown_room_rolls() {
+    for elite in [false, true] {
+        for held in [false, true] {
+            let relics = if held {
+                vec!["RELIC.JUZU_BRACELET"]
+            } else {
+                Vec::new()
+            };
+            let mut state = run_holding(&relics).state().clone();
+            let run = state.run.as_mut().unwrap();
+            run.rooms[0].retain(|room| room.coord.col != 2);
+            run.acts[0].elite_encounters = vec![id("ENCOUNTER.SHRINKER_BEETLE_WEAK")];
+            run.acts[0].events = vec![id("EVENT.DOORS_OF_LIGHT_AND_DARK")];
+            run.unknown_room_odds = sts2_engine::UnknownRoomOdds {
+                monster_bits: (if elite { 0.0_f32 } else { 1.0 }).to_bits(),
+                elite_bits: (if elite { 1.0_f32 } else { 0.0 }).to_bits(),
+                treasure_bits: 0.0_f32.to_bits(),
+                shop_bits: 0.0_f32.to_bits(),
+            };
+            let mut simulator =
+                Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+            walk_to(&mut simulator, 2);
+            assert_eq!(simulator.state().combat.is_some(), !held);
+        }
+    }
+}
+
+#[test]
+fn byrdine_transforms_swoops_preserving_upgrade_and_brings_its_pet() {
+    let mut state = run_holding_with_treasure(&[], "RELIC.BYRDINE")
+        .state()
+        .clone();
+    state.run_player.deck.push(card("CARD.BYRD_SWOOP", 1));
+    let mut simulator =
+        Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+    take_the_treasure(&mut simulator);
+    assert!(
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .any(|card| card.model_id == id("CARD.GOD_BYRD") && card.upgrade_level == 1)
+    );
+    let simulator = fight_from_run(&["RELIC.BYRDINE"]);
+    assert!(
+        simulator
+            .state()
+            .combat
+            .as_ref()
+            .unwrap()
+            .creatures
+            .iter()
+            .any(|creature| creature.model_id == id("MONSTER.BYRDINE_MONSTER"))
+    );
 }
 
 /// A fiddle draws two more on every hand draw, and refuses every other draw its
@@ -7038,12 +7158,12 @@ fn a_bone_flute_pays_for_every_swing_the_pet_finishes() {
     assert_eq!(player(&simulator).block, 4);
 }
 
-/// A book repair knife heals three for every creature other than its owner that
+/// A book repair knife heals three for every enemy that
 /// a Doom kill took down and whose death counted. Doom takes the whole doomed
 /// list down at once as the side it stands on ends its turn, so one kill of two
 /// creatures is one pass of six rather than two passes of three.
 #[test]
-fn a_book_repair_knife_heals_for_every_creature_a_doom_kill_took() {
+fn a_book_repair_knife_heals_for_every_enemy_a_doom_kill_took() {
     let doomed = |relics: &[&str], doom: i32, minions: u64| {
         let mut scenario = necrobinder_scenario("SHRINKER_MOVE", 3, relics, &[])
             .player_hp(40, 80)
