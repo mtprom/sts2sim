@@ -690,10 +690,22 @@ fn light_upgrades_one_card_the_player_chooses() {
         "DOORS_OF_LIGHT_AND_DARK.pages.INITIAL.options.LIGHT",
     );
     assert!(
-        simulator.state().run_player.deck.iter().all(|card| card.upgrade_level == 0),
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .all(|card| card.upgrade_level == 0),
         "no random upgrades happen before the choice"
     );
-    let choice = simulator.state().run.as_ref().unwrap().suspended_choice.as_ref().unwrap();
+    let choice = simulator
+        .state()
+        .run
+        .as_ref()
+        .unwrap()
+        .suspended_choice
+        .as_ref()
+        .unwrap();
     assert_eq!((choice.minimum, choice.maximum), (1, 1));
     assert_eq!(choice.candidates.len(), 2);
 }
@@ -707,10 +719,122 @@ fn breathing_techniques_costs_25_and_adds_one_enlightenment() {
     );
     assert_eq!(simulator.state().run_player.gold, 100);
     assert_eq!(
-        simulator.state().run_player.deck.iter()
-            .filter(|card| card.model_id == id("CARD.ENLIGHTENMENT")).count(),
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .filter(|card| card.model_id == id("CARD.ENLIGHTENMENT"))
+            .count(),
         1
     );
+}
+
+#[test]
+fn the_museum_breakout_costs_ten_max_hp_after_two_dialogue_pages() {
+    let mut simulator = Visit::new("EVENT.MUSEUM_OF_TORTURE").act(1).enter();
+    for option in [
+        "MUSEUM_OF_TORTURE.pages.INITIAL.options.CONTINUE",
+        "MUSEUM_OF_TORTURE.pages.LOCKED.options.CONTINUE",
+        "MUSEUM_OF_TORTURE.pages.DISPLAY.options.BREAK_OUT",
+    ] {
+        choose(&mut simulator, option);
+    }
+    assert_eq!(simulator.state().run_player.max_hp, 70);
+    assert_eq!(simulator.state().run_player.current_hp, 70);
+}
+
+#[test]
+fn the_shrine_gives_the_selected_mighty_card_or_wings_and_clumsy() {
+    for (option, card) in [
+        ("TAKE_WEAPON", "CARD.MIGHTY_WEAPON"),
+        ("TAKE_SHIELD", "CARD.MIGHTY_SHIELD"),
+        ("TAKE_WINGS", "CARD.CLUMSY"),
+    ] {
+        let mut simulator = Visit::new("EVENT.SHRINE_OF_THE_WARLORD").enter();
+        choose(
+            &mut simulator,
+            &format!("SHRINE_OF_THE_WARLORD.pages.INITIAL.options.{option}"),
+        );
+        assert!(
+            simulator
+                .state()
+                .run_player
+                .deck
+                .iter()
+                .any(|held| held.model_id == id(card))
+        );
+        if option == "TAKE_WINGS" {
+            assert!(
+                simulator
+                    .state()
+                    .run_player
+                    .relics
+                    .iter()
+                    .any(|held| held.model_id == id("RELIC.MIGHTY_WINGS"))
+            );
+        }
+    }
+}
+
+#[test]
+fn thermae_charges_88_for_a_towel_or_all_gold_for_robes() {
+    for (option, relic, remaining) in [
+        ("THERMAL_BATHS", "RELIC.BATH_TOWEL", 112),
+        ("PRIVATE_OASIS", "RELIC.BATH_ROBES", 0),
+    ] {
+        let mut simulator = Visit::new("EVENT.THERMAE_NONUPEIPE")
+            .gold(200)
+            .hp(60, 80)
+            .enter();
+        choose(
+            &mut simulator,
+            &format!("THERMAE_NONUPEIPE.pages.INITIAL.options.{option}"),
+        );
+        assert_eq!(simulator.state().run_player.gold, remaining);
+        assert!(
+            simulator
+                .state()
+                .run_player
+                .relics
+                .iter()
+                .any(|held| held.model_id == id(relic))
+        );
+    }
+}
+
+#[test]
+fn waterfall_locks_negotiation_below_70_and_gives_an_unupgraded_rare_card() {
+    for gold in [69, 70] {
+        let mut simulator = Visit::new("EVENT.WATERFALL_OF_OBVIOUS_SECRETS")
+            .gold(gold)
+            .enter();
+        choose(
+            &mut simulator,
+            "WATERFALL_OF_OBVIOUS_SECRETS.pages.INITIAL.options.ENTER",
+        );
+        if gold == 69 {
+            assert_eq!(
+                option_ids(&simulator)[2],
+                "WATERFALL_OF_OBVIOUS_SECRETS.pages.ENTER.options.NEGOTIATE_LOCKED"
+            );
+        } else {
+            choose(
+                &mut simulator,
+                "WATERFALL_OF_OBVIOUS_SECRETS.pages.ENTER.options.NEGOTIATE",
+            );
+            assert_eq!(simulator.state().run_player.gold, 0);
+            let added = simulator.state().run_player.deck.last().unwrap();
+            assert_eq!(added.upgrade_level, 0);
+            assert_eq!(
+                sts2_content::standard_registry()
+                    .card(&added.model_id)
+                    .unwrap()
+                    .rarity,
+                sts2_engine::CardRarity::Rare
+            );
+        }
+    }
 }
 
 #[test]

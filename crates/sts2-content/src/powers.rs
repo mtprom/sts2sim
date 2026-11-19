@@ -51,12 +51,12 @@ fn power(model_id: &str, power_type: PowerType, stack_type: PowerStackType) -> P
 }
 
 /// A counter power, which is what all but the marker powers are.
-fn counter(model_id: &str, power_type: PowerType) -> PowerDefinition {
+pub(crate) fn counter(model_id: &str, power_type: PowerType) -> PowerDefinition {
     power(model_id, power_type, PowerStackType::Counter)
 }
 
 /// A power whose amount is hidden and which nothing ever applies twice.
-fn single(model_id: &str, power_type: PowerType) -> PowerDefinition {
+pub(crate) fn single(model_id: &str, power_type: PowerType) -> PowerDefinition {
     power(model_id, power_type, PowerStackType::Single)
 }
 

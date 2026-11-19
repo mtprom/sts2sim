@@ -1023,7 +1023,7 @@ pub(crate) const COLORLESS_POOL: [(&str, CardType, CardRarity, i32); 53] = [
 /// A status card transforming rolls against this whole list: the transform's
 /// common/uncommon/rare narrowing is skipped for an original of the Status or
 /// Curse rarity, so nothing is filtered out but the card itself.
-const STATUS_POOL: [&str; 12] = [
+const STATUS_POOL: [&str; 13] = [
     "CARD.BECKON",
     "CARD.BURN",
     "CARD.DAZED",
@@ -1031,6 +1031,7 @@ const STATUS_POOL: [&str; 12] = [
     "CARD.FRANTIC_ESCAPE",
     "CARD.INFECTION",
     "CARD.WITHER",
+    "CARD.SADNESS",
     "CARD.SLIMED",
     "CARD.SOOT",
     "CARD.TOXIC",
@@ -1070,7 +1071,7 @@ const QUEST_POOL: [&str; 4] = [
 
 /// The event card pool, in the pool's own declaration order. The last two are not
 /// in alphabetical order in the build either.
-const EVENT_POOL: [&str; 28] = [
+const EVENT_POOL: [&str; 32] = [
     "CARD.ABUNDANCE",
     "CARD.APOTHEOSIS",
     "CARD.APPARITION",
@@ -1078,16 +1079,20 @@ const EVENT_POOL: [&str; 28] = [
     "CARD.BYRD_SWOOP",
     "CARD.CALTROPS",
     "CARD.CLASH",
+    "CARD.DINGY_DAGGER",
     "CARD.DISTRACTION",
     "CARD.DUAL_WIELD",
     "CARD.ENLIGHTENMENT",
     "CARD.ENTRENCH",
     "CARD.EXTERMINATE",
     "CARD.FEEDING_FRENZY",
+    "CARD.GOD_BYRD",
     "CARD.HELLO_WORLD",
     "CARD.MAD_SCIENCE",
     "CARD.MAUL",
     "CARD.METAMORPHOSIS",
+    "CARD.MIGHTY_SHIELD",
+    "CARD.MIGHTY_WEAPON",
     "CARD.NEOWS_FURY",
     "CARD.OUTMANEUVER",
     "CARD.PECK",
@@ -1124,7 +1129,8 @@ const VISUAL_POOL_OVERRIDES: [(&str, &str); 10] = [
 
 /// The cards a generation effect in combat is never allowed to hand out.
 /// Everything else is fair game for an effect that rolls against a pool.
-const NEVER_GENERATED_IN_COMBAT: [&str; 19] = [
+const NEVER_GENERATED_IN_COMBAT: [&str; 20] = [
+    "CARD.SADNESS",
     "CARD.ABUNDANCE",
     "CARD.ALCHEMIZE",
     "CARD.ASCENDERS_BANE",

@@ -219,11 +219,13 @@ pub(crate) const DEFECT_RELIC_POOL: [&str; 8] = [
 /// No bag is filled from it. A hundred of the hundred and forty-two are
 /// ancients, thirty-four carry the Event rarity, five are the refined starters
 /// a touch of Orobas deals, and three stand in the shared pool as well.
-pub(crate) const EVENT_RELIC_POOL: [&str; 142] = [
+pub(crate) const EVENT_RELIC_POOL: [&str; 151] = [
     "RELIC.ALCHEMICAL_COFFER",
     "RELIC.ARCANE_SCROLL",
     "RELIC.ARCHAIC_TOOTH",
     "RELIC.ASTROLABE",
+    "RELIC.BATH_ROBES",
+    "RELIC.BATH_TOWEL",
     "RELIC.BEAUTIFUL_BRACELET",
     "RELIC.BIG_MUSHROOM",
     "RELIC.BIIIG_HUG",
@@ -235,6 +237,7 @@ pub(crate) const EVENT_RELIC_POOL: [&str; 142] = [
     "RELIC.BONE_TEA",
     "RELIC.BOOMING_CONCH",
     "RELIC.BRILLIANT_SCARF",
+    "RELIC.BYRDINE",
     "RELIC.BYRDPIP",
     "RELIC.CALLING_BELL",
     "RELIC.CHOICES_PARADOX",
@@ -294,6 +297,7 @@ pub(crate) const EVENT_RELIC_POOL: [&str; 142] = [
     "RELIC.MASSIVE_SCROLL",
     "RELIC.MAW_BANK",
     "RELIC.MEAT_CLEAVER",
+    "RELIC.MIGHTY_WINGS",
     "RELIC.MR_STRUGGLES",
     "RELIC.MUSIC_BOX",
     "RELIC.NEOWS_BONES",
@@ -303,6 +307,7 @@ pub(crate) const EVENT_RELIC_POOL: [&str; 142] = [
     "RELIC.NEW_LEAF",
     "RELIC.NUTRITIOUS_OYSTER",
     "RELIC.NUTRITIOUS_SOUP",
+    "RELIC.OBSIDIAN_VICE",
     "RELIC.PAELS_BLOOD",
     "RELIC.PAELS_CLAW",
     "RELIC.PAELS_EYE",
@@ -345,13 +350,16 @@ pub(crate) const EVENT_RELIC_POOL: [&str; 142] = [
     "RELIC.SPIKED_GAUNTLETS",
     "RELIC.STONE_HUMIDIFIER",
     "RELIC.STORYBOOK",
+    "RELIC.STORYTELLER",
     "RELIC.SWORD_OF_JADE",
     "RELIC.SWORD_OF_STONE",
     "RELIC.TANXS_WHISTLE",
     "RELIC.TEA_OF_DISCOURTESY",
     "RELIC.THE_BOOT",
     "RELIC.THROWING_AXE",
+    "RELIC.THUMBSCREW",
     "RELIC.TOASTY_MITTENS",
+    "RELIC.TORMENTOUS_COLLAR",
     "RELIC.TOUCH_OF_OROBAS",
     "RELIC.TOY_BOX",
     "RELIC.TRI_BOOMERANG",
@@ -361,6 +369,7 @@ pub(crate) const EVENT_RELIC_POOL: [&str; 142] = [
     "RELIC.WINGED_BOOTS",
     "RELIC.WONGO_CUSTOMER_APPRECIATION_BADGE",
     "RELIC.WONGOS_MYSTERY_TICKET",
+    "RELIC.WUPPY",
     "RELIC.YUMMY_COOKIE",
 ];
 

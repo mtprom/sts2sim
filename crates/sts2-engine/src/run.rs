@@ -1093,6 +1093,8 @@ pub enum EventCondition {
     ActIndexBelow(usize),
     /// The run is in the act at this index.
     ActIndexIs(usize),
+    /// The act's ancient is not this model.
+    ActAncientIsNot(ModelId),
     /// The run stands on this floor or a later one, counted run-wide.
     TotalFloorAtLeast(u32),
     /// The run stands past this floor, counted run-wide.
@@ -1680,6 +1682,8 @@ pub enum EventEffect {
     /// The page is replaced with another set of options, and the room stays
     /// open for them.
     SetPage(Vec<EventOption>),
+    /// A follow-up page whose locked choices depend on the current run.
+    SetConditionalPage(Vec<ConditionalOption>),
     /// The same over a random few: the options are shuffled whole on the
     /// event's own stream and the first few are put up. The shuffle is the
     /// unstable one, so the order the options were written in is what it

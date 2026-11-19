@@ -4328,7 +4328,13 @@ fn a_velvet_choker_stops_an_autoplay_started_by_the_sixth_card() {
     }
     play(&mut simulator, "CARD.HAVOC");
     assert_eq!(
-        simulator.state().combat.as_ref().unwrap().player.first_plays_started_this_turn,
+        simulator
+            .state()
+            .combat
+            .as_ref()
+            .unwrap()
+            .player
+            .first_plays_started_this_turn,
         6,
         "Havoc is the sixth started play; its autoplay is refused"
     );
@@ -4338,10 +4344,37 @@ fn a_velvet_choker_stops_an_autoplay_started_by_the_sixth_card() {
 #[test]
 fn a_ringing_triangle_applies_retain_hand_when_combat_is_entered() {
     let simulator = fight_from_run(&["RELIC.RINGING_TRIANGLE"]);
-    assert_eq!(
-        power_amount(&simulator, 0, "POWER.RETAIN_HAND_POWER"),
-        1
+    assert_eq!(power_amount(&simulator, 0, "POWER.RETAIN_HAND_POWER"), 1);
+}
+
+#[test]
+fn an_obsidian_vice_deals_unpowered_damage_for_cards_still_in_hand() {
+    let mut simulator = fight_tough(
+        &["RELIC.OBSIDIAN_VICE"],
+        &[("CARD.DEFEND_IRONCLAD", 0), ("CARD.DEFEND_IRONCLAD", 0)],
     );
+    let before = simulator.state().combat.as_ref().unwrap().creatures[1].current_hp;
+    end_turn(&mut simulator);
+    assert_eq!(
+        simulator.state().combat.as_ref().unwrap().creatures[1].current_hp,
+        before - 2
+    );
+}
+
+#[test]
+fn mighty_wings_uses_total_powered_damage_and_triggers_per_hit() {
+    let mut simulator = fight_tough(&["RELIC.MIGHTY_WINGS"], &[("CARD.BLUDGEON", 0)]);
+    play(&mut simulator, "CARD.BLUDGEON");
+    assert_eq!(power_amount(&simulator, 0, "POWER.STRENGTH_POWER"), 2);
+}
+
+#[test]
+fn byrdpip_counts_swoops_and_caps_the_persistent_count_at_six() {
+    let mut simulator = fight_tough(&["RELIC.BYRDPIP"], &vec![("CARD.BYRD_SWOOP", 0); 7]);
+    for _ in 0..7 {
+        play(&mut simulator, "CARD.BYRD_SWOOP");
+    }
+    assert_eq!(relic_counter(&simulator, "RELIC.BYRDPIP"), 6);
 }
 
 /// A fiddle draws two more on every hand draw, and refuses every other draw its

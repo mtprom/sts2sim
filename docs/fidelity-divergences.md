@@ -15,6 +15,41 @@ Every entry answers four questions: what the build does, what this simulator
 does instead, whether the difference can reach a conformance claim, and what
 would change that.
 
+## Beta shared-content hooks not yet modeled
+
+**The build.** Extra-turn arbitration chooses the first source in the early
+pass (Pael's Eye) before ordinary extra turns, and notifies only that source.
+Pael's Legion binds its multiplier to a particular card play, not all nested
+plays. Byrdpip unlocks Evolve after six Swoops; Evolve replaces it with Byrdine,
+preserving the skin as Hair. Wuppy persists 30 or 60 HP between fights, redirects
+powered attack damage before block, keeps its corpse and loyalty power, and
+adds Restore at rest sites. Thumbscrew adds a hit to multi-hit card attacks.
+Dingy Dagger supports repeated upgrades, adding 3 plus the new upgrade level
+to damage each time.
+
+**This simulator.** `POWER.EXTRA_TURN_POWER` is registered, but the extra-turn
+dispatcher still notifies every source. Pael's Legion still uses its old
+boolean latch rather than a card-play identity. Byrdpip counts Swoops but has
+no Evolve rest option. Byrdine, God Byrd and both companion models are
+registered. Wuppy in Trouble fails explicitly as unsupported; obtaining Wuppy
+or Thumbscrew also fails explicitly. Dingy Dagger supports only levels 0 and 1;
+its `u8` fingerprint and upgrade command need repeatable-upgrade support.
+Storyteller is registered with its Starter rarity but obtaining it is
+unsupported: its Aim mechanics belong to the excluded Fool character.
+
+**Whether it can reach a conformance claim.** Yes. A playback with Ambergris
+and an unused Pael's Eye, nested block plays under Pael's Legion, six Swoops
+followed by Evolve, any Wuppy encounter, Thumbscrew, or repeated Dagger
+upgrades exposes these differences. These rules must not be reported as
+fully beta-conformant.
+
+**What would change this.** Engine support for source-specific early extra
+turns, card-play identity, Evolve and Restore, persistent event-pet HP and
+`ModifyPreBlockDamageTarget`/`BeforeWuppy`, `ModifyAttackHitCount`, and
+repeatable card upgrades. Museum's curse generation must use
+`non_combat_generation`; Waterfall's relic rarity must use its event RNG,
+not the old streams.
+
 ## The Architect's cosmetic dialogue is omitted
 
 **The build.** After the final boss, the Architect presents dialogue whose

@@ -3162,6 +3162,7 @@ impl Simulator {
             Condition::ActIndexAbove(index) => run.current_act > *index,
             Condition::ActIndexBelow(index) => run.current_act < *index,
             Condition::ActIndexIs(index) => run.current_act == *index,
+            Condition::ActAncientIsNot(ancient) => run.acts[run.current_act].ancient != *ancient,
             // The total floor counts every floor the run has walked, and acts
             // continue the count rather than restarting it.
             Condition::TotalFloorAtLeast(floor) => total_floor >= *floor,
@@ -7255,6 +7256,20 @@ impl Simulator {
             // An option body that is a run of commands over the shared surface.
             EventEffect::Run(commands) => {
                 self.run_out_of_combat_commands(&commands)?;
+            }
+            EventEffect::SetConditionalPage(options) => {
+                let mut page = Vec::with_capacity(options.len());
+                for conditional in options {
+                    let mut option = conditional.option;
+                    if !self.event_condition_holds(&conditional.available)? {
+                        option.option_id = conditional.locked_option_id;
+                        option.effects.clear();
+                        option.locked = true;
+                    }
+                    page.push(option);
+                }
+                self.set_event_page(page);
+                finish_room = false;
             }
             EventEffect::SetPage(options) => {
                 self.set_event_page(options);
@@ -12244,7 +12259,12 @@ impl Simulator {
                 let counted: Vec<CreatureCombatId> = doomed
                     .iter()
                     .copied()
-                    .filter(|id| self.death_would_trigger_fatal(*id))
+                    .filter(|id| {
+                        self.death_would_trigger_fatal(*id)
+                            && self
+                                .creature(*id)
+                                .is_ok_and(|creature| creature.side == CombatSide::Enemy)
+                    })
                     .collect();
                 for creature in doomed {
                     self.creature_mut(creature)?.current_hp = 0;
@@ -17019,10 +17039,7 @@ impl Simulator {
                 self.hook_context
                     .died_to_doom
                     .iter()
-                    .filter(|id| {
-                        self.creature(**id)
-                            .is_ok_and(|creature| creature.side == CombatSide::Enemy)
-                    })
+                    .filter(|id| Some(**id) != context.owner)
                     .count(),
             )
             .expect("creature count fits game integer"),
@@ -30042,6 +30059,12 @@ fn settle_option_vars(option: &mut crate::EventOption, vars: &[i32]) {
             *amount = crate::EventAmount::Fixed(vars.get(index).copied().unwrap_or(0));
         }
         match effect {
+            crate::EventEffect::SetConditionalPage(options) => {
+                for conditional in options {
+                    conditional.available = settle_condition_vars(&conditional.available, vars);
+                    settle_option_vars(&mut conditional.option, vars);
+                }
+            }
             crate::EventEffect::SetPage(options) => {
                 for option in options {
                     settle_option_vars(option, vars);

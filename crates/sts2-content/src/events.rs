@@ -856,7 +856,7 @@ pub fn orobas() -> EventDefinition {
     }
 }
 
-fn option(option_id: &str, label: &str, effects: Vec<EventEffect>) -> EventOption {
+pub(crate) fn option(option_id: &str, label: &str, effects: Vec<EventEffect>) -> EventOption {
     EventOption {
         option_id: option_id.to_owned(),
         label: label.to_owned(),

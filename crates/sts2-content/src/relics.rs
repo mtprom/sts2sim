@@ -15,7 +15,7 @@ use sts2_engine::{CardCreation, CardPoolRef, CardRarity};
 
 use crate::id;
 
-fn obtained_only(model_id: &str, rarity: RelicRarity) -> RelicDefinition {
+pub(crate) fn obtained_only(model_id: &str, rarity: RelicRarity) -> RelicDefinition {
     RelicDefinition {
         model_id: id(model_id),
         grants_an_extra_turn: None,
@@ -1472,6 +1472,8 @@ fn event_relics() -> Vec<RelicDefinition> {
         upon_pickup(RelicDefinition {
             spawns_pets: true,
             adds_pet: true,
+            counter_property: Some("SwoopsPlayed".to_owned()),
+            counter_kind: Some(sts2_engine::CounterKind::Ledger),
             rolled_skin: Some(skin_of_four()),
             on_obtained: vec![Command::Card(CardCmd::TransformDeckCards {
                 cards: CardSelector::DeckCardsOfModel(id("CARD.BYRDONIS_EGG")),
@@ -1482,12 +1484,32 @@ fn event_relics() -> Vec<RelicDefinition> {
                 },
                 one_at_a_time: false,
             })],
-            hooks: vec![ModifierHook::every_turn(
-                HookEvent::BeforeCombatStart,
-                vec![Command::Player(PlayerCmd::AddPet {
-                    monster: id("MONSTER.BYRDPIP"),
-                })],
-            )],
+            hooks: vec![
+                ModifierHook::every_turn(
+                    HookEvent::BeforeCombatStart,
+                    vec![Command::Player(PlayerCmd::AddPet {
+                        monster: id("MONSTER.BYRDPIP"),
+                    })],
+                ),
+                ModifierHook::every_turn(
+                    HookEvent::AfterCardPlayed,
+                    vec![Command::When {
+                        condition: Condition::Not(Box::new(
+                            Condition::ListeningRelicCounterAtLeast(6),
+                        )),
+                        then: vec![Command::Relic(RelicCmd::ModifyListeningCounter(
+                            Amount::Fixed(1),
+                        ))],
+                        otherwise: Vec::new(),
+                    }],
+                )
+                .when(HookCondition::All(vec![
+                    HookCondition::OwnerPlayedTheCard,
+                    HookCondition::PlayedCardIs(id("CARD.BYRD_SWOOP")),
+                ])),
+            ],
+            // TODO(package 4): EVOLVE rest option at SwoopsPlayed >= 6;
+            // replace with Byrdine, preserving Skin as Hair.
             ..obtained_only("RELIC.BYRDPIP", RelicRarity::Event)
         }),
         // A chosen cheese is a maximum HP for every fight that ends.
