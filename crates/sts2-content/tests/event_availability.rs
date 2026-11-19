@@ -267,6 +267,29 @@ fn shrine_and_thermae_are_excluded_when_their_ancient_owns_the_act() {
     }
 }
 
+#[test]
+fn wuppy_is_not_offered_alongside_an_event_pet_or_a_byrdonis_egg() {
+    let events = ["EVENT.WUPPY_IN_TROUBLE", "EVENT.TRIAL"];
+    assert_eq!(Walk::new(&events).lands_on().0, "EVENT.WUPPY_IN_TROUBLE");
+    for relic in [
+        "RELIC.BYRDPIP",
+        "RELIC.BYRDINE",
+        "RELIC.WUPPY",
+        "RELIC.PAELS_LEGION",
+    ] {
+        let mut walk = Walk::new(&events);
+        walk.relics = vec![relic];
+        assert_eq!(
+            walk.lands_on().0,
+            "EVENT.TRIAL",
+            "{relic} already brings a pet"
+        );
+    }
+    let mut egg = Walk::new(&events);
+    egg.deck.push("CARD.BYRDONIS_EGG");
+    assert_eq!(egg.lands_on().0, "EVENT.TRIAL");
+}
+
 /// A punch-off wants six floors walked, and the floor count is the map points
 /// the run has walked. The point being walked onto joins that count only
 /// once the room in front of it has been built, and the walk over the act's
