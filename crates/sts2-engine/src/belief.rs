@@ -15,23 +15,23 @@
 //!
 //! Two models live here, one per horizon:
 //!
-//! - [`BeliefState`], version `combat-v0`: the erasure covers hidden *combat*
+//! - [`BeliefState`], version `combat-v1`: the erasure covers hidden *combat*
 //!   state — the draw pile's order and every RNG stream position. Run-level
 //!   hidden state (the unrevealed map, undealt rewards, unentered events) is
 //!   carried as it stands, so a search over a sample is fair only while the
 //!   fight lasts: a consumer must treat the end of the combat as the sample's
 //!   horizon and not walk past it.
-//! - [`ActBeliefState`], version `act-v0.5`: the erasure additionally covers
+//! - [`ActBeliefState`], version `act-v0.6`: the erasure additionally covers
 //!   the current act's hidden remainder — the encounter and event pools past
 //!   their visited cursors, room definitions placed at unwalked map points,
 //!   the relic grab bags — so a search over a sample is fair until the act
 //!   transition, which is this model's horizon. Later acts' maps and pools
-//!   are carried as they stand, fenced by that horizon exactly as `combat-v0`
+//!   are carried as they stand, fenced by that horizon exactly as `combat-v1`
 //!   fences the run.
 //!
-//! # Honesty, `act-v0.5`
+//! # Honesty, `act-v0.6`
 //!
-//! An `act-v0.5` sample is a uniform *permutation* of the true world's hidden
+//! An `act-v0.6` sample is a uniform *permutation* of the true world's hidden
 //! remainder, not a draw from the full generative posterior. Across many
 //! samples the multiset of upcoming content is exactly the true one — which a
 //! player cannot know — and a permuted pool ignores the generation shape the
@@ -57,15 +57,17 @@ use crate::{EngineError, ErrorCode, ObservationKey};
 /// The version of the combat belief model: what [`BeliefState`] erases and
 /// how [`BeliefState::sample`] fills the holes. Any change to either moves
 /// this name, because a script searched under one model is not reproducible
-/// under another.
-pub const BELIEF_MODEL_VERSION: &str = "combat-v0";
+/// under another. `combat-v1` is `combat-v0` over the v0.113.1 shuffle (one
+/// draw seeds a child generator) and draw-pile sort, which change what every
+/// sampled world deals after its first reshuffle.
+pub const BELIEF_MODEL_VERSION: &str = "combat-v1";
 
 /// The version of the act belief model: what [`ActBeliefState`] erases and
 /// how [`ActBeliefState::sample`] fills the holes, under the same rule.
-pub const ACT_BELIEF_MODEL_VERSION: &str = "act-v0.5";
+pub const ACT_BELIEF_MODEL_VERSION: &str = "act-v0.6";
 
 /// The version of the combat belief model with monster foresight: what
-/// `combat-v0` erases, except the monster AI stream, which every sample
+/// `combat-v1` erases, except the monster AI stream, which every sample
 /// carries at its true position.
 ///
 /// Enemy move choice is the only thing that stream decides (random move
@@ -74,7 +76,7 @@ pub const ACT_BELIEF_MODEL_VERSION: &str = "act-v0.5";
 /// shows) knows every enemy's future moves. Draw order and every other
 /// stream stay erased. A search over such a sample sees the enemies' future
 /// exactly and the player's own draws only as a distribution.
-pub const FORESIGHT_BELIEF_MODEL_VERSION: &str = "combat-v0+monster-ai";
+pub const FORESIGHT_BELIEF_MODEL_VERSION: &str = "combat-v1+monster-ai";
 
 /// A combat decision point with its hidden state erased: what a fair analyst
 /// is allowed to stand on.
@@ -97,13 +99,13 @@ impl BeliefState {
     /// Erases the hidden state of a combat decision point.
     ///
     /// Combat-scoped: a simulator standing outside a fight is refused,
-    /// because `combat-v0` erases nothing at the run level and a sample of it
+    /// because `combat-v1` erases nothing at the run level and a sample of it
     /// would be clairvoyant about the map and the streams ahead.
     pub fn from_simulator(simulator: &Simulator) -> Result<Self, EngineError> {
         let mut state = simulator.state().clone();
         let Some(combat) = state.combat.as_mut() else {
             return Err(EngineError::new(ErrorCode::InvalidConfig)
-                .with_detail("belief", "combat-v0 samples combats only"));
+                .with_detail("belief", "combat-v1 samples combats only"));
         };
         sort_hidden_draw_order(combat);
         // A stream's position is hidden state. The erased form holds streams
@@ -181,7 +183,7 @@ impl BeliefState {
 /// on.
 ///
 /// Constructed by [`ActBeliefState::from_simulator`], which erases everything
-/// `combat-v0` erases and, on top of it, the current act's hidden remainder:
+/// `combat-v1` erases and, on top of it, the current act's hidden remainder:
 ///
 /// - the act's encounter and event pools past their visited cursors — the
 ///   walked prefix is player evidence and stays; the order ahead is hidden;
@@ -206,12 +208,12 @@ impl BeliefState {
 /// visible history. Later acts' maps, pools, and placed rooms are carried as
 /// they stand: they are beyond this model's horizon — the engine's own
 /// [`DecisionContext::ActTransition`](crate::DecisionContext::ActTransition)
-/// — and a consumer must not walk a sample past it, exactly as `combat-v0`
+/// — and a consumer must not walk a sample past it, exactly as `combat-v1`
 /// consumers must not walk past the fight. A finished act's unwalked pool
 /// remainder is likewise carried: it is dead state nothing ahead reads.
 ///
-/// Mid-fight, `combat-v0` composes in unchanged: the fight entry inside an
-/// act sample is the very world `combat-v0` would deal for the same
+/// Mid-fight, `combat-v1` composes in unchanged: the fight entry inside an
+/// act sample is the very world `combat-v1` would deal for the same
 /// `(analysis_seed, rollout)` — same draw-pile deal, same stream seeds —
 /// because the sampler spends its analysis randomness in the same order
 /// before touching anything run-level.
@@ -226,12 +228,12 @@ impl ActBeliefState {
     ///
     /// Run-scoped: a simulator standing outside a run — a bare scenario
     /// fight — is refused, because there is no act to bound the sample and
-    /// `combat-v0` already covers the fight alone.
+    /// `combat-v1` already covers the fight alone.
     pub fn from_simulator(simulator: &Simulator) -> Result<Self, EngineError> {
         let mut state = simulator.state().clone();
         if state.run.is_none() {
             return Err(EngineError::new(ErrorCode::InvalidConfig)
-                .with_detail("belief", "act-v0.5 samples runs only"));
+                .with_detail("belief", "act-v0.6 samples runs only"));
         }
         if let Some(combat) = state.combat.as_mut() {
             sort_hidden_draw_order(combat);
@@ -266,9 +268,9 @@ impl ActBeliefState {
 
     fn sample_with(&self, analysis_seed: u64, rollout: u64) -> Result<Simulator, EngineError> {
         let mut state = self.state.clone();
-        // The same SplitMix64 walk as `combat-v0`, spent in the same order —
+        // The same SplitMix64 walk as `combat-v1`, spent in the same order —
         // draw pile first, stream seeds last — so a mid-fight sample's combat
-        // is bit-for-bit the one `combat-v0` deals for the pair. The
+        // is bit-for-bit the one `combat-v1` deals for the pair. The
         // run-level permutations spend only the analysis generator between
         // those two, which the walk never reads back.
         let mut mix = analysis_seed ^ rollout.wrapping_mul(0x9E37_79B9_7F4A_7C15);

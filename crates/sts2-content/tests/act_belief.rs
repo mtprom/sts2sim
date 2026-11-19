@@ -1,7 +1,7 @@
 //! The act belief boundary over pinned content: an erased run decision point
 //! samples back into full worlds that agree with the original on everything a
 //! player could see and on nothing they could not, deterministically in
-//! `(analysis_seed, rollout)`, labeled analysis. Model `act-v0.5`: each
+//! `(analysis_seed, rollout)`, labeled analysis. Model `act-v0.6`: each
 //! sample deals a uniform permutation of the current act's hidden remainder —
 //! pool suffixes, placed rooms, grab bags — behind the evidence the walk has
 //! already pinned, with the act transition as the horizon.
@@ -221,9 +221,9 @@ fn an_unvisited_encounter_varies_across_samples() {
 
 #[test]
 fn a_mid_fight_erasure_composes_with_combat_v0() {
-    // Inside a fight the act model erases nothing combat-v0 does not, and its
+    // Inside a fight the act model erases nothing combat-v1 does not, and its
     // sampler spends its dice in the same order, so the fight entry of an act
-    // sample is the very world combat-v0 deals for the pair: same draw-pile
+    // sample is the very world combat-v1 deals for the pair: same draw-pile
     // order, same stream positions. The act model only widens the horizon.
     let original = first_combat();
     let act_world = ActBeliefState::from_simulator(&original)
@@ -237,7 +237,7 @@ fn a_mid_fight_erasure_composes_with_combat_v0() {
     assert_eq!(
         act_world.state().combat,
         combat_world.state().combat,
-        "the fight's hidden state is dealt exactly as combat-v0 deals it"
+        "the fight's hidden state is dealt exactly as combat-v1 deals it"
     );
     assert_eq!(act_world.state().rng, combat_world.state().rng);
     assert_eq!(
@@ -348,7 +348,7 @@ fn placed_rooms_permute_within_their_map_type_and_visited_ones_stay() {
 
 #[test]
 fn a_fight_outside_a_run_is_refused() {
-    // A bare scenario fight has no act to bound a sample: combat-v0's scope.
+    // A bare scenario fight has no act to bound a sample: combat-v1's scope.
     let simulator =
         sts2_engine::ScenarioBuilder::new(SEED, "ENCOUNTER.SHRINKER_BEETLE_WEAK".parse().unwrap())
             .player_hp(80, 80)
@@ -480,7 +480,7 @@ fn a_rolled_reward_screen_inside_a_rollout_keys_by_what_it_offers() {
 
 #[test]
 fn the_acts_map_and_its_previews_are_pinned_by_the_erasure() {
-    // The map is on the screen from the moment the act opens, so act-v0.5
+    // The map is on the screen from the moment the act opens, so act-v0.6
     // pins it — layout, walked trail, and the boss and ancient the map
     // previews. What sits behind an unwalked icon is what the model erases,
     // and the pieces must not have traded places.

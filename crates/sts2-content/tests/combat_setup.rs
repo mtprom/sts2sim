@@ -334,7 +334,7 @@ fn a_setup_the_content_cannot_honor_is_refused_with_the_field_named() {
 fn the_document_reads_unsaid_fields_as_unsaid() {
     let text = r#"{
       "setup_version": 1,
-      "compatibility_id": "sts2-v0.111.0-41cef1ea-models-1568834832",
+      "compatibility_id": "sts2-v0.113.1-d09d48e5-models-1748280997",
       "character": "CHARACTER.IRONCLAD",
       "ascension": 0,
       "act": 0,
