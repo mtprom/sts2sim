@@ -3565,7 +3565,8 @@ impl Simulator {
             }
             // Settling the vars touches both lazy lists in order: the owned
             // relics shuffle on the event's own stream, then three relics come
-            // off the front of the bag on the rewards stream.
+            // off the front of the bag, their rarities rolled on that stream
+            // too.
             crate::EventGeneration::RelicTrader => {
                 let mut owned: Vec<ModelId> = self
                     .state
@@ -3584,7 +3585,8 @@ impl Simulator {
                 owned.truncate(3);
                 let mut pulled = Vec::with_capacity(3);
                 for _ in 0..3 {
-                    if let Some(relic) = self.pull_relic_from_front(None)? {
+                    let rarity = roll_relic_rarity(&mut rng);
+                    if let Some(relic) = self.pull_relic_from_front(Some(rarity))? {
                         pulled.push(relic);
                     }
                 }
@@ -3779,18 +3781,6 @@ impl Simulator {
                         was_chosen: false,
                         locked: false,
                     });
-                }
-                options
-            }
-            crate::EventGeneration::ShuffledRelicPools { pools } => {
-                let mut options = Vec::with_capacity(pools.len());
-                for pool in pools {
-                    let mut shuffled = pool.clone();
-                    rng.shuffle(&mut shuffled);
-                    let Some(relic) = shuffled.first() else {
-                        continue;
-                    };
-                    options.push(relic_option(model_id, relic));
                 }
                 options
             }
@@ -7188,9 +7178,14 @@ impl Simulator {
                 });
                 finish_room = false;
             }
+            // The rarity rolls on the event's own stream, so an event's relic
+            // leaves the card-reward odds' rewards stream alone.
             EventEffect::ObtainRolledRelic => {
-                let rarity =
-                    roll_relic_rarity(self.state.player_rng.stream_mut(PlayerStream::Rewards));
+                let model_id = self.event_model_id()?;
+                let mut rng = self.event_rng(&model_id);
+                rng.load_counter(self.event_rng_counter()?);
+                let rarity = roll_relic_rarity(&mut rng);
+                self.set_event_rng_counter(rng.counter())?;
                 self.prune_disallowed_relics(false);
                 let run = self
                     .state

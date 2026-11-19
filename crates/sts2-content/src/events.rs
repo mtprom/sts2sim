@@ -189,32 +189,36 @@ pub fn ranwid_the_elder() -> EventDefinition {
     }
 }
 
-/// Vakuu, the ancient who shuffles three pools and deals the top of each.
+/// Vakuu, the ancient who deals one relic rolled out of each of three pools.
 #[must_use]
 pub fn vakuu() -> EventDefinition {
+    let always = |relic: &str| sts2_engine::ConditionalRelic {
+        relic: id(relic),
+        available: EventCondition::Always,
+    };
     EventDefinition {
         model_id: id("EVENT.VAKUU"),
         combat_layout: None,
         heals_on_entry: true,
         allowed: EventCondition::Always,
         vars: Vec::new(),
-        generation: EventGeneration::ShuffledRelicPools {
+        generation: EventGeneration::RolledRelicPools {
             pools: vec![
                 vec![
-                    id("RELIC.BLOOD_SOAKED_ROSE"),
-                    id("RELIC.WHISPERING_EARRING"),
-                    id("RELIC.FIDDLE"),
+                    always("RELIC.BLOOD_SOAKED_ROSE"),
+                    always("RELIC.WHISPERING_EARRING"),
+                    always("RELIC.FIDDLE"),
                 ],
                 vec![
-                    id("RELIC.PRESERVED_FOG"),
-                    id("RELIC.SERE_TALON"),
-                    id("RELIC.DISTINGUISHED_CAPE"),
+                    always("RELIC.PRESERVED_FOG"),
+                    always("RELIC.SERE_TALON"),
+                    always("RELIC.DISTINGUISHED_CAPE"),
                 ],
                 vec![
-                    id("RELIC.CHOICES_PARADOX"),
-                    id("RELIC.MUSIC_BOX"),
-                    id("RELIC.LORDS_PARASOL"),
-                    id("RELIC.JEWELED_MASK"),
+                    always("RELIC.CHOICES_PARADOX"),
+                    always("RELIC.MUSIC_BOX"),
+                    always("RELIC.LORDS_PARASOL"),
+                    always("RELIC.JEWELED_MASK"),
                 ],
             ],
         },
