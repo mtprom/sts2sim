@@ -765,7 +765,7 @@ fn an_apparition_holds_every_blow_to_one() {
     assert!(!apparition.ethereal_at(1));
 }
 
-/// The brightest flame pays a point of maximum HP for energy and cards.
+/// Brightest Flame pays two maximum HP for energy and cards.
 #[test]
 fn the_brightest_flame_pays_maximum_hp() {
     for (upgrade, gained, cards) in [(0, 2, 2), (1, 3, 3)] {
@@ -781,7 +781,7 @@ fn the_brightest_flame_pays_maximum_hp() {
         play(&mut simulator, "CARD.BRIGHTEST_FLAME");
         assert_eq!(energy(&simulator), before + gained);
         assert_eq!(pile(&simulator, PileName::Hand).len(), cards);
-        assert_eq!(player(&simulator).max_hp, 79);
+        assert_eq!(player(&simulator).max_hp, 78);
     }
 }
 

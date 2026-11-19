@@ -944,7 +944,7 @@ pub(crate) fn event_cards() -> Vec<CardDefinition> {
             )))),
             CardRarity::Ancient,
         ),
-        // The brightest flame pays a point of maximum HP for energy and cards.
+        // Brightest Flame pays two maximum HP for energy and cards.
         rarity(
             upgrading(
                 card(
@@ -1352,14 +1352,14 @@ fn stun_target() -> Command {
     })
 }
 
-/// Brightest Flame, played: energy, then cards, then a point of maximum HP.
+/// Brightest Flame, played: energy, then cards, then two maximum HP.
 fn brightest_flame(energy_gained: i32, cards: i32) -> Vec<Command> {
     vec![
         energy(energy_gained),
         draw(cards),
         Command::Creature(CreatureCmd::LoseMaxHp {
             target: CreatureSelector::Owner,
-            amount: Amount::Fixed(1),
+            amount: Amount::Fixed(2),
         }),
     ]
 }

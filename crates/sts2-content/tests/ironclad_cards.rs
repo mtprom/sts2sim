@@ -1147,6 +1147,7 @@ fn expect_a_fight_discounts_held_non_x_attacks_until_played() {
         ("CARD.STRIKE_IRONCLAD", 0),
         ("CARD.WHIRLWIND", 0),
         ("CARD.DEFEND_IRONCLAD", 0),
+        ("CARD.SALVO", 0),
     ]);
     play(&mut simulator, "CARD.EXPECT_A_FIGHT");
     play(&mut simulator, "CARD.EXPECT_A_FIGHT");
@@ -1154,13 +1155,30 @@ fn expect_a_fight_discounts_held_non_x_attacks_until_played() {
     for held in &combat.player.piles.hand {
         assert_eq!(
             held.cost_until_played,
-            if held.fingerprint.model_id == id("CARD.STRIKE_IRONCLAD") {
+            if matches!(
+                held.fingerprint.model_id.entry(),
+                "STRIKE_IRONCLAD" | "SALVO"
+            ) {
                 -2
             } else {
                 0
             }
         );
     }
+    play(&mut simulator, "CARD.SALVO");
+    end_turn(&mut simulator);
+    let held = simulator
+        .state()
+        .combat
+        .as_ref()
+        .expect("a fight")
+        .player
+        .piles
+        .hand
+        .iter()
+        .find(|card| card.fingerprint.model_id == id("CARD.STRIKE_IRONCLAD"))
+        .expect("retained strike");
+    assert_eq!(held.cost_until_played, -2, "the discount survives turn end");
     let before = energy(&simulator);
     play(&mut simulator, "CARD.STRIKE_IRONCLAD");
     assert_eq!(energy(&simulator), before, "the attack is free");

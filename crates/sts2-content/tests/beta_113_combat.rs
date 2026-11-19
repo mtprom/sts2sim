@@ -126,3 +126,50 @@ fn enemy_ritual_applied_on_player_turn_pays_on_the_next_enemy_turn() {
         2
     );
 }
+
+/// Sly is a hand-discard trigger, not a trigger for moving a card out of draw.
+/// A test card discards the selected pile to isolate the source-pile check.
+#[test]
+fn sly_requires_a_discard_from_hand() {
+    use sts2_engine::{CardCmd, CardFilter, CardFingerprint, CardSelector, Command, PileName};
+
+    for (pile, hp_after) in [(PileName::Draw, 39), (PileName::Hand, 20)] {
+        let mut content = (*sts2_content::standard_registry()).clone();
+        let mut discarder = content
+            .card(&id("CARD.STRIKE_IRONCLAD"))
+            .expect("strike")
+            .clone();
+        discarder.effects = vec![Command::Card(CardCmd::Discard {
+            cards: CardSelector::Pile {
+                pile,
+                filter: CardFilter::Any,
+            },
+        })];
+        content.add_card(discarder);
+        let mut simulator = ScenarioBuilder::new("SLY113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+            .player_hp(80, 80)
+            .energy(3, 3)
+            .turn(1, 1)
+            .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 39, 39, "SHRINKER_MOVE")
+            .card(
+                PileName::Hand,
+                0,
+                CardFingerprint::base(id("CARD.STRIKE_IRONCLAD")),
+                1,
+            )
+            .card(pile, 1, CardFingerprint::base(id("CARD.MEMENTO_MORI")), 3)
+            .build(std::sync::Arc::new(content))
+            .expect("scenario");
+        let action = simulator
+            .legal_actions()
+            .iter()
+            .find(|action| {
+                matches!(action, Action::PlayCard { card, .. }
+                if card.fingerprint.model_id == id("CARD.STRIKE_IRONCLAD"))
+            })
+            .cloned()
+            .expect("test discarder");
+        simulator.step(action).expect("discard");
+        assert_eq!(creature(&simulator, CombatSide::Enemy).current_hp, hp_after);
+    }
+}

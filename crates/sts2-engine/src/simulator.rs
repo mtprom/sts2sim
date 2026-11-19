@@ -12674,7 +12674,8 @@ impl Simulator {
                             combat
                                 .player
                                 .piles
-                                .all_cards()
+                                .hand
+                                .iter()
                                 .any(|card| card.id == **card_id && self.card_is_sly(card))
                         })
                         .copied()
