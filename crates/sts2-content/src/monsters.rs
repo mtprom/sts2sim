@@ -652,27 +652,34 @@ fn thievery() -> Command {
                 vec![CardRarity::Basic],
             ],
         },
-        then: vec![
-            Command::CardPile(CardPileCmd::RemoveFromCombat {
-                cards: CardSelector::Chosen,
-            }),
-            Command::CardPile(CardPileCmd::RemoveFromDeck {
-                cards: CardSelector::Chosen,
-            }),
-            // The theft marks whoever it took the card from, which is who the
-            // loot goes back to.
-            Command::Power(PowerCmd::Apply {
-                power: id("POWER.SWIPE_POWER"),
-                target: CreatureSelector::Owner,
-                applier: Some(CreatureSelector::Owner),
-                amount: Amount::Fixed(1),
-                marks: Some(CreatureSelector::AllOpponents),
-            }),
-            Command::Power(PowerCmd::HoldCard {
-                power: PowerRef::owned(id("POWER.SWIPE_POWER")),
-                cards: CardSelector::Chosen,
-            }),
-        ],
+        then: vec![Command::When {
+            condition: Condition::CountAtLeast {
+                count: sts2_engine::Count::ChosenCards,
+                at_least: 1,
+            },
+            otherwise: Vec::new(),
+            then: vec![
+                Command::CardPile(CardPileCmd::RemoveFromCombat {
+                    cards: CardSelector::Chosen,
+                }),
+                Command::CardPile(CardPileCmd::RemoveFromDeck {
+                    cards: CardSelector::Chosen,
+                }),
+                // The theft marks whoever it took the card from, which is who the
+                // loot goes back to.
+                Command::Power(PowerCmd::Apply {
+                    power: id("POWER.SWIPE_POWER"),
+                    target: CreatureSelector::Owner,
+                    applier: Some(CreatureSelector::Owner),
+                    amount: Amount::Fixed(1),
+                    marks: Some(CreatureSelector::AllOpponents),
+                }),
+                Command::Power(PowerCmd::HoldCard {
+                    power: PowerRef::owned(id("POWER.SWIPE_POWER")),
+                    cards: CardSelector::Chosen,
+                }),
+            ],
+        }],
     }
 }
 
