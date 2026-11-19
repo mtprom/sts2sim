@@ -11,6 +11,32 @@ use sts2_rng::RunStream;
 const SEED: &str = "SHAREDCARDS";
 
 #[test]
+fn my_shinies_truncates_gold_per_hit_and_scales_each_hit_with_strength() {
+    for (upgrade, gold, hits) in [(0, 19, 0), (0, 39, 1), (0, 40, 2), (1, 39, 3)] {
+        let mut simulator = scenario(&[("CARD.MY_SHINIES", upgrade)], &[], 100)
+            .gold(gold)
+            .power(
+                0,
+                id("POWER.STRENGTH_POWER"),
+                2,
+                sts2_engine::PowerType::Buff,
+            )
+            .build(sts2_content::standard_registry())
+            .unwrap();
+        play(&mut simulator, "CARD.MY_SHINIES");
+        assert_eq!(
+            simulator.state().combat.as_ref().unwrap().creatures[1].current_hp,
+            100 - 3 * hits
+        );
+        assert_eq!(
+            simulator.state().run_player.gold,
+            gold,
+            "gold is counted, not spent"
+        );
+    }
+}
+
+#[test]
 fn mighty_cards_add_dazed_at_random_positions_after_their_effect() {
     for (model, upgraded, block, damage, dazed) in [
         ("CARD.MIGHTY_SHIELD", 0, 20, 0, 3),

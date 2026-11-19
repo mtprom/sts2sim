@@ -532,6 +532,7 @@ fn the_colorless_card_pool_is_the_fifty_three_single_player_cards() {
             "CARD.MASTER_OF_STRATEGY",
             "CARD.MAYHEM",
             "CARD.MIND_BLAST",
+            "CARD.MY_SHINIES",
             "CARD.NOSTALGIA",
             "CARD.OMNISLICE",
             "CARD.PANACHE",

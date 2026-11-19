@@ -47,6 +47,7 @@ pub(crate) fn cards() -> Vec<CardDefinition> {
     );
     shield.gains_block = true;
     vec![
+        my_shinies(),
         // TODO(package 4): repeatable upgrades; the fingerprint and upgrade
         // command currently represent only the base and first upgrade.
         rarity(
@@ -91,6 +92,31 @@ pub(crate) fn cards() -> Vec<CardDefinition> {
         ),
         rarity(sadness, CardRarity::Status),
     ]
+}
+
+fn my_shinies() -> CardDefinition {
+    let hits = |gold_per_hit| {
+        crate::cards::multi_attack(
+            Amount::Fixed(1),
+            Amount::Quotient {
+                of: Box::new(Amount::counting(Count::PlayerGold)),
+                by: gold_per_hit,
+            },
+        )
+    };
+    rarity(
+        upgrading(
+            card(
+                "CARD.MY_SHINIES",
+                CardType::Attack,
+                TargetType::AnyEnemy,
+                1,
+                vec![hits(20)],
+            ),
+            vec![hits(10)],
+        ),
+        CardRarity::Rare,
+    )
 }
 
 pub(crate) fn powers() -> Vec<PowerDefinition> {

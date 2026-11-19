@@ -897,7 +897,7 @@ pub(crate) const DEFECT_POOL: [(&str, CardType, CardRarity, i32); 80] = [
     ("CARD.WHITE_NOISE", CardType::Skill, CardRarity::Uncommon, 1),
 ];
 
-pub(crate) const COLORLESS_POOL: [(&str, CardType, CardRarity, i32); 53] = [
+pub(crate) const COLORLESS_POOL: [(&str, CardType, CardRarity, i32); 54] = [
     ("CARD.ALCHEMIZE", CardType::Skill, CardRarity::Rare, 1),
     ("CARD.ANOINTED", CardType::Skill, CardRarity::Rare, 1),
     ("CARD.AUTOMATION", CardType::Power, CardRarity::Uncommon, 1),
@@ -949,6 +949,7 @@ pub(crate) const COLORLESS_POOL: [(&str, CardType, CardRarity, i32); 53] = [
     ),
     ("CARD.MAYHEM", CardType::Power, CardRarity::Rare, 2),
     ("CARD.MIND_BLAST", CardType::Attack, CardRarity::Uncommon, 1),
+    ("CARD.MY_SHINIES", CardType::Attack, CardRarity::Rare, 1),
     ("CARD.NOSTALGIA", CardType::Power, CardRarity::Rare, 1),
     ("CARD.OMNISLICE", CardType::Attack, CardRarity::Uncommon, 0),
     ("CARD.PANACHE", CardType::Power, CardRarity::Uncommon, 0),
