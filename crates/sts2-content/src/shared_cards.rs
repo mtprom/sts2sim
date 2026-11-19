@@ -816,7 +816,7 @@ pub(crate) fn quest_cards() -> Vec<CardDefinition> {
 }
 
 /// Dowsing, as a map point's room is entered: the deck's own card counts the
-/// point where it is an unknown one, and on the fifth turns into an Abundance.
+/// point where it is an unknown one, and on the fourth turns into an Abundance.
 /// The transform names its replacement, so it rolls nothing; like any deck
 /// transform it takes the quest out and adds the Abundance at the end.
 fn dowsing() -> CardDefinition {
@@ -841,7 +841,7 @@ fn dowsing() -> CardDefinition {
                     otherwise: Vec::new(),
                     condition: Condition::SourceCardPropertyAtLeast {
                         name: "RoomsEntered".to_owned(),
-                        value: 5,
+                        value: 4,
                     },
                     then: vec![Command::Card(CardCmd::TransformDeckCards {
                         cards: CardSelector::Source,

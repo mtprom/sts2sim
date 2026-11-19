@@ -526,6 +526,9 @@ mod one_or_many_costs {
 pub struct TemporaryCost {
     /// What the card costs while this stands.
     pub cost: i32,
+    /// Add to the preceding cost instead of replacing it.
+    #[serde(default)]
+    pub relative: bool,
     /// Whether the end of the turn takes it back off.
     pub clears_when_turn_ends: bool,
     /// Whether playing the card takes it back off.
@@ -552,6 +555,7 @@ impl TemporaryCost {
     pub const fn this_turn(cost: i32) -> Self {
         Self {
             cost,
+            relative: false,
             clears_when_turn_ends: true,
             clears_when_played: true,
             reduce_only: false,
@@ -576,6 +580,7 @@ impl TemporaryCost {
     pub const fn set_this_turn(cost: i32) -> Self {
         Self {
             cost,
+            relative: false,
             clears_when_turn_ends: true,
             clears_when_played: false,
             reduce_only: false,
@@ -588,6 +593,7 @@ impl TemporaryCost {
     pub const fn this_combat(cost: i32) -> Self {
         Self {
             cost,
+            relative: false,
             clears_when_turn_ends: false,
             clears_when_played: false,
             reduce_only: false,

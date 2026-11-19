@@ -4800,6 +4800,16 @@ impl Simulator {
                 }
             }
         }
+        // Dowsing protects the fourth unknown room before its entry completes the quest.
+        if self.state.run_player.deck.iter().any(|card| {
+            card.model_id.entry() == "DOWSING" && card_property(card, "RoomsEntered") >= 3
+        }) {
+            for kind in [crate::ResolvedRoom::Monster, crate::ResolvedRoom::Elite] {
+                if !blocked.contains(&kind) {
+                    blocked.push(kind);
+                }
+            }
+        }
         // A quest card in the deck answers the same pass, and the one that does
         // replaces the whole table with the single type it wants rather than
         // taking one off it.
@@ -12795,6 +12805,12 @@ impl Simulator {
                 for card in self.combat_mut()?.player.piles.all_cards_mut() {
                     if ids.contains(&card.id) {
                         card.cost_this_turn += amount;
+                        if amount != 0 {
+                            card.temporary_costs.push(crate::TemporaryCost {
+                                relative: true,
+                                ..crate::TemporaryCost::set_this_turn(amount)
+                            });
+                        }
                     }
                 }
                 self.refresh_card_costs();
@@ -12808,6 +12824,12 @@ impl Simulator {
                 for card in self.combat_mut()?.player.piles.all_cards_mut() {
                     if ids.contains(&card.id) {
                         card.cost_this_combat += amount;
+                        if amount != 0 {
+                            card.temporary_costs.push(crate::TemporaryCost {
+                                relative: true,
+                                ..crate::TemporaryCost::this_combat(amount)
+                            });
+                        }
                     }
                 }
                 self.refresh_card_costs();
@@ -13002,6 +13024,13 @@ impl Simulator {
                     for card in combat.player.piles.all_cards_mut() {
                         if ids.contains(&card.id) {
                             card.cost_until_played += amount;
+                            if amount != 0 {
+                                card.temporary_costs.push(crate::TemporaryCost {
+                                    relative: true,
+                                    clears_when_played: true,
+                                    ..crate::TemporaryCost::this_combat(amount)
+                                });
+                            }
                         }
                     }
                 }
@@ -15361,13 +15390,32 @@ impl Simulator {
         if card.costs_x || own < 0 {
             return Some(own);
         }
-        Some(card.temporary_costs.iter().fold(own, |cost, temporary| {
-            if temporary.reduce_only {
-                cost.min(temporary.cost)
-            } else {
-                temporary.cost
-            }
-        }))
+        // Scalar counters mirror relative entries; only unrepresented offsets are additional.
+        let recorded: i32 = card
+            .temporary_costs
+            .iter()
+            .filter(|modifier| modifier.relative)
+            .map(|modifier| modifier.cost)
+            .sum();
+        // shortcut: legacy states lack modifier order; regenerate them for exact ordering.
+        let legacy =
+            card.cost_this_turn + card.cost_this_combat + card.cost_until_played - recorded;
+        Some(
+            card.temporary_costs
+                .iter()
+                .fold(own + legacy, |cost, temporary| {
+                    let modified = if temporary.relative {
+                        cost + temporary.cost
+                    } else {
+                        temporary.cost
+                    };
+                    if temporary.reduce_only {
+                        cost.min(modified)
+                    } else {
+                        modified
+                    }
+                }),
+        )
     }
 
     #[allow(
@@ -15437,7 +15485,13 @@ impl Simulator {
             // every card cost more leaves it at nothing. An unplayable card's
             // cost is likewise left where it is, before any modifier and
             // before the clamp.
-            if card.costs_x || base < 0 {
+            let definition = self.content.card(&card.fingerprint.model_id)?;
+            let own = card_energy_cost(
+                definition,
+                &card.fingerprint,
+                self.content.card_enchantment(&card.fingerprint),
+            );
+            if card.costs_x || own < 0 {
                 return Some((card.id, base));
             }
             let card_type = self.content.card_type_of(&card.fingerprint)?;
@@ -15529,16 +15583,7 @@ impl Simulator {
                     }
                 }
             });
-            // A cost added for this turn and one added until the card is played
-            // both stand over whatever the listeners made of the cost, and the
-            // whole of it is clamped at nothing. The build applies both close to
-            // the card, ahead of the global pass; nothing covered has a listener
-            // that moves a cost either of them is standing on.
-            Some((
-                card.id,
-                (modified + card.cost_this_turn + card.cost_this_combat + card.cost_until_played)
-                    .max(0),
-            ))
+            Some((card.id, modified.max(0)))
         })
         .collect();
         // The star cost is the same question asked of a different pool, and it
@@ -18960,12 +19005,11 @@ impl Simulator {
             // about every card: a card a scarf is about to make free still
             // costs something of its own.
             CardFilter::CostsEnergyNow => {
-                self.local_energy_cost(card).is_some_and(|cost| {
-                    cost + card.cost_this_turn + card.cost_this_combat + card.cost_until_played > 0
-                }) && self
-                    .content
-                    .card(&card.fingerprint.model_id)
-                    .is_some_and(|definition| !definition.costs_x)
+                self.local_energy_cost(card).is_some_and(|cost| cost > 0)
+                    && self
+                        .content
+                        .card(&card.fingerprint.model_id)
+                        .is_some_and(|definition| !definition.costs_x)
             }
             CardFilter::NotSlyOfType(card_type) => {
                 !self.card_is_sly(card)

@@ -1196,6 +1196,44 @@ fn expect_a_fight_discounts_held_non_x_attacks_until_played() {
     assert_eq!(played.cost_until_played, 0);
 }
 
+/// Local reductions and absolute costs are applied in insertion order:
+/// Expect a Fight then Enlightenment costs one, the reverse costs zero.
+#[test]
+fn expect_a_fight_and_enlightenment_respect_modifier_order() {
+    for upgrade in [0, 1] {
+        for (first, second, expected) in [
+            ("CARD.EXPECT_A_FIGHT", "CARD.ENLIGHTENMENT", 1),
+            ("CARD.ENLIGHTENMENT", "CARD.EXPECT_A_FIGHT", 0),
+        ] {
+            let mut simulator = fight(&[
+                ("CARD.EXPECT_A_FIGHT", 0),
+                ("CARD.ENLIGHTENMENT", upgrade),
+                ("CARD.BLUDGEON", 0),
+            ]);
+            play(&mut simulator, first);
+            play(&mut simulator, second);
+            let held = simulator
+                .state()
+                .combat
+                .as_ref()
+                .expect("a fight")
+                .player
+                .piles
+                .hand
+                .iter()
+                .find(|card| card.fingerprint.model_id == id("CARD.BLUDGEON"))
+                .expect("Bludgeon in hand");
+            assert_eq!(
+                held.energy_cost, expected,
+                "{first} then {second}, +{upgrade}"
+            );
+            let before = energy(&simulator);
+            play(&mut simulator, "CARD.BLUDGEON");
+            assert_eq!(before - energy(&simulator), expected);
+        }
+    }
+}
+
 /// A battle trance draws and then stops the well; the next turn's own opening
 /// hand still comes, because that draw is the hand draw.
 #[test]
