@@ -28593,7 +28593,7 @@ impl Simulator {
             else {
                 continue;
             };
-            if i32::try_from(combat.player.first_plays_started_this_turn)
+            if i32::try_from(combat.player.play_types_started_this_turn.len())
                 .expect("play count fits game integer")
                 >= allowed
             {

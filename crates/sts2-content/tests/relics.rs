@@ -4340,6 +4340,33 @@ fn a_velvet_choker_stops_an_autoplay_started_by_the_sixth_card() {
     );
 }
 
+#[test]
+fn a_velvet_choker_counts_each_replay_in_a_series() {
+    let mut scenario = ScenarioBuilder::new(SEED, id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .energy(30, 30)
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 999, 999, "SHRINKER_MOVE")
+        .relics(&[id("RELIC.VELVET_CHOKER")])
+        .power(
+            0,
+            id("POWER.DUPLICATION_POWER"),
+            1,
+            sts2_engine::PowerType::Buff,
+        );
+    for index in 0..7 {
+        scenario = scenario.card(PileName::Hand, index, card("CARD.DEFEND_IRONCLAD", 0), 0);
+    }
+    let mut simulator = scenario.build(sts2_content::standard_registry()).unwrap();
+    for _ in 0..5 {
+        play(&mut simulator, "CARD.DEFEND_IRONCLAD");
+    }
+    assert!(
+        !simulator
+            .legal_actions()
+            .iter()
+            .any(|action| matches!(action, Action::PlayCard { .. }))
+    );
+}
+
 /// Opening Retain is a power now, rather than a first-hand flush exception.
 #[test]
 fn a_ringing_triangle_applies_retain_hand_when_combat_is_entered() {
@@ -7202,6 +7229,48 @@ fn a_book_repair_knife_heals_for_every_enemy_a_doom_kill_took() {
     // A minion going down is not a death that counts, because the power that
     // makes it a minion says so, so only the other one is paid for.
     assert_eq!(doomed(&["RELIC.BOOK_REPAIR_KNIFE"], 39, 1), 40 + 3);
+}
+
+#[test]
+fn a_book_repair_knife_does_not_heal_for_a_doomed_ally() {
+    let simulator = necrobinder_scenario("SHRINKER_MOVE", 2, &["RELIC.BOOK_REPAIR_KNIFE"], &[])
+        .player_hp(40, 80)
+        .power(
+            1,
+            id("POWER.DOOM_POWER"),
+            39,
+            sts2_engine::PowerType::Debuff,
+        )
+        .build(sts2_content::standard_registry())
+        .unwrap();
+    let mut state = simulator.state().clone();
+    state
+        .combat
+        .as_mut()
+        .unwrap()
+        .creatures
+        .iter_mut()
+        .find(|creature| creature.combat_id.0 == 1)
+        .unwrap()
+        .side = sts2_engine::CombatSide::Player;
+    let mut simulator =
+        Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+    end_turn(&mut simulator);
+    assert_eq!(
+        player(&simulator).current_hp,
+        40,
+        "only enemy Doom deaths pay a heal"
+    );
+    assert!(
+        !simulator
+            .state()
+            .combat
+            .as_ref()
+            .unwrap()
+            .creatures
+            .iter()
+            .any(|creature| creature.combat_id.0 == 1 && creature.current_hp > 0)
+    );
 }
 
 /// A funerary mask shuffles three Souls through the draw pile before the first
