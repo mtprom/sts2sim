@@ -493,8 +493,8 @@ fn a_luminesce_is_kept_in_hand() {
 #[test]
 fn the_minion_cards_and_a_shiv_land_what_they_declare() {
     for (model_id, upgrade, damage) in [
-        ("CARD.MINION_DIVE_BOMB", 0, 13),
-        ("CARD.MINION_DIVE_BOMB", 1, 16),
+        ("CARD.MINION_DIVE_BOMB", 0, 11),
+        ("CARD.MINION_DIVE_BOMB", 1, 13),
         ("CARD.MINION_STRIKE", 0, 6),
         ("CARD.MINION_STRIKE", 1, 9),
         ("CARD.SHIV", 0, 4),
@@ -1049,6 +1049,10 @@ fn enlightenment_holds_the_hand_to_one_energy() {
             ],
         );
         play(&mut simulator, "CARD.ENLIGHTENMENT");
+        assert!(
+            pile(&simulator, PileName::Discard).contains(&"CARD.ENLIGHTENMENT".to_owned()),
+            "Enlightenment no longer exhausts"
+        );
         assert_eq!(cost_of(&simulator, "CARD.BLUDGEON"), 1, "at +{upgrade}");
         assert_eq!(
             cost_of(&simulator, "CARD.ANGER"),
@@ -2140,8 +2144,8 @@ fn the_offered_colorless_cards_are_what_they_say() {
     for (model_id, upgrade, damage) in [
         ("CARD.BOLAS", 0, 3),
         ("CARD.BOLAS", 1, 4),
-        ("CARD.SALVO", 0, 12),
-        ("CARD.SALVO", 1, 16),
+        ("CARD.SALVO", 0, 10),
+        ("CARD.SALVO", 1, 14),
         ("CARD.THRUMMING_HATCHET", 0, 11),
         ("CARD.THRUMMING_HATCHET", 1, 14),
         ("CARD.ULTIMATE_STRIKE", 0, 14),

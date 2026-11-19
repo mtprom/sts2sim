@@ -637,9 +637,9 @@ pub(crate) fn token_cards() -> Vec<CardDefinition> {
                         CardType::Attack,
                         TargetType::AnyEnemy,
                         0,
-                        vec![attack(13)],
+                        vec![attack(11)],
                     )),
-                    vec![attack(16)],
+                    vec![attack(13)],
                 ),
                 &[CardTag::Minion],
             ),
@@ -1050,7 +1050,7 @@ pub(crate) fn event_cards() -> Vec<CardDefinition> {
         // Enlightenment makes the hand cost one, this turn or this fight.
         rarity(
             upgrading(
-                exhausting(card(
+                card(
                     "CARD.ENLIGHTENMENT",
                     CardType::Skill,
                     TargetType::SelfTarget,
@@ -1062,7 +1062,7 @@ pub(crate) fn event_cards() -> Vec<CardDefinition> {
                         },
                         lifetime: sts2_engine::TemporaryCost::this_turn_reduce_only(1),
                     })],
-                )),
+                ),
                 vec![Command::Card(CardCmd::SetTemporaryCost {
                     cards: CardSelector::Pile {
                         pile: PileName::Hand,
@@ -2111,9 +2111,9 @@ pub(crate) fn offered_colorless_cards() -> Vec<CardDefinition> {
                 CardType::Attack,
                 TargetType::AnyEnemy,
                 1,
-                vec![attack(12), buff("POWER.RETAIN_HAND_POWER", 1)],
+                vec![attack(10), buff("POWER.RETAIN_HAND_POWER", 1)],
             ),
-            vec![attack(16), buff("POWER.RETAIN_HAND_POWER", 1)],
+            vec![attack(14), buff("POWER.RETAIN_HAND_POWER", 1)],
         ),
         // A secret technique takes a skill out of the draw pile.
         keeps_itself_when_upgraded(exhausting(card(

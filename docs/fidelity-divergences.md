@@ -216,3 +216,11 @@ the one that may be filtered out of the action list from the one that may not.
   modification; schedule Nightmare copy cleanup at turn end; defer Juggling's
   remembered clone until after the triggering card resolves. These timing
   changes need engine scheduling rather than different content values.
+- TODO(package 4): Omnislice splash must be powered but pass only through
+  damage caps (`ModifyDamageHookType.Cap`), not receive Strength/multipliers
+  a second time; remove the Thorns Omnislice exception alongside that hook.
+- TODO(package 4): propagate the causing card through max-HP loss and death.
+  Brightest Flame must bypass Buffer while still reporting its card source;
+  Bone Shards and Sacrifice must identify their card when killing Osty.
+  Brightest Flame also has a pre-existing numerical mismatch: the simulator
+  loses 1 max HP, but both reference builds lose 2.
