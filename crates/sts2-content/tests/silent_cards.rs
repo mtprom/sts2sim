@@ -1346,8 +1346,10 @@ fn hand_faces(
         .hand
         .iter()
         .find(|handle| handle.fingerprint.model_id == wanted)
-        .map(|handle| handle.face.clone())
-        .unwrap_or_else(|| panic!("{model_id} is not in the hand"));
+        .map_or_else(
+            || panic!("{model_id} is not in the hand"),
+            |handle| handle.face.clone(),
+        );
     let offered = simulator
         .legal_actions()
         .iter()

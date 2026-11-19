@@ -66,7 +66,7 @@ fn broken_plow_does_not_regain_strength() {
             .energy(3, 3)
             .turn(1, 1)
             .enemy(1, id("MONSTER.CEREMONIAL_BEAST"), 252, 252, "PLOW_MOVE")
-            .power(1, id("POWER.PLOW_POWER"), 1, PowerType::Buff);
+            .power(1, id("POWER.PLOW_POWER"), 251, PowerType::Debuff);
         if thorns > 0 {
             scenario = scenario.power(0, id("POWER.THORNS_POWER"), thorns, PowerType::Buff);
         }
