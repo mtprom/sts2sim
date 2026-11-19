@@ -100,12 +100,19 @@ fn render_player(state: &GameState, content: &sts2_engine::ContentRegistry) -> V
                     .player_rng
                     .stream(PlayerStream::Transformations)
                     .counter(),
+                "non_combat_generation": state
+                    .player_rng
+                    .stream(PlayerStream::NonCombatGeneration)
+                    .counter(),
             },
             "states": {
                 "rewards": render_stream(state.player_rng.stream(PlayerStream::Rewards)),
                 "shops": render_stream(state.player_rng.stream(PlayerStream::Shops)),
                 "transformations": render_stream(
                     state.player_rng.stream(PlayerStream::Transformations)
+                ),
+                "non_combat_generation": render_stream(
+                    state.player_rng.stream(PlayerStream::NonCombatGeneration)
                 ),
             },
         },
