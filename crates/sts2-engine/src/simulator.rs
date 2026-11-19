@@ -18474,6 +18474,25 @@ impl Simulator {
                 candidates.truncate(take);
                 Ok(candidates.into_iter().map(ChosenCard::Combat).collect())
             }
+            CardSelector::StablyShuffledInnateLast {
+                pile,
+                filter,
+                take,
+                stream,
+            } => {
+                let take = usize::try_from(self.resolve_amount(take, context)?.max(0)).unwrap_or(0);
+                let (mut innate, mut rest): (Vec<CardInstance>, Vec<CardInstance>) = self
+                    .pile_cards_passing(*pile, *filter, None)?
+                    .into_iter()
+                    .partition(|card| self.card_is_innate(card));
+                for list in [&mut rest, &mut innate] {
+                    sort_pile_canonically(list);
+                    self.shuffle_stream_mut(*stream).shuffle(list);
+                }
+                rest.append(&mut innate);
+                rest.truncate(take);
+                Ok(rest.into_iter().map(ChosenCard::Combat).collect())
+            }
             // The same over the run deck, which has no instances: a deck card
             // is named by where it stands, so the shuffle carries the index
             // along with the fingerprint.
@@ -18826,26 +18845,28 @@ impl Simulator {
     }
 
     /// A thief prefers what a deck can least afford to lose: the first rarity
-    /// group that has anything in it, rolled on the combat card-generation
-    /// stream.
+    /// group that has anything in it, rolled on the combat card-selection
+    /// stream. Quest cards are never stolen.
     fn select_stolen_card(
         &mut self,
         piles: &[PileName],
         priorities: &[Vec<crate::CardRarity>],
     ) -> Result<Vec<ChosenCard>, EngineError> {
+        let rarity_of = |card: &CardInstance| {
+            self.content
+                .card(&card.fingerprint.model_id)
+                .map(|definition| definition.rarity)
+        };
         let owned: Vec<CardInstance> = {
             let combat = self.combat()?;
             piles
                 .iter()
                 .flat_map(|pile| pile_of(&combat.player.piles, *pile).iter())
-                .filter(|card| card.from_deck())
+                .filter(|card| {
+                    card.from_deck() && rarity_of(card) != Some(crate::CardRarity::Quest)
+                })
                 .cloned()
                 .collect()
-        };
-        let rarity_of = |card: &CardInstance| {
-            self.content
-                .card(&card.fingerprint.model_id)
-                .map(|definition| definition.rarity)
         };
         let mut candidates: Vec<CardInstance> = owned.clone();
         for group in priorities {
@@ -18862,7 +18883,7 @@ impl Simulator {
         let index = self
             .state
             .rng
-            .stream_mut(RunStream::CombatCardGeneration)
+            .stream_mut(RunStream::CombatCardSelection)
             .next_index(candidates.len())
             .map_err(|error| {
                 EngineError::new(ErrorCode::InternalInvariant)

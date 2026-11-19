@@ -2023,13 +2023,23 @@ pub enum CardSelector {
         #[serde(default = "any_card")]
         filter: CardFilter,
         /// The filter the body falls back on when the first leaves nothing,
-        /// which is the second set a body names for itself. A shuffle over an
-        /// empty set reads no dice, so choosing the set before the shuffle
-        /// comes to the same run of them as shuffling both.
+        /// which is the second set a body names for itself. The empty first
+        /// set is still shuffled, and a shuffle reads one draw whatever it
+        /// holds, so falling back costs a draw before the second shuffle.
         #[serde(default)]
         fallback: Option<CardFilter>,
         take: Amount,
         #[serde(default = "shuffle_stream")]
+        stream: ShuffleStream,
+    },
+    /// Power Cell's deal: the pile's cards passing the filter, the ones
+    /// without Innate stably shuffled first and the Innate ones stably
+    /// shuffled after them on the same stream (two shuffles, two draws), and
+    /// the first few of the two lists joined.
+    StablyShuffledInnateLast {
+        pile: PileName,
+        filter: CardFilter,
+        take: Amount,
         stream: ShuffleStream,
     },
     /// Every card of the run deck that passes all of the filters, in deck
