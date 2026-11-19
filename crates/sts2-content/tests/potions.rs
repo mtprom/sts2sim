@@ -395,8 +395,17 @@ fn alchemize_rolls_one_potion_on_the_potion_stream() {
 fn an_entropic_brew_fills_every_free_slot() {
     let mut simulator = fight(&["POTION.ENTROPIC_BREW", "POTION.FIRE_POTION"], &[], &[]);
     drink(&mut simulator, "POTION.ENTROPIC_BREW");
-    // Two slots were free once the brew left its own: two rolls, two potions.
-    assert_eq!(counter(&simulator, RunStream::CombatPotionGeneration), 4);
+    // Two slots were free once the brew left its own: two rolls, two potions,
+    // on the player's non-combat-generation stream even inside a fight.
+    assert_eq!(counter(&simulator, RunStream::CombatPotionGeneration), 0);
+    assert_eq!(
+        simulator
+            .state()
+            .player_rng
+            .stream(sts2_rng::PlayerStream::NonCombatGeneration)
+            .counter(),
+        4
+    );
     let held = belt(&simulator);
     assert!(held.iter().all(Option::is_some), "{held:?}");
     assert_eq!(held[1], Some("POTION.FIRE_POTION".to_owned()));
