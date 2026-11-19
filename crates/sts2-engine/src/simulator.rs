@@ -15527,7 +15527,8 @@ impl Simulator {
                         cost
                     }
                 }
-                crate::CardCostRule::FreeInHandOrPlay => {
+                crate::CardCostRule::FreeInHandOrPlay
+                | crate::CardCostRule::FreeEnergyInHandOrPlay => {
                     if matches!(pile, PileName::Hand | PileName::Play) {
                         0
                     } else {

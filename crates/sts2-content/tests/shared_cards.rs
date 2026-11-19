@@ -159,6 +159,23 @@ fn free_card_is_spent_before_the_first_play_and_not_at_turn_end() {
     assert_eq!(simulator.state().combat.as_ref().unwrap().player.energy, 8);
 }
 
+#[test]
+fn free_card_does_not_waive_a_regent_cards_star_cost() {
+    let simulator = scenario(&[("CARD.ASTRAL_PULSE", 0)], &[], 100)
+        .power(
+            0,
+            id("POWER.FREE_CARD_POWER"),
+            1,
+            sts2_engine::PowerType::Buff,
+        )
+        .build(sts2_content::standard_registry())
+        .unwrap();
+    assert!(
+        play_action(&simulator, "CARD.ASTRAL_PULSE").is_none(),
+        "Free Card affects energy, not the three-star cost"
+    );
+}
+
 fn id(value: &str) -> sts2_core::ModelId {
     value.parse().expect("static model ID")
 }

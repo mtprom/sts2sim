@@ -681,6 +681,8 @@ pub enum CardCostRule {
     /// Brilliant Scarf: a card of its owner's standing in the hand or in play
     /// costs nothing.
     FreeInHandOrPlay,
+    /// Free Card affects energy alone, unlike Brilliant Scarf.
+    FreeEnergyInHandOrPlay,
     /// Void Form: a card of its owner's standing in the hand or in play costs
     /// nothing while they have played fewer cards this turn than the rule is
     /// worth.
@@ -705,6 +707,7 @@ impl CardCostRule {
                 | Self::FreeSkills
                 | Self::FreeSkillsInHandOrPlay
                 | Self::FreeInHandOrPlay
+                | Self::FreeEnergyInHandOrPlay
                 | Self::FreePowersInHandOrPlay
                 | Self::FreeEtherealInHandOrPlay
                 | Self::FreeInHandOrPlayUnderCount

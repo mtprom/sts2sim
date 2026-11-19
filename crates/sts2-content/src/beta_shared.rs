@@ -141,7 +141,7 @@ pub(crate) fn powers() -> Vec<PowerDefinition> {
             ..powers::counter("POWER.GOD_BYRD_POWER", PowerType::Buff)
         },
         PowerDefinition {
-            card_cost_rule: Some(CardCostRule::FreeInHandOrPlay),
+            card_cost_rule: Some(CardCostRule::FreeEnergyInHandOrPlay),
             hooks: vec![
                 ModifierHook::every_turn(
                     HookEvent::BeforeCardPlayed,
