@@ -211,7 +211,7 @@ fn snapshot_replay_matches_key_digest_and_actions_at_every_fixture_boundary() {
         Some(7),
         None,
         Some(6),
-        Some(4),
+        Some(3),
     ] {
         let action = if let Some(card_id) = card_id {
             simulator
@@ -263,7 +263,8 @@ fn reward_flow_can_be_completed_through_public_actions() {
         play(&mut simulator, card_id);
     }
     end_turn(&mut simulator);
-    for card_id in [6, 4] {
+    // The turn-three reshuffle deals a Strike (card 3) where the Bully was.
+    for card_id in [6, 3] {
         play(&mut simulator, card_id);
     }
     while !matches!(simulator.decision(), DecisionContext::Terminal { .. }) {

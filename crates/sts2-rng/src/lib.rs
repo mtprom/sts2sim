@@ -1,4 +1,4 @@
-//! Deterministic random behavior from STS2 `v0.111.0` (public beta).
+//! Deterministic random behavior from STS2 `v0.113.1` (public beta).
 //!
 //! The high-level [`Rng`] counts one consumed Xoshiro output per uniform draw.
 //! Composite operations such as Gaussian sampling and shuffle consume through
@@ -410,10 +410,19 @@ impl Rng {
         None
     }
 
-    /// In-place Fisher-Yates shuffle.
+    /// The build's raw 64-bit draw, counted once.
+    pub fn next_unsigned_long(&mut self) -> u64 {
+        self.consume()
+    }
+
+    /// The build's list shuffle (`UnstableShuffle`): one 64-bit draw from
+    /// this stream seeds a fresh generator, and Fisher-Yates from the top
+    /// runs on that child. The stream advances by exactly one draw whatever
+    /// the length, an empty or single-item list included.
     pub fn shuffle<T>(&mut self, values: &mut [T]) {
+        let mut child = Self::new(self.next_unsigned_long());
         for upper in (1..values.len()).rev() {
-            let selected = self
+            let selected = child
                 .next_index(upper + 1)
                 .expect("nonempty slice length fits game integer")
                 .expect("length is nonzero");
@@ -587,10 +596,18 @@ pub enum PlayerStream {
     Rewards,
     Shops,
     Transformations,
+    /// Out-of-combat picks a relic, potion or modifier makes for its owner
+    /// (Whetstone's upgrades, Entropic Brew's potions, Neow's Bones).
+    NonCombatGeneration,
 }
 
 impl PlayerStream {
-    pub const ALL: [Self; 3] = [Self::Rewards, Self::Shops, Self::Transformations];
+    pub const ALL: [Self; 4] = [
+        Self::Rewards,
+        Self::Shops,
+        Self::Transformations,
+        Self::NonCombatGeneration,
+    ];
 
     #[must_use]
     pub const fn name(self) -> &'static str {
@@ -598,6 +615,7 @@ impl PlayerStream {
             Self::Rewards => "rewards",
             Self::Shops => "shops",
             Self::Transformations => "transformations",
+            Self::NonCombatGeneration => "non_combat_generation",
         }
     }
 }
@@ -1011,8 +1029,12 @@ mod tests {
         let mut rng = Rng::new(42);
         let mut values = [0, 1, 2, 3, 4, 5, 6, 7];
         rng.shuffle(&mut values);
-        assert_eq!(values, [7, 1, 6, 3, 5, 4, 2, 0]);
-        assert_eq!(rng.counter(), 7);
+        assert_eq!(values, [1, 3, 7, 6, 5, 2, 0, 4]);
+        // One draw seeds the child generator the swaps run on.
+        assert_eq!(rng.counter(), 1);
+        let mut empty: [u8; 0] = [];
+        rng.shuffle(&mut empty);
+        assert_eq!(rng.counter(), 2, "an empty list still costs its seed draw");
     }
 
     #[test]

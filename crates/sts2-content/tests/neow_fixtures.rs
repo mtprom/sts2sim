@@ -145,6 +145,17 @@ fn neows_bones_offer_two_of_neows_own_and_charge_a_curse() {
             .cloned()
             .unwrap_or_else(|| panic!("reward {index} can be taken"));
         simulator.step(action).expect("taking the relic applies");
+        // A relic that opens a screen of its own (Hefty Tablet on this seed)
+        // is answered before the next claim.
+        while let sts2_engine::DecisionContext::ChooseCards { .. } = simulator.decision() {
+            let pick = simulator
+                .legal_actions()
+                .iter()
+                .find(|action| matches!(action, sts2_engine::Action::ChooseCards { cards, .. } if !cards.is_empty()))
+                .cloned()
+                .expect("the screen offers a card");
+            simulator.step(pick).expect("the card is taken");
+        }
     }
     // The curse arrives once the set is done with. Whatever else the two
     // relics handed over arrives with it, so what is checked is the curse.
@@ -168,19 +179,21 @@ fn neows_bones_offer_two_of_neows_own_and_charge_a_curse() {
 #[test]
 fn neows_bones_wait_for_both_relics_without_holding_the_claimed_relics_body() {
     use sts2_engine::Action;
-    use sts2_rng::RunStream;
+    use sts2_rng::PlayerStream;
 
-    // A seed whose Neow offers the bones, whose bones deal the Large Capsule
-    // and the Cursed Pearl, and whose capsule draws nothing off the niche
-    // stream, so that stream moving is the curse and nothing else.
-    let mut simulator =
-        sts2_content::standard_ironclad_run("N3EWU9ZHHX").expect("the run generates");
-    let bones = simulator.legal_actions().iter().find(|action| {
-        matches!(action, Action::ChooseEvent { option_id, .. } if option_id.ends_with(".NEOWS_BONES"))
-    }).cloned().expect("Neow offers the bones");
-    simulator.step(bones).expect("the two relics are offered");
+    // A seed whose bones deal the Large Capsule and the Cursed Pearl, and
+    // whose capsule draws nothing off the non-combat-generation stream, so
+    // that stream moving is the curse and nothing else.
+    let mut simulator = take_neow_relic_on("B0NES78", "NEOWS_BONES");
     let before = simulator.state().run_player.deck.len();
-    let niche = simulator.state().rng.stream(RunStream::Niche).counter();
+    let stream = |simulator: &sts2_engine::Simulator| {
+        simulator
+            .state()
+            .player_rng
+            .stream(PlayerStream::NonCombatGeneration)
+            .counter()
+    };
+    let niche = stream(&simulator);
     let claim = simulator
         .legal_actions()
         .iter()
@@ -197,7 +210,7 @@ fn neows_bones_wait_for_both_relics_without_holding_the_claimed_relics_body() {
         "the capsule adds both basics, while the bones' curse still waits"
     );
     assert_eq!(
-        simulator.state().rng.stream(RunStream::Niche).counter(),
+        stream(&simulator),
         niche,
         "the curse is not rolled until the remaining relic is claimed"
     );
@@ -213,16 +226,18 @@ fn neows_bones_wait_for_both_relics_without_holding_the_claimed_relics_body() {
         before + 4,
         "the pearl's Greed and the bones' curse each join the deck"
     );
-    assert_eq!(
-        simulator.state().rng.stream(RunStream::Niche).counter(),
-        niche + 1
-    );
+    assert_eq!(stream(&simulator), niche + 1);
     assert!(simulator.state().run.as_ref().unwrap().pending.is_empty());
 }
 
 /// A run that has just taken the named Neow option and nothing else.
 fn take_neow_relic(relic: &str) -> sts2_engine::Simulator {
-    let simulator = sts2_content::standard_ironclad_run("N3Z9EE2CXB").expect("the run generates");
+    take_neow_relic_on("N3Z9EE2CXB", relic)
+}
+
+/// The same on a named seed.
+fn take_neow_relic_on(seed: &str, relic: &str) -> sts2_engine::Simulator {
+    let simulator = sts2_content::standard_ironclad_run(seed).expect("the run generates");
     let option_id = format!("NEOW.pages.INITIAL.options.{relic}");
     let mut state = simulator.state().clone();
     let option = sts2_engine::EventOption {

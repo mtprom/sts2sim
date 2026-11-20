@@ -760,15 +760,13 @@ pub enum CardTransformReplacement {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TransformStream {
-    /// The run's niche stream.
-    Niche,
     /// The player's own transformation stream.
     Transformations,
     /// The event's own stream, carried on from wherever its last page left it.
     Event,
-    /// The combat card-selection stream, which is what a body transforming a
+    /// The combat card-generation stream, which is what a body transforming a
     /// card of the hand mid-fight rolls on.
-    CombatCardSelection,
+    CombatCardGeneration,
 }
 
 /// What a body does to a whole pile of cards: add to one, move cards between
@@ -822,7 +820,7 @@ pub enum CardPileCmd {
     AddToDeck { card: CardOrigin },
     /// The curse draw two relics do for themselves: the curse pool's cards
     /// that modifiers are allowed to generate, ordered by model ID, drawn one
-    /// at a time on the run's niche stream without replacement, each added to
+    /// at a time on the player's non-combat-generation stream without replacement, each added to
     /// the deck as it is drawn.
     AddCursesToDeck { pool: ModelId, count: usize },
     /// Cards made the way a reward offer makes them, added straight to the
@@ -1649,7 +1647,7 @@ pub enum PotionOrigin {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum RewardsCmd {
     /// What Neow's Bones does once it is taken: the relics of a named list,
-    /// shuffled on the player's own rewards stream, and the first few of them
+    /// shuffled on the player's own non-combat-generation stream, and the first few of them
     /// offered as one reward set the player may not skip.
     OfferShuffledRelics { relics: Vec<ModelId>, count: usize },
     /// A set of rewards a relic or event hands over, which leaves the room
@@ -1694,10 +1692,10 @@ pub enum RewardsCmd {
         enchantment: ModelId,
         amount: Amount,
         /// One of the cards it could go on rather than all of them, rolled on
-        /// the run's niche stream. A body that says no enchants every
+        /// the player's rewards stream. A body that says no enchants every
         /// candidate and reads no dice.
         #[serde(default)]
-        one_rolled_on_the_niche_stream: bool,
+        one_rolled_on_the_rewards_stream: bool,
     },
     /// What a Lasting Candy does to an offer: one more option, rolled out of
     /// the offer's own pool narrowed to a card type and, where it can be, to
@@ -1718,7 +1716,7 @@ pub enum RewardsCmd {
     /// this many character colours other than the owner's.
     ///
     /// The colours are rolled per offer: every unlocked character's pool but
-    /// the owner's, sorted by model ID and then shuffled on the run's niche
+    /// the owner's, sorted by model ID and then shuffled on the player's non-combat-generation
     /// stream, and the first few taken. Each is its own one-card creation with
     /// no pool modifications allowed, so each runs its own passes over what it
     /// made and none of them blacklists the others' cards; the cards are
@@ -2025,13 +2023,23 @@ pub enum CardSelector {
         #[serde(default = "any_card")]
         filter: CardFilter,
         /// The filter the body falls back on when the first leaves nothing,
-        /// which is the second set a body names for itself. A shuffle over an
-        /// empty set reads no dice, so choosing the set before the shuffle
-        /// comes to the same run of them as shuffling both.
+        /// which is the second set a body names for itself. The empty first
+        /// set is still shuffled, and a shuffle reads one draw whatever it
+        /// holds, so falling back costs a draw before the second shuffle.
         #[serde(default)]
         fallback: Option<CardFilter>,
         take: Amount,
         #[serde(default = "shuffle_stream")]
+        stream: ShuffleStream,
+    },
+    /// Power Cell's deal: the pile's cards passing the filter, the ones
+    /// without Innate stably shuffled first and the Innate ones stably
+    /// shuffled after them on the same stream (two shuffles, two draws), and
+    /// the first few of the two lists joined.
+    StablyShuffledInnateLast {
+        pile: PileName,
+        filter: CardFilter,
+        take: Amount,
         stream: ShuffleStream,
     },
     /// Every card of the run deck that passes all of the filters, in deck
@@ -2110,10 +2118,9 @@ pub enum CardSelector {
         stream: ShuffleStream,
         take: Amount,
     },
-    /// One card of a combat pile that passes the filter, rolled on the
-    /// shuffle stream, which a handful of bodies read instead of the combat
-    /// card-selection stream.
-    ShuffleRolledFromPile {
+    /// One card of a combat pile that passes the filter, rolled with one
+    /// `NextItem` on the combat card-selection stream (Stampede).
+    SelectionRolledFromPile {
         pile: PileName,
         #[serde(default = "any_card")]
         filter: CardFilter,
@@ -2169,9 +2176,9 @@ pub enum ShuffleStream {
     Shuffle,
     /// The combat card-selection stream.
     CombatCardSelection,
-    /// The run's niche stream, which is what the two relics that upgrade a
-    /// couple of deck cards as they are taken read.
-    Niche,
+    /// The player's non-combat-generation stream, which is what the relics
+    /// that upgrade or enchant deck cards as they are taken read.
+    NonCombatGeneration,
     /// The event's own stream.
     Event,
 }

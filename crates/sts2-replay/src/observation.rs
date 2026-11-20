@@ -93,19 +93,14 @@ fn render_player(state: &GameState, content: &sts2_engine::ContentRegistry) -> V
             .map(|run| render_player_grab_bag(&run.player_relic_grab_bag)),
         "rng": {
             "seed": state.player_rng.seed(),
-            "counters": {
-                "rewards": state.player_rng.stream(PlayerStream::Rewards).counter(),
-                "shops": state.player_rng.stream(PlayerStream::Shops).counter(),
-                "transformations": state
-                    .player_rng
-                    .stream(PlayerStream::Transformations)
-                    .counter(),
-            },
-            "states": {
+            "rngs": {
                 "rewards": render_stream(state.player_rng.stream(PlayerStream::Rewards)),
                 "shops": render_stream(state.player_rng.stream(PlayerStream::Shops)),
                 "transformations": render_stream(
                     state.player_rng.stream(PlayerStream::Transformations)
+                ),
+                "non_combat_generation": render_stream(
+                    state.player_rng.stream(PlayerStream::NonCombatGeneration)
                 ),
             },
         },
@@ -410,7 +405,8 @@ fn render_run(state: &GameState, run: &RunState) -> Value {
     })
 }
 
-/// The run's RNG: its seed, and each stream's draw count and generator state.
+/// The run's RNG: its seed, and each stream's draw count and four generator
+/// words, keyed by stream name under `rngs` as recorder 0.21.0 writes them.
 fn render_run_rng(state: &GameState, run: &RunState) -> Value {
     const STREAMS: [(&str, RunStream); 12] = [
         ("up_front", RunStream::UpFront),
@@ -429,23 +425,14 @@ fn render_run_rng(state: &GameState, run: &RunState) -> Value {
         ("combat_orbs", RunStream::CombatOrbs),
         ("treasure_room_relics", RunStream::TreasureRoomRelics),
     ];
-    let counters: Map<String, Value> = STREAMS
-        .iter()
-        .map(|(name, stream)| ((*name).to_owned(), json!(counter(state, *stream))))
-        .collect();
-    let states: Map<String, Value> = STREAMS
+    let rngs: Map<String, Value> = STREAMS
         .iter()
         .map(|(name, stream)| ((*name).to_owned(), run_stream(state, *stream)))
         .collect();
     json!({
         "seed": run.config.seed,
-        "counters": counters,
-        "states": states,
+        "rngs": rngs,
     })
-}
-
-fn counter(state: &GameState, stream: RunStream) -> u64 {
-    state.rng.stream(stream).counter()
 }
 
 fn run_stream(state: &GameState, stream: RunStream) -> Value {
@@ -455,13 +442,9 @@ fn run_stream(state: &GameState, stream: RunStream) -> Value {
 /// One stream as projection v2 records it: the draw count and the four
 /// generator words the build saves beside it.
 fn render_stream(stream: &sts2_rng::Rng) -> Value {
-    let [state0, state1, state2, state3] = stream.state_words();
     json!({
         "counter": stream.counter(),
-        "state0": state0,
-        "state1": state1,
-        "state2": state2,
-        "state3": state3,
+        "state": stream.state_words(),
     })
 }
 

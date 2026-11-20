@@ -501,19 +501,20 @@ impl MapBuilder {
         }
     }
 
+    /// The first type in queue order that is valid here, taken out of the
+    /// queue; the types passed over keep their places.
     fn next_valid_point_type(
         &mut self,
         queue: &mut VecDeque<PointType>,
         point: usize,
     ) -> PointType {
-        for _ in 0..queue.len() {
-            let point_type = queue.pop_front().expect("bounded by queue length");
-            if self.is_valid_point_type(point_type, point) {
-                return point_type;
-            }
-            queue.push_back(point_type);
-        }
-        PointType::Unassigned
+        let Some(index) = queue
+            .iter()
+            .position(|point_type| self.is_valid_point_type(*point_type, point))
+        else {
+            return PointType::Unassigned;
+        };
+        queue.remove(index).expect("position is in the queue")
     }
 
     fn is_valid_point_type(&self, point_type: PointType, point: usize) -> bool {
@@ -521,7 +522,13 @@ impl MapBuilder {
         if node.row >= self.length - 3 && point_type == PointType::RestSite {
             return false;
         }
-        if node.row < 6 && matches!(point_type, PointType::RestSite | PointType::Elite) {
+        // Rest sites may stand from row five, elites only from row six.
+        let lowest_row = match point_type {
+            PointType::RestSite => 5,
+            PointType::Elite => 6,
+            _ => 0,
+        };
+        if node.row < lowest_row {
             return false;
         }
         if matches!(
@@ -773,24 +780,31 @@ impl MapBuilder {
         repaired
     }
 
+    /// Puts back what pruning took of one type. Pinned rows count for nothing;
+    /// the candidates are the modifiable monsters, shuffled, and — for every
+    /// type but Unknown — the modifiable unknowns after them, shuffled on
+    /// their own.
     fn repair_point_type(&mut self, point_type: PointType, target: usize) -> bool {
-        let present = self
-            .all_grid_points()
-            .into_iter()
-            .filter(|point| self.nodes[*point].point_type == point_type)
-            .count();
+        let modifiable_of = |this: &Self, of: PointType| -> Vec<usize> {
+            this.all_grid_points()
+                .into_iter()
+                .filter(|point| {
+                    this.nodes[*point].point_type == of && this.nodes[*point].can_modify
+                })
+                .collect()
+        };
+        let present = modifiable_of(self, point_type).len();
         let mut missing = target.saturating_sub(present);
         if missing == 0 {
             return false;
         }
-        let mut candidates: Vec<_> = self
-            .all_grid_points()
-            .into_iter()
-            .filter(|point| {
-                self.nodes[*point].point_type == PointType::Monster && self.nodes[*point].can_modify
-            })
-            .collect();
+        let mut candidates = modifiable_of(self, PointType::Monster);
         self.stable_shuffle_points(&mut candidates);
+        if point_type != PointType::Unknown {
+            let mut unknowns = modifiable_of(self, PointType::Unknown);
+            self.stable_shuffle_points(&mut unknowns);
+            candidates.extend(unknowns);
+        }
         let mut repaired = false;
         for point in candidates {
             if missing == 0 {

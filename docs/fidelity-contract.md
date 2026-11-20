@@ -12,9 +12,9 @@ wins and the disagreement is a defect.
 
 The only compatibility identity recognised is:
 
-- game version `v0.111.0`;
-- game commit `41cef1ea`, the short form the game reports at runtime;
-- model database hash `1568834832`.
+- game version `v0.113.1`;
+- game commit `d09d48e5`, the short form the game reports at runtime;
+- model database hash `1748280997`.
 
 The recorder reads all three from the running game and writes them into every
 trace header, so any recording verifies the pin without other sources. The
@@ -66,7 +66,7 @@ that would change it, so a recording of this baseline carries `random`.
 
 The CLI's `run` command takes a seed and an optional ascension and fills every
 other field from the baseline: the pinned compatibility id, standard mode, one
-player, no modifiers, `random` act one, and the unlock preset `v0111_0_veteran`.
+player, no modifiers, `random` act one, and the unlock preset `v0113_1_veteran`.
 A seed alone makes no parity claim; the baseline is what makes it one.
 
 ### Unlock profiles and presets

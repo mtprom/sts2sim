@@ -33,7 +33,7 @@ fn card(model_id: &str) -> CardFingerprint {
 ///
 /// The beetle is healthy: nothing here ends the fight.
 fn a_catastrophe_over_a_screen() -> Simulator {
-    ScenarioBuilder::new("CATA", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+    ScenarioBuilder::new("CATA1", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
         .player_hp(80, 80)
         .energy(9, 9)
         .turn(1, 1)
@@ -97,7 +97,7 @@ fn a_catastrophe_that_plays_a_card_with_a_screen_has_not_won_the_fight() {
 /// stands, and it has been played by the time the answer settles.
 #[test]
 fn a_catastrophe_still_owes_its_second_play_after_the_screen() {
-    let mut simulator = ScenarioBuilder::new("CATA", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+    let mut simulator = ScenarioBuilder::new("CATA1", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
         .player_hp(80, 80)
         .energy(9, 9)
         .turn(1, 1)

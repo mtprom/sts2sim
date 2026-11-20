@@ -1229,9 +1229,6 @@ pub enum EventGeneration {
         #[serde(default)]
         keepsake_cards: Vec<ModelId>,
     },
-    /// Vakuu's page: each pool is shuffled and the first relic of each is
-    /// offered.
-    ShuffledRelicPools { pools: Vec<Vec<ModelId>> },
     /// The Colorful Philosophers' page: a list laid out in the build's own
     /// order, cut down to at most `keep` by removing one entry at a rolled
     /// index at a time. Each removal reads one value, so a list already short

@@ -80,7 +80,7 @@ fn the_reference_seed_generates_the_same_run_at_every_level_but_for_the_rules() 
         (7, 64, 2, 11, 8, None),
         (8, 64, 2, 11, 8, None),
         (9, 64, 2, 11, 8, None),
-        (10, 64, 2, 11, 8, Some("ENCOUNTER.QUEEN_BOSS")),
+        (10, 64, 2, 11, 8, Some("ENCOUNTER.AEONGLASS_BOSS")),
     ];
     for (ascension, hp, potions, deck, elites, second_boss) in expected {
         let simulator = run_at(ascension);
@@ -147,11 +147,10 @@ fn the_reference_seed_generates_the_same_run_at_every_level_but_for_the_rules() 
 /// Elites, and five multiplied by one below it, each rounded: eight points
 /// rather than five, on a map laid out by exactly the same dice.
 ///
-/// Three more elites have to stand somewhere. The shops, the unknown points and
-/// the forced treasure row are untouched, but a map that cannot hold both loses
-/// rest sites to them, because the repair pass tops the types back up in the
-/// order shop, elite, rest site, unknown and the elites are
-/// repaired first. The last act of this seed is such a map.
+/// Three more elites have to stand somewhere. On this seed the shops, the
+/// unknown points and the rest sites keep their counts; the treasure row,
+/// pinned but prunable, does not, because pruning compares segments by their
+/// point types.
 #[test]
 fn swarming_elites_puts_eight_elite_points_on_a_map_that_carried_five() {
     let baseline = run_at(0);
@@ -174,12 +173,15 @@ fn swarming_elites_puts_eight_elite_points_on_a_map_that_carried_five() {
     for family in [
         MapPointType::Shop,
         MapPointType::Unknown,
-        MapPointType::Treasure,
+        MapPointType::RestSite,
     ] {
         assert_eq!(count(below, family), count(at, family), "{family:?} points");
     }
-    assert_eq!(count(below, MapPointType::RestSite), [8, 11, 8]);
-    assert_eq!(count(at, MapPointType::RestSite), [8, 11, 8]);
+    assert_eq!(count(below, MapPointType::RestSite), [8, 10, 7]);
+    // Pruning keys duplicate segments on their point types, so the extra
+    // elites change which pinned treasure points survive it.
+    assert_eq!(count(below, MapPointType::Treasure), [3, 4, 3]);
+    assert_eq!(count(at, MapPointType::Treasure), [4, 4, 3]);
 }
 
 // --- 2: Weary Traveler ----------------------------------------------------

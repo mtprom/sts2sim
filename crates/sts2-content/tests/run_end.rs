@@ -119,7 +119,7 @@ fn replay_abstracts_architect_dialogue_without_changing_state_or_winning_early()
 fn architect_dialogue_still_checks_health_rng_and_event_identity() {
     for pointer in [
         "/players/0/current_hp",
-        "/players/0/rng/counters/rewards",
+        "/players/0/rng/rngs/rewards/counter",
         "/choices/events/0/event_id",
     ] {
         let mut adapter = replay_at_architect();

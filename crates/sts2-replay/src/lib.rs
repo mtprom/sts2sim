@@ -502,10 +502,11 @@ pub fn validate_stream<R: BufRead>(
     Ok(summary)
 }
 
-/// The state projection the pinned build's recorder writes. Version 2 is
-/// version 1 with each RNG stream's four generator words and counter beside
-/// its draw count, which the v0.111.0 build saves in place of a seed.
-pub const PROJECTION_VERSION: u64 = 2;
+/// The state projection the pinned build's recorder (0.21.0) writes. It calls
+/// itself version 1: each RNG stream is `{counter, state: [four generator
+/// words]}` under `rngs`, the form the v0.113.1 save uses. The v0.111.0
+/// beta recorder's version 2 (`counters` beside `states`) is not accepted.
+pub const PROJECTION_VERSION: u64 = 1;
 
 /// Validates a projection's embedded digest, accepting both the legacy Rust
 /// encoding and the C# recorder's encoding of canonical wire values.
@@ -766,9 +767,9 @@ mod tests {
              [FormatVersion \"1\"]\n\
              [RecorderVersion \"test\"]\n\
              [RunId \"run\"]\n\
-             [GameVersion \"v0.111.0\"]\n\
-             [GameCommit \"41cef1ea\"]\n\
-             [ModelIdHash \"1568834832\"]\n\
+             [GameVersion \"v0.113.1\"]\n\
+             [GameCommit \"d09d48e5\"]\n\
+             [ModelIdHash \"1748280997\"]\n\
              [Seed \"ABC\"]\n\
              [Mode \"STANDARD\"]\n\
              [Ascension \"0\"]\n\
@@ -817,7 +818,7 @@ mod tests {
     fn format_two_uses_the_same_build_and_mode_compatibility_checks() {
         let input = minimal("", "{}").replace("[FormatVersion \"1\"]", "[FormatVersion \"2\"]");
         validate_compatibility(&Parser::new(Cursor::new(&input)).unwrap()).unwrap();
-        let unsupported = input.replace("41cef1ea", "unsupported");
+        let unsupported = input.replace("d09d48e5", "unsupported");
         assert_eq!(
             validate_compatibility(&Parser::new(Cursor::new(unsupported)).unwrap())
                 .unwrap_err()

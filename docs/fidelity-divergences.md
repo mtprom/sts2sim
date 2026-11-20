@@ -188,6 +188,61 @@ rather than a state the build settles on, and it is not replayed past it.
 observation is recorder timing, not run state, and a recorder that snapshots
 after the settle records the reading this simulator gives.
 
+## v0.113.1 content the foundation port does not carry yet
+
+**The build.** v0.113.1 adds the Fool (cards, relics, potions, powers, arrows,
+melody, tarot), five events (Museum of Torture in every act's shared list,
+Shrine of the Warlord and Thermae Nonupeipe in Glory, Waterfall of Obvious
+Secrets and Wuppy in Trouble in Underdocks), the Blitz and Dread modes, and the
+balance changes listed in `BETA_113_DIFF_INVENTORY.md`.
+
+**This simulator.** The build identity, every RNG stream move, the new shuffle
+and stable-shuffle order, merchant and event relic streams, and map generation
+are ported. The Fool has no loadout, so a Fool run is refused at generation
+(`InvalidConfig: players`). The five events are not on the act lists, so each
+act's event pool is shuffled from a shorter list and diverges from its first
+entry. Blitz and Dread are refused as unsupported modes.
+
+**Whether it can reach a conformance claim.** Yes: a recording reaching any of
+these fails, at run start for the Fool and the event lists. Checked outside the
+suite against the three Fool recordings of 2026-11-14 and 2026-11-17 with a
+stand-in character: run and player RNG, the Neow page, and the act 1, 2 and 3
+maps agree with the recording; the act event lists differ only by the missing
+events.
+
+**What would change this.** The content, Fool and modes work packages.
+
+## Two copies of a card that differ only in a variable this engine does not grow
+
+**The build.** `CardModel.CompareTo`, the stable-shuffle sort, breaks ties on
+every dynamic variable's base value in ordinal key order.
+
+**This simulator.** Only the variables this engine grows per copy are read: a
+saved `CurrentBlock` or `CurrentDamage`, and the combat copy's damage bonus.
+
+**Whether it can reach a conformance claim.** Only if a mechanic changes some
+other per-copy variable and two such copies of one model, upgrade, enchantment,
+affliction, cost and replay count share a shuffled pile. No registered content
+does; the Fool's cards may.
+
+**What would change this.** Read the remaining variables when content stores
+one per copy (`shortcut:` in `dynamic_base_values`).
+
+## The veteran preset assumes every v0.113.1 epoch revealed
+
+**The build.** Pools and characters are gated by revealed epochs.
+
+**This simulator.** `v0113_1_veteran` is the v0.111.0 preset plus all nine new
+epochs. Mac's recorded profile reveals 59 of 66 (no Dread or `FOOL2`..`FOOL7`),
+so replay of his recordings is refused with "content pools require all pinned
+epochs revealed" until a preset matching his profile is registered.
+
+**Whether it can reach a conformance claim.** Yes, as a refusal, never as a
+silent approximation.
+
+**What would change this.** Register a preset cut from Mac's profile once the
+partly unlocked Fool pool is implemented.
+
 ## Not on this list
 
 **A potion offer the belt has no room for is not a divergence.** The build

@@ -490,10 +490,10 @@ fn one_card_of_the_discard_back() -> Command {
 }
 
 /// An Uproar's second half: the draw pile's playable attacks, stably shuffled
-/// on the run's shuffle stream, and the first of them played for free. The
-/// build writes a second list where the first is empty — every attack, playable
-/// or not — and a shuffle over an empty list reads no dice, so the fallback
-/// costs nothing of its own.
+/// on the combat card-selection stream, and the first of them played for free.
+/// The build writes a second list where the first is empty — every attack,
+/// playable or not — and shuffles that too; each shuffle reads one draw, empty
+/// or not, so falling back costs two.
 fn play_an_attack_off_the_draw_pile() -> Command {
     Command::Select {
         cards: CardSelector::StablyShuffledFromPile {
@@ -501,7 +501,7 @@ fn play_an_attack_off_the_draw_pile() -> Command {
             filter: CardFilter::PlayableOfType(CardType::Attack),
             fallback: Some(CardFilter::OfType(CardType::Attack)),
             take: Amount::Fixed(1),
-            stream: ShuffleStream::Shuffle,
+            stream: ShuffleStream::CombatCardSelection,
         },
         then: vec![Command::Card(CardCmd::AutoPlay {
             cards: CardSelector::Chosen,

@@ -2204,8 +2204,8 @@ pub(crate) fn offered_colorless_cards() -> Vec<CardDefinition> {
 }
 
 /// Beat Down, played: playable attacks of the discard pile, put in canonical
-/// order and shuffled on the shuffle stream, played one after another without
-/// being chosen.
+/// order and shuffled on the combat card-selection stream, played one after
+/// another without being chosen.
 fn beat_down(count: i32) -> Command {
     Command::Select {
         cards: CardSelector::StablyShuffledFromPile {
@@ -2213,7 +2213,7 @@ fn beat_down(count: i32) -> Command {
             filter: CardFilter::PlayableOfType(CardType::Attack),
             fallback: None,
             take: Amount::Fixed(count),
-            stream: sts2_engine::ShuffleStream::Shuffle,
+            stream: sts2_engine::ShuffleStream::CombatCardSelection,
         },
         then: vec![Command::Card(CardCmd::AutoPlay {
             at_the_bodys_target: false,
@@ -2283,9 +2283,9 @@ fn returns_to_hand(mut definition: CardDefinition) -> CardDefinition {
 
 /// Catastrophe, played: a card of the draw pile, played without being chosen,
 /// as many times as the card says. The build takes the playable cards, puts
-/// them in canonical order, shuffles on the shuffle stream and takes the first;
-/// only where there is no playable card at all does it fall back to the whole
-/// pile.
+/// them in canonical order, shuffles on the combat card-selection stream and
+/// takes the first; only where there is no playable card at all does it fall
+/// back to the whole pile, shuffled again.
 fn catastrophe(times: i32) -> Command {
     Command::Repeat {
         times: Amount::Fixed(times),
@@ -2306,7 +2306,7 @@ fn catastrophe(times: i32) -> Command {
                     filter: CardFilter::Playable,
                     fallback: Some(CardFilter::Any),
                     take: Amount::Fixed(1),
-                    stream: sts2_engine::ShuffleStream::Shuffle,
+                    stream: sts2_engine::ShuffleStream::CombatCardSelection,
                 },
                 then: vec![Command::Card(CardCmd::AutoPlay {
                     at_the_bodys_target: false,

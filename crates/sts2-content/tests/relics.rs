@@ -2803,6 +2803,14 @@ fn niche_counter(simulator: &Simulator) -> u64 {
     simulator.state().rng.stream(RunStream::Niche).counter()
 }
 
+fn non_combat_counter(simulator: &Simulator) -> u64 {
+    simulator
+        .state()
+        .player_rng
+        .stream(sts2_rng::PlayerStream::NonCombatGeneration)
+        .counter()
+}
+
 fn transformations_counter(simulator: &Simulator) -> u64 {
     simulator
         .state()
@@ -2834,6 +2842,7 @@ fn a_pandoras_box_rolls_every_starter_card_anew() {
         .count();
     assert!(starters > 0, "the starting deck holds starter cards");
     let niche = niche_counter(&simulator);
+    let transformations = transformations_counter(&simulator);
     take_the_treasure(&mut simulator);
     let after = deck_models(&simulator);
     assert_eq!(after.len(), before.len(), "one card in, one card out");
@@ -2843,12 +2852,15 @@ fn a_pandoras_box_rolls_every_starter_card_anew() {
             .any(|model| model.starts_with("CARD.STRIKE") || model.starts_with("CARD.DEFEND")),
         "no starter card is left"
     );
-    // One roll per card, all of them on the run's niche stream.
-    assert_eq!(niche_counter(&simulator), niche + starters as u64);
+    // One roll per card, all of them on the player's transformations stream.
     assert_eq!(
         transformations_counter(&simulator),
-        0,
-        "a box rolls nothing on the player's own stream"
+        transformations + starters as u64
+    );
+    assert_eq!(
+        niche_counter(&simulator),
+        niche,
+        "the niche stream is untouched"
     );
     // What is left of the old deck keeps its order, and the replacements stand
     // behind it.
@@ -2990,7 +3002,7 @@ fn the_two_rolled_transform_relics_differ_only_in_the_upgrade() {
     for (relic, count, upgraded) in [("RELIC.ASTROLABE", 3, true), ("RELIC.NEW_LEAF", 1, false)] {
         let mut simulator = run_holding_with_treasure(&[], relic);
         let before = deck_models(&simulator);
-        let niche = niche_counter(&simulator);
+        let niche = transformations_counter(&simulator);
         take_the_treasure(&mut simulator);
         let sts2_engine::DecisionContext::ChooseCards {
             choice_id,
@@ -3004,7 +3016,11 @@ fn the_two_rolled_transform_relics_differ_only_in_the_upgrade() {
         simulator
             .step(Action::ChooseCards { choice_id, cards })
             .expect("the choice applies");
-        assert_eq!(niche_counter(&simulator), niche + count as u64, "{relic}");
+        assert_eq!(
+            transformations_counter(&simulator),
+            niche + count as u64,
+            "{relic}"
+        );
         let deck = &simulator.state().run_player.deck;
         assert_eq!(deck.len(), before.len(), "{relic}");
         for card in &deck[deck.len() - count..] {
@@ -3342,10 +3358,10 @@ fn a_whispering_earring_plays_the_opening_turn_for_its_owner() {
         .combat
         .as_ref()
         .expect("a fight is standing");
-    // The burst stops where the pool runs out, which is what each play is
-    // gated on: four points of energy against a hand of one-cost cards.
-    assert_eq!(combat.player.piles.hand.len(), 2);
-    assert_eq!(combat.player.card_plays_finished, 3);
+    // The burst stops where the pool or the hand runs out: four points of
+    // energy against a dealt hand of one free Bully and four one-cost cards.
+    assert_eq!(combat.player.piles.hand.len(), 0);
+    assert_eq!(combat.player.card_plays_finished, 5);
     assert_eq!(combat.player.energy, 0, "and paid for out of the pool");
     // Nothing is owed on any turn but the first.
     let plain = fight_from_run(&[]);
@@ -3578,7 +3594,7 @@ fn the_ancients_that_upgrade_the_deck() {
     // A sand castle asks nobody: it shuffles the deck's upgradable cards on the
     // run's niche stream and upgrades the first six.
     let mut simulator = run_holding_with_treasure(&[], "RELIC.SAND_CASTLE");
-    let niche = niche_counter(&simulator);
+    let niche = non_combat_counter(&simulator);
     take_the_treasure(&mut simulator);
     assert!(
         !matches!(
@@ -3598,7 +3614,7 @@ fn the_ancients_that_upgrade_the_deck() {
         6
     );
     assert!(
-        niche_counter(&simulator) > niche,
+        non_combat_counter(&simulator) > niche,
         "the shuffle is rolled for"
     );
 }
@@ -4115,11 +4131,15 @@ fn a_fishing_rod_answers_every_third_monster_room() {
     }
     let mut third = Simulator::from_generated_state(state, sts2_content::standard_registry())
         .expect("the run rebuilds");
-    let niche = niche_counter(&third);
+    let niche = non_combat_counter(&third);
     win_the_fight(&mut third);
     assert_eq!(relic_counter(&third, "RELIC.FISHING_ROD"), 3);
     assert_eq!(upgraded(&third), 1);
-    assert_eq!(niche_counter(&third), niche + 1, "the card is rolled for");
+    assert_eq!(
+        non_combat_counter(&third),
+        niche + 1,
+        "the card is rolled for"
+    );
 
     // An elite room is not a monster room, so nothing is counted.
     let mut elite = run_winning(&["RELIC.FISHING_ROD"], MapPointType::Elite);
@@ -4697,7 +4717,7 @@ fn the_relics_that_ask_which_cards_to_enchant() {
 #[test]
 fn a_beautiful_bracelet_picks_four_cards_itself() {
     let mut simulator = run_holding_with_treasure(&[], "RELIC.BEAUTIFUL_BRACELET");
-    let niche = niche_counter(&simulator);
+    let niche = non_combat_counter(&simulator);
     take_the_treasure(&mut simulator);
     assert!(
         !matches!(
@@ -4717,22 +4737,22 @@ fn a_beautiful_bracelet_picks_four_cards_itself() {
             .all(|held| held.model_id == id("ENCHANTMENT.SWIFT") && held.amount == 2)
     );
     assert!(
-        niche_counter(&simulator) > niche,
-        "the shuffle read the niche stream"
+        non_combat_counter(&simulator) > niche,
+        "the shuffle read the non-combat-generation stream"
     );
 }
 
-/// A royal stamp approves one card, and reads the niche stream once for the
-/// shuffle the build hands the screen.
+/// A royal stamp approves one card, and reads the non-combat-generation stream
+/// for the shuffle the build hands the screen.
 #[test]
-fn a_royal_stamp_approves_one_card_and_reads_the_niche_stream() {
+fn a_royal_stamp_approves_one_card_and_reads_its_stream() {
     let mut simulator = run_holding_with_treasure(&[], "RELIC.ROYAL_STAMP");
-    let niche = niche_counter(&simulator);
+    let niche = non_combat_counter(&simulator);
     take_and_enchant(&mut simulator, &[0]);
     assert_eq!(deck_carrying(&simulator, "ENCHANTMENT.ROYALLY_APPROVED"), 1);
     assert!(
-        niche_counter(&simulator) > niche,
-        "the candidates were shuffled on the niche stream before the screen"
+        non_combat_counter(&simulator) > niche,
+        "the candidates were shuffled on the non-combat-generation stream before the screen"
     );
 }
 
@@ -4840,6 +4860,14 @@ fn the_relics_that_enchant_a_card_reward() {
         "enchanting all of them rolls nothing"
     );
 
+    // The charm's roll is on the rewards stream, which the reward itself also
+    // reads, so it is measured against the same win without the charm.
+    let rewards_read = |relics: &[&str]| {
+        let mut simulator = run_winning_a_fight(relics, true);
+        let before = rewards_counter(&simulator);
+        win_the_fight(&mut simulator);
+        rewards_counter(&simulator) - before
+    };
     let mut simulator = run_winning_a_fight(&["RELIC.WING_CHARM"], true);
     let niche = niche_counter(&simulator);
     win_the_fight(&mut simulator);
@@ -4858,8 +4886,13 @@ fn the_relics_that_enchant_a_card_reward() {
     );
     assert_eq!(
         niche_counter(&simulator),
-        niche + 1,
-        "and which one is a roll on the niche stream"
+        niche,
+        "the niche stream is untouched"
+    );
+    assert_eq!(
+        rewards_read(&["RELIC.WING_CHARM"]),
+        rewards_read(&[]) + 1,
+        "and which one is a roll on the rewards stream"
     );
 }
 
@@ -6343,7 +6376,7 @@ fn a_lizard_tail_turns_one_death_away() {
 fn a_distinguished_cape_charges_two_curses_for_three_apparitions() {
     let mut simulator = run_holding_with_treasure(&[], "RELIC.DISTINGUISHED_CAPE");
     let deck_before = simulator.state().run_player.deck.len();
-    let niche_before = niche_counter(&simulator);
+    let niche_before = non_combat_counter(&simulator);
     take_from_the_chest(&mut simulator);
     let deck = &simulator.state().run_player.deck;
     assert_eq!(deck.len(), deck_before + 5);
@@ -6380,7 +6413,7 @@ fn a_distinguished_cape_charges_two_curses_for_three_apparitions() {
         ]
     );
     assert_eq!(
-        niche_counter(&simulator) - niche_before,
+        non_combat_counter(&simulator) - niche_before,
         2,
         "one draw per curse and nothing else"
     );
@@ -7610,6 +7643,7 @@ fn a_data_disk_pays_focus_on_the_way_in() {
 /// the first turn opens.
 #[test]
 fn a_power_cell_deals_the_free_cards_up_front() {
+    const SKIP: u64 = 13;
     let hand_of = |simulator: &Simulator| {
         simulator
             .state()
@@ -7625,8 +7659,22 @@ fn a_power_cell_deals_the_free_cards_up_front() {
     };
     // The run's deck is the fixture's, and one card of it — a bully — costs
     // nothing; the relic takes up to two such and the draw is dealt around it.
-    let plain = hand_of(&defect_fight_from_run(&[]));
-    let celled = hand_of(&defect_fight_from_run(&["RELIC.POWER_CELL"]));
+    // The shuffle stream is moved on so the plain deal leaves the bully in
+    // the draw pile.
+    let fight = |relics: &[&str]| {
+        let mut state = run_holding(relics).state().clone();
+        state
+            .rng
+            .stream_mut(RunStream::Shuffle)
+            .fast_forward(SKIP)
+            .unwrap();
+        let mut simulator =
+            Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        walk_to(&mut simulator, 3);
+        simulator
+    };
+    let plain = hand_of(&fight(&[]));
+    let celled = hand_of(&fight(&["RELIC.POWER_CELL"]));
     assert!(!plain.contains(&"CARD.BULLY".to_owned()));
     assert!(celled.contains(&"CARD.BULLY".to_owned()));
     assert_eq!(celled.len(), plain.len() + 1);
@@ -8253,13 +8301,14 @@ fn a_card_offer_whose_sacrifice_pays_a_wing_charm() -> Simulator {
 /// The sacrifice is the one path that obtains a relic from inside an open pick
 /// screen, and the offer is still listening when it does: the charm it pulls
 /// runs its card-reward body over the very offer being thrown away, and reads
-/// its niche draw doing it. The cards go unpicked either way; the draw is what
+/// its rewards-stream draw doing it. The cards go unpicked either way; the draw is what
 /// survives.
 #[test]
 fn a_wing_charm_a_sacrifice_pulls_reads_its_draw_over_the_offer_it_throws_away() {
     let mut simulator = a_card_offer_whose_sacrifice_pays_a_wing_charm();
     claim_reward_at(&mut simulator, 0);
     let niche = niche_counter(&simulator);
+    let rewards = rewards_counter(&simulator);
     let sacrifice = simulator
         .legal_actions()
         .iter()
@@ -8283,8 +8332,13 @@ fn a_wing_charm_a_sacrifice_pulls_reads_its_draw_over_the_offer_it_throws_away()
     );
     assert_eq!(
         niche_counter(&simulator),
-        niche + 1,
-        "the charm rolls which card of the standing offer takes its swift"
+        niche,
+        "the niche stream is untouched"
+    );
+    assert_eq!(
+        rewards_counter(&simulator),
+        rewards + 2,
+        "the pulled relic's rarity, then the charm's roll for which card takes its swift"
     );
 }
 

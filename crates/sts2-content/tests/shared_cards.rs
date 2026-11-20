@@ -2068,15 +2068,16 @@ fn an_entropy_puts_its_power_on_and_nothing_else() {
     );
 
     // A seed at which the two filters part ways: with the combat-ineligible
-    // cards taken out ahead of the roll, the transform lands on Radiate
-    // rather than Refine Blade.
-    let mut transformed = ScenarioBuilder::new("ZPBUDFAA0L", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+    // cards taken out ahead of the roll on the combat card-generation stream,
+    // the transform lands on Seeking Edge; over the unfiltered pool the same
+    // draw would land on Royalties itself.
+    let mut transformed = ScenarioBuilder::new("ENTR19", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
         .played_as(id("CHARACTER.REGENT"))
         .player_hp(75, 75)
         .energy(3, 3)
         .turn(3, 3)
         .rng_counter(RunStream::MonsterAi, 0)
-        .rng_counter(RunStream::CombatCardSelection, 0)
+        .rng_counter(RunStream::CombatCardGeneration, 0)
         .power(
             0,
             id("POWER.ENTROPY_POWER"),
@@ -2090,7 +2091,7 @@ fn an_entropy_puts_its_power_on_and_nothing_else() {
     end_turn(&mut transformed);
     assert_eq!(
         pile(&transformed, PileName::Hand),
-        ["CARD.RADIATE"],
+        ["CARD.SEEKING_EDGE"],
         "the combat-ineligible Royalties is removed before this roll"
     );
     assert_eq!(

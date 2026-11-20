@@ -355,7 +355,7 @@ mod tests {
     #[test]
     fn stable_card_id_commands_drive_the_fixture_line() {
         let mut simulator = sts2_content::shrinker_beetle_fixture().unwrap();
-        let commands = b"play 4\nplay 3\nplay 1\nend\nplay 6\nplay 7\nend\nplay 6\nplay 4\nclaim 0\nclaim 1\nclaim 2\nchoose 11\nproceed\n";
+        let commands = b"play 4\nplay 3\nplay 1\nend\nplay 6\nplay 7\nend\nplay 6\nplay 3\nclaim 0\nclaim 1\nclaim 2\nchoose 11\nproceed\n";
         let mut output = Vec::new();
         let result = run(&mut simulator, &commands[..], &mut output, false).unwrap();
         assert_eq!(result, Some(RunResult::Victory));
