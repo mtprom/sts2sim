@@ -1270,7 +1270,7 @@ fn the_deprecated_potion_pool_holds_only_the_stand_in() {
 /// and nothing else. It is what an offer of another colour is rolled out of, so
 /// a shared pool leaking into it would put a status or a token on the shelf.
 #[test]
-fn only_the_five_colours_are_character_card_pools() {
+fn only_the_six_colours_are_character_card_pools() {
     let content = sts2_content::standard_registry();
     let pools: Vec<String> = content
         .character_card_pools()
@@ -1281,6 +1281,7 @@ fn only_the_five_colours_are_character_card_pools() {
         pools,
         [
             "CARD_POOL.DEFECT_CARD_POOL",
+            "CARD_POOL.FOOL_CARD_POOL",
             "CARD_POOL.IRONCLAD_CARD_POOL",
             "CARD_POOL.NECROBINDER_CARD_POOL",
             "CARD_POOL.REGENT_CARD_POOL",
