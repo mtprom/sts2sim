@@ -619,7 +619,7 @@ mod tests {
             text,
             "{sequence} state.observe {}",
             json!({
-                "after":sequence-1,"context":"action.settled","projection_version":2,
+                "after":sequence-1,"context":"action.settled","projection_version":1,
                 "digest":sts2_replay::projection_digest(state).unwrap(),"state":state
             })
         )
@@ -646,7 +646,7 @@ mod tests {
                 json!({
                     "base":7,
                     "patch":[["set",["players"],state["players"]],["set",["run","total_floor"],20]],
-                    "observation":{"after":7,"context":"action.settled","projection_version":2,
+                    "observation":{"after":7,"context":"action.settled","projection_version":1,
                         "digest":sts2_replay::projection_digest(&state).unwrap()}
                 })
             )

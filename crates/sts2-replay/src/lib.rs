@@ -502,10 +502,11 @@ pub fn validate_stream<R: BufRead>(
     Ok(summary)
 }
 
-/// The state projection the pinned build's recorder writes. Version 2 is
-/// version 1 with each RNG stream's four generator words and counter beside
-/// its draw count, which the v0.111.0 build saves in place of a seed.
-pub const PROJECTION_VERSION: u64 = 2;
+/// The state projection the pinned build's recorder (0.21.0) writes. It calls
+/// itself version 1: each RNG stream is `{counter, state: [four generator
+/// words]}` under `rngs`, the form the v0.113.1 save uses. The v0.111.0
+/// beta recorder's version 2 (`counters` beside `states`) is not accepted.
+pub const PROJECTION_VERSION: u64 = 1;
 
 /// Validates a projection's embedded digest, accepting both the legacy Rust
 /// encoding and the C# recorder's encoding of canonical wire values.
