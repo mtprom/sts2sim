@@ -4115,6 +4115,9 @@ pub struct ValueContext {
     pub props: crate::ValueProps,
     /// The card the value came from.
     pub card: Option<CardInstanceId>,
+    /// Turn and started-play ordinal, absent for card-sourced non-play effects.
+    #[serde(default)]
+    pub card_play: Option<(u32, u64)>,
     /// The power a power-received pass is carrying, and how much of it is on
     /// its way.
     pub power: Option<(ModelId, i32)>,
@@ -4746,6 +4749,7 @@ pub struct DamageFrame {
     pub targets: Vec<CreatureCombatId>,
     pub dealer: Option<CreatureCombatId>,
     pub card: Option<CardInstanceId>,
+    pub card_play: Option<(u32, u64)>,
     pub props: crate::ValueProps,
     /// The value the caller worked out once, before the call.
     pub amount: i32,

@@ -321,8 +321,7 @@ parity blockers until the named hooks and distinguishing scenarios are added.
 - TODO(package 4): propagate the causing card through max-HP loss and death.
   Brightest Flame must bypass Buffer while still reporting its card source;
   Bone Shards and Sacrifice must identify their card when killing Osty.
-- TODO(package 4): distinguish real `CardPlay` damage from a card's other
-  effects when Lethality counts the current Attack; Shrink must ignore a
+- TODO(package 4): Shrink must ignore a
   player's death when removing itself on its applier's death. The generic
   applier-death cleanup currently does not distinguish a player applier.
 - TODO(package 4): transform results and dupe cloning need the new source/result identity

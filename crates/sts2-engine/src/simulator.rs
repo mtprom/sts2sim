@@ -10453,6 +10453,7 @@ impl Simulator {
             props: ValueProps::default(),
             card,
             power: Some((model_id.clone(), amount)),
+            card_play: None,
             applier: Some(applier),
             amount: 0,
             damage: None,
@@ -10519,6 +10520,7 @@ impl Simulator {
             props: ValueProps::default(),
             card: None,
             power: Some((model_id.clone(), amount)),
+            card_play: None,
             applier: None,
             amount: 0,
             damage: None,
@@ -11912,6 +11914,7 @@ impl Simulator {
                         props: *props,
                         amount,
                         results: Vec::new(),
+                        card_play: context.card_play,
                         announced: 0,
                         given: false,
                     },
@@ -12150,6 +12153,7 @@ impl Simulator {
                         targets,
                         dealer: context.owner,
                         card: context.card,
+                        card_play: context.card_play,
                         props: *props,
                         amount,
                         results: Vec::new(),
@@ -12524,6 +12528,7 @@ impl Simulator {
                     targets,
                     dealer: Some(source),
                     card: frame.context.card,
+                    card_play: frame.context.card_play,
                     props: frame.props,
                     amount: base,
                     results: Vec::new(),
@@ -12970,7 +12975,7 @@ impl Simulator {
                 let base = self.card_damage_var(&fingerprint, growth).unwrap_or(0);
                 let owner = self.combat()?.player.creature_id;
                 let modified =
-                    self.modify_damage_at(Some(owner), None, base, ValueProps::NONE, read)?;
+                    self.modify_damage_at(Some(owner), None, base, ValueProps::NONE, read, None)?;
                 for card in self.combat_mut()?.player.piles.all_cards_mut() {
                     if card.id == source {
                         card.damage_bonus += modified;
@@ -13568,7 +13573,7 @@ impl Simulator {
             (Some(upgrade), 1) => upgrade.effects.clone(),
             _ => definition.effects.clone(),
         };
-        let context = CommandContext::by(self.combat()?.player.creature_id)
+        let mut context = CommandContext::by(self.combat()?.player.creature_id)
             .at(target)
             .from_card(card_id);
         let announced_target = (self.card_target(&definition, &card.fingerprint)
@@ -13594,6 +13599,7 @@ impl Simulator {
                     &definition,
                     announced_target,
                 )?;
+                context.card_play = Some(self.started_play_identity()?);
                 won |= self.run_commands_to_end(&commands, &context, events)?;
                 if self.suspended() {
                     self.push_resume(Effect::Resume(Box::new(crate::ResumeFrame::AutoPlay(
@@ -21568,7 +21574,7 @@ impl Simulator {
         // what this copy has added to its own var.
         let unaimed_base = self.resolve_amount(&amount, &unaimed)? + growth;
         let unaimed_damage =
-            self.modify_damage_at(dealer, None, unaimed_base, props, Some(card_id))?;
+            self.modify_damage_at(dealer, None, unaimed_base, props, Some(card_id), None)?;
         preview.damage = Some(unaimed_damage);
         match self.card_target(&definition, fingerprint) {
             TargetType::AnyEnemy => {
@@ -21576,7 +21582,7 @@ impl Simulator {
                     let aimed = CommandContext::by(player_id).at(*target).from_card(card_id);
                     let base = self.resolve_amount(&amount, &aimed)? + growth;
                     let damage =
-                        self.modify_damage_at(dealer, Some(*target), base, props, Some(card_id))?;
+                        self.modify_damage_at(dealer, Some(*target), base, props, Some(card_id), None)?;
                     preview.aimed_damage.push(crate::AimedDamage {
                         combat_id: *target,
                         damage,
@@ -21599,6 +21605,7 @@ impl Simulator {
                         unaimed_base,
                         props,
                         Some(card_id),
+                        None,
                     )?;
                     match agreed {
                         None => agreed = Some(damage),
@@ -22838,7 +22845,7 @@ impl Simulator {
         props: ValueProps,
         card: Option<CardInstanceId>,
     ) -> Result<i32, EngineError> {
-        self.modify_damage_at(dealer, Some(target), base, props, card)
+        self.modify_damage_at(dealer, Some(target), base, props, card, None)
     }
 
     /// The same pass with nobody in the target's place: every listener that
@@ -22851,6 +22858,7 @@ impl Simulator {
         base: i32,
         props: ValueProps,
         card: Option<CardInstanceId>,
+        card_play: Option<(u32, u64)>,
     ) -> Result<i32, EngineError> {
         /// How many of the pass's own units make one point of damage.
         const HUNDREDTHS: i64 = 100;
@@ -22859,6 +22867,7 @@ impl Simulator {
             target,
             props,
             card,
+            card_play,
             power: None,
             applier: None,
             amount: 0,
@@ -23058,10 +23067,16 @@ impl Simulator {
             _ => definition.effects.clone(),
         };
         let owner = self.combat()?.player.creature_id;
-        let context = CommandContext::by(owner)
+        let mut context = CommandContext::by(owner)
             .at(target.unwrap_or(owner))
             .from_card(card_id);
+        context.card_play = Some(self.started_play_identity()?);
         Ok(Some((commands, context)))
+    }
+
+    fn started_play_identity(&self) -> Result<(u32, u64), EngineError> {
+        let player = &self.combat()?.player;
+        Ok((player.turn, u64::try_from(player.play_types_started_this_turn.len()).expect("play count fits u64")))
     }
 
     /// What a card's enchantment adds to the play, run once per play after the
@@ -23199,6 +23214,7 @@ impl Simulator {
             // Block off a card belongs to whoever played it, which is what
             // Dexterity tests against.
             dealer: card.and_then(|_| self.combat().ok().map(|combat| combat.player.creature_id)),
+            card_play: None,
             target: Some(target),
             props,
             card,
@@ -23253,6 +23269,7 @@ impl Simulator {
             target: Some(target),
             props,
             card,
+            card_play: None,
             power: None,
             applier: None,
             amount: 0,
@@ -24030,6 +24047,7 @@ impl Simulator {
                         targets: vec![creature],
                         dealer: None,
                         card: None,
+                        card_play: None,
                         props: crate::ValueProps::UNBLOCKABLE,
                         amount: excess,
                         results: Vec::new(),
@@ -24096,7 +24114,7 @@ impl Simulator {
                 continue;
             }
             let dealt =
-                self.modify_damage(frame.dealer, target, frame.amount, frame.props, frame.card)?;
+                self.modify_damage_at(frame.dealer, Some(target), frame.amount, frame.props, frame.card, frame.card_play)?;
             let settled =
                 self.apply_damage(frame.dealer, target, dealt, frame.props, frame.card, events)?;
             frame.results.extend(settled);
@@ -24132,6 +24150,7 @@ impl Simulator {
                 target: Some(target),
                 props,
                 card,
+                card_play: None,
                 power: None,
                 applier: None,
                 amount: 0,
@@ -24291,6 +24310,7 @@ impl Simulator {
                 target: Some(target),
                 props: frame.props,
                 card: frame.card,
+                card_play: frame.card_play,
                 power: None,
                 applier: None,
                 amount: 0,
@@ -25450,7 +25470,7 @@ impl Simulator {
                         .count(),
                 )
                 .unwrap_or(i64::MAX);
-                started <= i64::from(u8::from(in_play))
+                started <= i64::from(u8::from(in_play && value.card_play.is_some()))
             }
             crate::HookCondition::OwnersPetDealsPoweredDamageFromACard => {
                 !value.props.unpowered
@@ -31190,6 +31210,7 @@ mod card_view_sort_tests {
                     face: card.face.clone(),
                     preview: damage.map(|damage| KeyPreviewView {
                         damage: Some(damage),
+                        hits: None,
                         block: None,
                         aimed_damage: &[],
                         multi_target_damage: None,

@@ -113,3 +113,38 @@ fn thumbscrew_preview_matches_attack_hits() {
     play(&mut simulator);
     assert_eq!(simulator.state().combat.as_ref().unwrap().creatures[1].current_hp, 90);
 }
+
+/// Lethality's in-Play subtraction requires a supplied CardPlay. Merely
+/// identifying the same card source is not enough; replays never qualify.
+#[test]
+fn lethality_requires_a_real_play_for_the_current_attack_exception() {
+    use sts2_engine::{CardType, CommandContext, QueuedCommand};
+    for (has_play, replay, hp) in [(true, 0, 88), (false, 0, 94), (true, 1, 94)] {
+        let content = sts2_content::standard_registry();
+        let simulator = ScenarioBuilder::new("LETHALITY113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+            .player_hp(80, 80)
+            .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
+            .power(0, id("POWER.LETHALITY_POWER"), 100, PowerType::Buff)
+            .card(PileName::Play, 0, CardFingerprint::base(id("CARD.STRIKE_IRONCLAD")), 1)
+            .build(content.clone()).unwrap();
+        let mut state = simulator.state().clone();
+        let combat = state.combat.as_mut().unwrap();
+        combat.player.play_types_started_this_turn.push(CardType::Attack);
+        combat.played_card_play_index = replay;
+        let mut context = CommandContext::by(combat.player.creature_id)
+            .at(sts2_core::CreatureCombatId::from(1))
+            .from_card(sts2_core::CardInstanceId::from(0));
+        context.card_play = has_play.then_some((1, 1));
+        combat.queue.push_back(QueuedCommand::queued(
+            Command::Damage(DamageCmd::Attack {
+                amount: Amount::Fixed(6), hits: Amount::Fixed(1),
+                target: CreatureSelector::Target, props: ValueProps::NONE,
+            }),
+            context,
+        ));
+        let mut simulator = Simulator::from_scenario(state, content).unwrap();
+        let end = simulator.legal_actions().iter().find(|a| matches!(a, Action::EndTurn { .. })).unwrap().clone();
+        simulator.step(end).unwrap();
+        assert_eq!(simulator.state().combat.as_ref().unwrap().creatures[1].current_hp, hp);
+    }
+}

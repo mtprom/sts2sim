@@ -3146,6 +3146,9 @@ pub struct CommandContext {
     pub target: Option<CreatureCombatId>,
     /// The card the command came from.
     pub card: Option<CardInstanceId>,
+    /// The actual play that issued the command, not merely its card source.
+    #[serde(default)]
+    pub card_play: Option<(u32, u64)>,
     /// The power whose listener issued the command.
     pub power: Option<ModelId>,
     /// What the enclosing [`Command::WithAmount`] worked out, bound for the
