@@ -359,7 +359,7 @@ fn lovers_fills_hand_from_other_characters_and_upgrades_only_when_requested() {
                 .expect("generated model");
             assert_ne!(definition.visual_pool, Some(id("CARD_POOL.FOOL_CARD_POOL")));
             assert_eq!(card.fingerprint.upgrade_level, upgrade);
-            assert!(card.temporary_costs.is_empty());
+            assert_eq!(card.temporary_costs.len(), 0);
         }
     }
 }
@@ -477,22 +477,21 @@ fn tower_deals_its_multiplier_times_the_total_floor() {
 }
 
 #[test]
-fn missing_primitives_fail_explicitly_without_fake_effects() {
-    for (model, upgrade) in [("CARD.FOOLISH_SHOT", 0)] {
-        let mut sim = fight(model, upgrade, 0, 0, 100);
-        let action = sim
-            .legal_actions()
-            .iter()
-            .find(|action| {
-                matches!(
-                    action, Action::PlayCard { card, .. } if card.fingerprint.model_id == id(model)
-                )
-            })
-            .cloned()
-            .expect("registered playable card");
-        let error = sim.step(action).expect_err("unsupported body must fail");
-        assert_eq!(error.code, sts2_engine::ErrorCode::UnsupportedContent);
-    }
+fn foolish_shot_fails_explicitly_without_fake_effects() {
+    let mut sim = fight("CARD.FOOLISH_SHOT", 0, 0, 0, 100);
+    let action = sim
+        .legal_actions()
+        .iter()
+        .find(|action| {
+            matches!(
+                action, Action::PlayCard { card, .. }
+                    if card.fingerprint.model_id == id("CARD.FOOLISH_SHOT")
+            )
+        })
+        .cloned()
+        .expect("registered playable card");
+    let error = sim.step(action).expect_err("unsupported body must fail");
+    assert_eq!(error.code, sts2_engine::ErrorCode::UnsupportedContent);
 }
 
 #[test]

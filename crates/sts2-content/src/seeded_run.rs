@@ -27,6 +27,7 @@ struct Loadout {
     orb_slots: i32,
 }
 
+#[allow(clippy::too_many_lines, reason = "one literal per character")]
 fn loadout(character: &sts2_core::ModelId) -> Option<Loadout> {
     match character.to_string().as_str() {
         "CHARACTER.IRONCLAD" => Some(Loadout {
