@@ -85,6 +85,7 @@ fn power(model_id: &str, hooks: Vec<ModifierHook>) -> PowerDefinition {
         stops_draws_outside_hand_draw: false,
         keeps_hand: false,
         removed_when_applier_dies: false,
+        kept_when_player_applier_dies: false,
         keeps_owners_powers_on_death: false,
         survives_owner_death: false,
         redirects_owners_powered_attacks: false,

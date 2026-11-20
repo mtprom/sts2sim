@@ -36,6 +36,7 @@ fn power(model_id: &str, power_type: PowerType, stack_type: PowerStackType) -> P
         stops_draws_outside_hand_draw: false,
         keeps_hand: false,
         removed_when_applier_dies: false,
+        kept_when_player_applier_dies: false,
         keeps_owners_powers_on_death: false,
         survives_owner_death: false,
         redirects_owners_powered_attacks: false,
@@ -201,8 +202,10 @@ fn damage_shaping_powers() -> Vec<PowerDefinition> {
         // than nothing is the permanent kind and never wears off.
         PowerDefinition {
             allow_negative: true,
-            // A shrink comes off when whoever worked it goes down.
+            // A shrink comes off when whoever worked it goes down, unless that
+            // was the player.
             removed_when_applier_dies: true,
+            kept_when_player_applier_dies: true,
             hooks: vec![
                 scales_damage_dealt(70),
                 ModifierHook::every_turn(

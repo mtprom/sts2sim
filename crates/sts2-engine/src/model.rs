@@ -2055,6 +2055,10 @@ pub struct PowerDefinition {
     /// Guarded and the magic bomb do. A power that does not say so stays.
     #[serde(default)]
     pub removed_when_applier_dies: bool,
+    /// The applier-death removal ignores a player applier, which is what
+    /// Shrink's `AfterDeath` tests.
+    #[serde(default)]
+    pub kept_when_player_applier_dies: bool,
     /// The power answers for every power its owner carries when that owner
     /// dies, which is what an illusion does: a debuff goes, and everything
     /// else stays.

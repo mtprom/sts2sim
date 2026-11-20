@@ -189,3 +189,53 @@ fn lethality_requires_a_real_play_for_the_current_attack_exception() {
         82
     );
 }
+
+fn step_matching(simulator: &mut Simulator, wanted: impl Fn(&Action) -> bool) {
+    let action = simulator
+        .legal_actions()
+        .iter()
+        .find(|action| wanted(action))
+        .cloned()
+        .expect("legal action");
+    simulator.step(action).expect("step");
+}
+
+fn shrink_on(simulator: &Simulator, creature: usize) -> bool {
+    let creature = &simulator.state().combat.as_ref().unwrap().creatures[creature];
+    creature
+        .powers
+        .iter()
+        .any(|power| power.model_id == id("POWER.SHRINK_POWER"))
+}
+
+/// ShrinkPower.AfterDeath removes itself when its applier dies, unless that
+/// applier is a player. A monster applier's death takes it off the player.
+#[test]
+fn shrink_ignores_a_player_appliers_death() {
+    // A single player's death ends the combat before anything could read
+    // the power, so the player half is the definition's own flag.
+    let content = sts2_content::standard_registry();
+    let shrink = content.power(&id("POWER.SHRINK_POWER")).unwrap();
+    assert!(shrink.removed_when_applier_dies && shrink.kept_when_player_applier_dies);
+
+    let mut simulator =
+        ScenarioBuilder::new("SHRINKMONSTER113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+            .player_hp(80, 80)
+            .energy(3, 3)
+            .turn(1, 1)
+            .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 4, 100, "SHRINKER_MOVE")
+            .card(
+                PileName::Draw,
+                0,
+                CardFingerprint::base(id("CARD.STRIKE_IRONCLAD")),
+                1,
+            )
+            .build(sts2_content::standard_registry())
+            .expect("scenario");
+    step_matching(&mut simulator, |action| {
+        matches!(action, Action::EndTurn { .. })
+    });
+    assert!(shrink_on(&simulator, 0));
+    play(&mut simulator);
+    assert!(!shrink_on(&simulator, 0));
+}

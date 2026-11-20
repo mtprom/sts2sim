@@ -24548,6 +24548,7 @@ impl Simulator {
         // Only a power that says so comes off when whoever worked it dies:
         // `AfterDeath` testing whether the dead creature applied it. Nothing
         // else notices.
+        let player = self.combat()?.player.creature_id;
         let doomed: Vec<(usize, Vec<bool>)> =
             self.combat()?
                 .creatures
@@ -24564,7 +24565,11 @@ impl Simulator {
                                     .applier
                                     .is_some_and(|applier| removed.contains(&applier))
                                     && self.content.power(&power.model_id).is_some_and(
-                                        |definition| definition.removed_when_applier_dies,
+                                        |definition| {
+                                            definition.removed_when_applier_dies
+                                                && !(definition.kept_when_player_applier_dies
+                                                    && power.applier == Some(player))
+                                        },
                                     )
                             })
                             .collect(),
