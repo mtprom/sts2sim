@@ -2,14 +2,15 @@
 //! Bodies needing arrows, melodies or Stretch fail rather than approximate.
 
 use sts2_engine::{
-    Amount, CardDefinition, CardFilter, CardOrigin, CardPileCmd, CardPoolRef, CardRarity, CardType,
-    Command, Condition, Count, CreatureSelector, DrawPilePosition, HookCondition, HookEvent,
-    ModifierHook, OrbCmd, OrbSource, PileName, PlayerCmd, RelicDefinition, RelicRarity, TargetType,
-    TemporaryCost, ValueProps,
+    Amount, CardCmd, CardDefinition, CardFilter, CardOrigin, CardPileCmd, CardPoolRef, CardRarity,
+    CardSelectCmd, CardSelector, CardType, Command, Condition, Count, CreatureSelector,
+    DrawPilePosition, HookCondition, HookEvent, ModifierHook, OrbCmd, OrbSource, PileName,
+    PlayerCmd, RelicDefinition, RelicRarity, SelectorPrefs, TargetType, TemporaryCost, ValueProps,
 };
 
 use crate::cards::{
-    attack, block, card, dedefending, draw, exhausting, rarity, striking, sweep, upgrading,
+    attack, block, buff, card, debuff, defending, draw, exhausting, rarity, striking, sweep,
+    upgrading,
 };
 use crate::id;
 
@@ -214,6 +215,16 @@ pub(crate) const TOKENS: &[&str] = &[
     "CARD.THE_MAGICIAN",
     "CARD.THE_MOON",
     "CARD.THE_TOWER",
+    "CARD.STRENGTH",
+    "CARD.DEATH",
+    "CARD.TEMPERANCE",
+    "CARD.THE_DEVIL",
+    "CARD.THE_HERMIT",
+    "CARD.THE_LOVERS",
+    "CARD.THE_STAR",
+    "CARD.THE_SUN",
+    "CARD.THE_WORLD",
+    "CARD.WHEEL_OF_FORTUNE",
 ];
 
 pub(crate) fn song_bow() -> RelicDefinition {
@@ -269,6 +280,7 @@ fn timber(damage: i32, splash: i32) -> Command {
 pub(crate) fn cards() -> Vec<CardDefinition> {
     let mut implemented = first_ten();
     implemented.extend(second_ten());
+    implemented.extend(third_ten());
     let mut result: Vec<_> = POOL
         .iter()
         .filter(|(model, _, _, _)| !implemented.iter().any(|card| card.model_id == id(model)))
@@ -294,6 +306,7 @@ pub(crate) fn cards() -> Vec<CardDefinition> {
     result
 }
 
+#[allow(clippy::too_many_lines, reason = "one literal per card model")]
 fn first_ten() -> Vec<CardDefinition> {
     let mut status = card(
         "CARD.SADNESS",
@@ -543,6 +556,187 @@ fn second_ten() -> Vec<CardDefinition> {
             TargetType::AnyEnemy,
             vec![Command::Unsupported(id("CARD.THE_TOWER"))],
             vec![Command::Unsupported(id("CARD.THE_TOWER"))],
+        ),
+    ]
+}
+
+fn hand() -> CardSelector {
+    CardSelector::Pile {
+        pile: PileName::Hand,
+        filter: CardFilter::Any,
+    }
+}
+
+fn devil() -> Command {
+    Command::Select {
+        cards: hand(),
+        then: vec![Command::WithAmount {
+            amount: Amount::counting(Count::ChosenCards),
+            then: vec![
+                Command::Card(CardCmd::Exhaust {
+                    cards: CardSelector::Chosen,
+                }),
+                Command::CardPile(CardPileCmd::AutoPlayFromDrawPile {
+                    count: Amount::counting(Count::Bound),
+                    position: DrawPilePosition::Top,
+                    force_exhaust: false,
+                }),
+            ],
+        }],
+    }
+}
+
+fn hermit(draws: i32) -> Vec<Command> {
+    vec![
+        Command::CardSelect(CardSelectCmd::FromHandForDiscard {
+            prefs: SelectorPrefs::exactly(1),
+            maximum: None,
+            exact_count: None,
+            filter: CardFilter::Any,
+            then: vec![Command::When {
+                condition: Condition::ChosenCardIsOfType(CardType::Curse),
+                then: vec![Command::Card(CardCmd::Exhaust {
+                    cards: CardSelector::Chosen,
+                })],
+                otherwise: vec![Command::Card(CardCmd::Discard {
+                    cards: CardSelector::Chosen,
+                })],
+            }],
+        }),
+        draw(draws),
+    ]
+}
+
+fn lovers(upgraded: bool) -> Command {
+    Command::CardPile(CardPileCmd::AddGeneratedFromPool {
+        pool: CardPoolRef::EveryOtherCharacter,
+        count: Amount::counting(Count::SpaceLeftInHand),
+        distinct: false,
+        filter: CardFilter::Any,
+        pile: PileName::Hand,
+        position: DrawPilePosition::Bottom,
+        excludes_source: false,
+        upgraded,
+        temporary_cost: None,
+        ethereal: false,
+        rolled_one_at_a_time: false,
+    })
+}
+
+fn world(count: i32) -> Command {
+    Command::CardPile(CardPileCmd::MoveToPile {
+        cards: CardSelector::ShuffledFromPile {
+            pile: PileName::Discard,
+            filter: CardFilter::Any,
+            take: Amount::Least(vec![
+                Amount::Fixed(count),
+                Amount::counting(Count::SpaceLeftInHand),
+            ]),
+        },
+        pile: PileName::Hand,
+        position: DrawPilePosition::Bottom,
+    })
+}
+
+fn wheel(draws: i32) -> Command {
+    Command::When {
+        condition: Condition::CountAtLeast {
+            count: Count::CardsInPile(PileName::Hand),
+            at_least: 1,
+        },
+        then: vec![Command::Card(CardCmd::DiscardAndDraw {
+            cards: hand(),
+            count: Amount::Fixed(draws),
+        })],
+        otherwise: vec![draw(draws)],
+    }
+}
+
+fn third_ten() -> Vec<CardDefinition> {
+    vec![
+        tarot(
+            "CARD.STRENGTH",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            vec![buff("POWER.STRENGTH_POWER", 4)],
+            vec![buff("POWER.STRENGTH_POWER", 5)],
+        ),
+        tarot(
+            "CARD.DEATH",
+            CardType::Skill,
+            TargetType::AnyEnemy,
+            vec![debuff("POWER.DOOM_POWER", 75)],
+            vec![debuff("POWER.DOOM_POWER", 99)],
+        ),
+        tarot(
+            "CARD.TEMPERANCE",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            vec![block(30)],
+            vec![block(35)],
+        ),
+        tarot(
+            "CARD.THE_DEVIL",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            vec![devil()],
+            vec![Command::Unsupported(id("CARD.THE_DEVIL"))],
+        ),
+        tarot(
+            "CARD.THE_HERMIT",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            hermit(2),
+            hermit(3),
+        ),
+        tarot(
+            "CARD.THE_LOVERS",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            vec![lovers(false)],
+            vec![lovers(true)],
+        ),
+        tarot(
+            "CARD.THE_STAR",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            vec![
+                buff("POWER.ENERGY_NEXT_TURN_POWER", 3),
+                buff("POWER.DRAW_CARDS_NEXT_TURN_POWER", 3),
+            ],
+            vec![
+                buff("POWER.ENERGY_NEXT_TURN_POWER", 4),
+                buff("POWER.DRAW_CARDS_NEXT_TURN_POWER", 4),
+            ],
+        ),
+        tarot(
+            "CARD.THE_SUN",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            vec![
+                draw(2),
+                energy(2),
+                generate("CARD.SOOT", Amount::Fixed(1), PileName::Discard, false),
+            ],
+            vec![
+                draw(3),
+                energy(3),
+                generate("CARD.SOOT", Amount::Fixed(1), PileName::Discard, false),
+            ],
+        ),
+        tarot(
+            "CARD.THE_WORLD",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            vec![world(5)],
+            vec![world(7)],
+        ),
+        tarot(
+            "CARD.WHEEL_OF_FORTUNE",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            vec![wheel(7)],
+            vec![wheel(9)],
         ),
     ]
 }

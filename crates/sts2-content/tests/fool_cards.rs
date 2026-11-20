@@ -260,3 +260,278 @@ fn magician_adds_slots_before_channeling_and_moon_fills_only_empty_hand_slots() 
         );
     }
 }
+
+#[test]
+fn strength_death_temperance_and_star_apply_their_literal_values() {
+    for upgrade in [0, 1] {
+        let n = i32::from(upgrade);
+        let mut sim = fight("CARD.STRENGTH", upgrade, 0, 0, 100);
+        play(&mut sim, "CARD.STRENGTH");
+        assert_eq!(
+            creature(&sim, 0).power_amount("POWER.STRENGTH_POWER"),
+            4 + n
+        );
+        let mut sim = fight("CARD.DEATH", upgrade, 0, 0, 100);
+        play(&mut sim, "CARD.DEATH");
+        assert_eq!(creature(&sim, 1).current_hp, 100);
+        assert_eq!(
+            creature(&sim, 1).power_amount("POWER.DOOM_POWER"),
+            75 + 24 * n
+        );
+        let mut sim = fight("CARD.TEMPERANCE", upgrade, 0, 0, 100);
+        play(&mut sim, "CARD.TEMPERANCE");
+        assert_eq!(creature(&sim, 0).block, 30 + 5 * n);
+        let mut sim = fight("CARD.THE_STAR", upgrade, 0, 0, 100);
+        play(&mut sim, "CARD.THE_STAR");
+        assert_eq!(
+            creature(&sim, 0).power_amount("POWER.ENERGY_NEXT_TURN_POWER"),
+            3 + n
+        );
+        assert_eq!(
+            creature(&sim, 0).power_amount("POWER.DRAW_CARDS_NEXT_TURN_POWER"),
+            3 + n
+        );
+    }
+}
+
+#[test]
+fn devil_exhausts_the_snapshot_hand_then_autoplays_that_many_without_forced_exhaust() {
+    let mut sim = fight("CARD.THE_DEVIL", 0, 2, 3, 100);
+    play(&mut sim, "CARD.THE_DEVIL");
+    assert_eq!(pile(&sim, PileName::Hand).len(), 0);
+    assert_eq!(pile(&sim, PileName::Draw).len(), 1);
+    assert_eq!(pile(&sim, PileName::Discard), ["CARD.DEFEND_FOOL"; 2]);
+    assert_eq!(creature(&sim, 0).block, 10);
+    assert_eq!(
+        pile(&sim, PileName::Exhaust),
+        ["CARD.DEFEND_FOOL", "CARD.DEFEND_FOOL", "CARD.THE_DEVIL",]
+    );
+}
+
+#[test]
+fn hermit_exhausts_curses_but_discards_other_cards_before_drawing() {
+    for (chosen, destination) in [
+        ("CARD.INJURY", PileName::Exhaust),
+        ("CARD.DEFEND_FOOL", PileName::Discard),
+    ] {
+        for upgrade in [0, 1] {
+            let mut sim = scenario("CARD.THE_HERMIT", upgrade, 0, 4, 100)
+                .card(PileName::Hand, 50, CardFingerprint::base(id(chosen)), 0)
+                .build(sts2_content::standard_registry())
+                .expect("scenario builds");
+            play(&mut sim, "CARD.THE_HERMIT");
+            if let Some(choice) = sim
+                .legal_actions()
+                .iter()
+                .find(|action| {
+                    matches!(
+                        action, Action::ChooseCards { cards, .. } if cards.len() == 1
+                    )
+                })
+                .cloned()
+            {
+                sim.step(choice).expect("choose discard");
+            }
+            assert!(pile(&sim, destination).contains(&chosen.to_owned()));
+            assert_eq!(pile(&sim, PileName::Hand).len(), 2 + usize::from(upgrade));
+        }
+    }
+}
+
+#[test]
+fn lovers_fills_hand_from_other_characters_and_upgrades_only_when_requested() {
+    let registry = sts2_content::standard_registry();
+    for upgrade in [0, 1] {
+        let mut sim = fight("CARD.THE_LOVERS", upgrade, 7, 0, 100);
+        play(&mut sim, "CARD.THE_LOVERS");
+        let hand = &sim
+            .state()
+            .combat
+            .as_ref()
+            .expect("combat")
+            .player
+            .piles
+            .hand;
+        assert_eq!(hand.len(), 10);
+        for card in &hand[7..] {
+            let definition = registry
+                .card(&card.fingerprint.model_id)
+                .expect("generated model");
+            assert_ne!(definition.visual_pool, Some(id("CARD_POOL.FOOL_CARD_POOL")));
+            assert_eq!(card.fingerprint.upgrade_level, upgrade);
+            assert!(card.temporary_costs.is_empty());
+        }
+    }
+}
+
+#[test]
+fn sun_draws_then_grants_energy_and_puts_soot_in_discard() {
+    for upgrade in [0, 1] {
+        let mut sim = fight("CARD.THE_SUN", upgrade, 0, 4, 100);
+        play(&mut sim, "CARD.THE_SUN");
+        assert_eq!(pile(&sim, PileName::Hand).len(), 2 + usize::from(upgrade));
+        assert_eq!(
+            sim.state().combat.as_ref().expect("combat").player.energy,
+            11 + i32::from(upgrade)
+        );
+        assert_eq!(pile(&sim, PileName::Discard), ["CARD.SOOT"]);
+    }
+}
+
+#[test]
+fn world_moves_random_discard_cards_only_up_to_its_limit_and_free_space() {
+    for (upgrade, held, expected) in [(0, 0, 5), (1, 0, 7), (1, 8, 2)] {
+        let mut scenario = scenario("CARD.THE_WORLD", upgrade, held, 0, 100);
+        for index in 0..9 {
+            scenario = scenario.card(
+                PileName::Discard,
+                50 + index,
+                CardFingerprint::base(id("CARD.STRIKE_FOOL")),
+                0,
+            );
+        }
+        let mut sim = scenario
+            .build(sts2_content::standard_registry())
+            .expect("scenario builds");
+        play(&mut sim, "CARD.THE_WORLD");
+        assert_eq!(pile(&sim, PileName::Hand).len(), held + expected);
+        assert_eq!(pile(&sim, PileName::Discard).len(), 9 - expected);
+    }
+}
+
+#[test]
+fn wheel_draws_even_when_hand_is_empty_and_discards_otherwise() {
+    for upgrade in [0, 1] {
+        for held in [0, 2] {
+            let mut sim = fight("CARD.WHEEL_OF_FORTUNE", upgrade, held, 10, 100);
+            play(&mut sim, "CARD.WHEEL_OF_FORTUNE");
+            assert_eq!(
+                pile(&sim, PileName::Hand).len(),
+                7 + 2 * usize::from(upgrade)
+            );
+            assert_eq!(pile(&sim, PileName::Discard).len(), held);
+        }
+    }
+}
+
+#[test]
+fn missing_primitives_fail_explicitly_without_fake_effects() {
+    for (model, upgrade) in [
+        ("CARD.JUDGEMENT", 0),
+        ("CARD.JUDGEMENT", 1),
+        ("CARD.THE_TOWER", 0),
+        ("CARD.THE_TOWER", 1),
+        ("CARD.THE_DEVIL", 1),
+        ("CARD.FOOLISH_SHOT", 0),
+    ] {
+        let mut sim = fight(model, upgrade, 0, 0, 100);
+        let action = sim
+            .legal_actions()
+            .iter()
+            .find(|action| {
+                matches!(
+                    action, Action::PlayCard { card, .. } if card.fingerprint.model_id == id(model)
+                )
+            })
+            .cloned()
+            .expect("registered playable card");
+        let error = sim.step(action).expect_err("unsupported body must fail");
+        assert_eq!(error.code, sts2_engine::ErrorCode::UnsupportedContent);
+    }
+}
+
+#[test]
+fn fool_starts_with_77_hp_99_gold_and_the_exact_ten_card_deck() {
+    let sim = sts2_content::standard_run_on_preset(
+        "N3Z9EE2CXB",
+        &id("CHARACTER.FOOL"),
+        &sts2_core::UnlockPresetManifest::pinned().expect("preset"),
+    )
+    .expect("Fool run starts");
+    let player = &sim.state().run_player;
+    assert_eq!(
+        (player.current_hp, player.max_hp, player.gold),
+        (77, 77, 99)
+    );
+    let deck: Vec<_> = player
+        .deck
+        .iter()
+        .map(|card| card.model_id.to_string())
+        .collect();
+    assert_eq!(&deck[..5], ["CARD.STRIKE_FOOL"; 5]);
+    assert_eq!(&deck[5..9], ["CARD.DEFEND_FOOL"; 4]);
+    assert_eq!(deck[9], "CARD.FOOLISH_SHOT");
+    assert!(
+        player
+            .relics
+            .iter()
+            .any(|relic| relic.model_id == id("RELIC.SONG_BOW"))
+    );
+}
+
+#[test]
+fn fool_reward_pool_preserves_order_and_excludes_basics_ancients_and_multiplayer() {
+    let registry = sts2_content::standard_registry();
+    let pool = registry
+        .card_pool(&id("CARD_POOL.FOOL_CARD_POOL"))
+        .expect("Fool pool");
+    assert_eq!(pool.len(), 79);
+    assert_eq!(
+        pool.first().expect("first").model_id,
+        id("CARD.ALL_IS_WELL")
+    );
+    assert_eq!(pool.last().expect("last").model_id, id("CARD.YAH"));
+    let ids: Vec<_> = pool.iter().map(|card| card.model_id.to_string()).collect();
+    assert!(
+        ids.iter().position(|model| model == "CARD.LOCKED_IN")
+            < ids.iter().position(|model| model == "CARD.LULLABY")
+    );
+    for excluded in [
+        "CARD.STRIKE_FOOL",
+        "CARD.DEFEND_FOOL",
+        "CARD.FOOLISH_SHOT",
+        "CARD.DIVINE_SHOT",
+        "CARD.LOST_LUTE",
+        "CARD.COMPOST",
+        "CARD.COVERING_FIRE",
+        "CARD.ENRAPTURE",
+        "CARD.ENSEMBLE",
+        "CARD.SELF_DEPRECATE",
+        "CARD.YOGA",
+    ] {
+        assert!(!ids.contains(&excluded.to_owned()), "{excluded}");
+        assert!(
+            registry.card(&id(excluded)).is_some(),
+            "{excluded} retains its identity"
+        );
+    }
+    let preset = sts2_core::UnlockPresetManifest::pinned().expect("preset");
+    assert_eq!(preset.unlocks.epochs.len(), 66);
+    for epoch in 1..=7 {
+        assert!(
+            preset
+                .unlocks
+                .epochs
+                .contains(&format!("FOOL{epoch}_EPOCH"))
+        );
+    }
+}
+
+#[test]
+fn song_bow_stops_combat_entry_rather_than_silently_omitting_aim() {
+    let mut sim = sts2_content::standard_run_on_preset(
+        "N3Z9EE2CXB", &id("CHARACTER.FOOL"),
+        &sts2_core::UnlockPresetManifest::pinned().expect("preset"),
+    ).expect("Fool run starts");
+    for _ in 0..200 {
+        let action = sim.legal_actions().iter().find(|action| matches!(
+            action, Action::ChooseCards { cards, .. } if !cards.is_empty()
+        )).or_else(|| sim.legal_actions().first()).cloned().expect("live run");
+        if let Err(error) = sim.step(action) {
+            assert_eq!(error.code, sts2_engine::ErrorCode::UnsupportedContent);
+            assert!(format!("{error:?}").contains("RELIC.SONG_BOW"), "{error:?}");
+            return;
+        }
+    }
+    panic!("walk never entered combat");
+}

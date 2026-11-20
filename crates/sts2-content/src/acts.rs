@@ -178,7 +178,7 @@ pub fn select_acts(
         id(rng
             .next_item(&ALL_CHARACTERS)
             .expect("character count fits a game integer")
-            .expect("the build always has five characters"))
+            .expect("the build always has six characters"))
     } else {
         character.clone()
     };
