@@ -21581,8 +21581,14 @@ impl Simulator {
                 for target in aimable {
                     let aimed = CommandContext::by(player_id).at(*target).from_card(card_id);
                     let base = self.resolve_amount(&amount, &aimed)? + growth;
-                    let damage =
-                        self.modify_damage_at(dealer, Some(*target), base, props, Some(card_id), None)?;
+                    let damage = self.modify_damage_at(
+                        dealer,
+                        Some(*target),
+                        base,
+                        props,
+                        Some(card_id),
+                        None,
+                    )?;
                     preview.aimed_damage.push(crate::AimedDamage {
                         combat_id: *target,
                         damage,
@@ -23076,7 +23082,10 @@ impl Simulator {
 
     fn started_play_identity(&self) -> Result<(u32, u64), EngineError> {
         let player = &self.combat()?.player;
-        Ok((player.turn, u64::try_from(player.play_types_started_this_turn.len()).expect("play count fits u64")))
+        Ok((
+            player.turn,
+            u64::try_from(player.play_types_started_this_turn.len()).expect("play count fits u64"),
+        ))
     }
 
     /// What a card's enchantment adds to the play, run once per play after the
@@ -24113,8 +24122,14 @@ impl Simulator {
             if !self.creature(target).is_ok_and(Creature::alive) {
                 continue;
             }
-            let dealt =
-                self.modify_damage_at(frame.dealer, Some(target), frame.amount, frame.props, frame.card, frame.card_play)?;
+            let dealt = self.modify_damage_at(
+                frame.dealer,
+                Some(target),
+                frame.amount,
+                frame.props,
+                frame.card,
+                frame.card_play,
+            )?;
             let settled =
                 self.apply_damage(frame.dealer, target, dealt, frame.props, frame.card, events)?;
             frame.results.extend(settled);
@@ -25434,11 +25449,22 @@ impl Simulator {
                 value.dealer == Some(owner) && !value.props.unpowered && value.card.is_some()
             }
             crate::HookCondition::OwnersMultiHitAttackCard => {
-                let count = self.modifier.map_or(i64::from(value.amount), ModifierPass::settled);
+                let count = self
+                    .modifier
+                    .map_or(i64::from(value.amount), ModifierPass::settled);
                 count > 1
                     && value.dealer == Some(owner)
                     && owner == self.combat()?.player.creature_id
-                    && value.card.and_then(|id| self.combat().ok()?.player.piles.all_cards().find(|card| card.id == id))
+                    && value
+                        .card
+                        .and_then(|id| {
+                            self.combat()
+                                .ok()?
+                                .player
+                                .piles
+                                .all_cards()
+                                .find(|card| card.id == id)
+                        })
                         .and_then(|card| self.content.card_type_of(&card.fingerprint))
                         == Some(crate::CardType::Attack)
             }

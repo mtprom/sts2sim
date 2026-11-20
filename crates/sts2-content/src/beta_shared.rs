@@ -269,10 +269,15 @@ pub(crate) fn relics() -> Vec<RelicDefinition> {
             ..relics::obtained_only("RELIC.BYRDINE", RelicRarity::Event)
         },
         RelicDefinition {
-            hooks: vec![ModifierHook::every_turn(
-                HookEvent::ModifyAttackHitCount,
-                vec![Command::Modify(sts2_engine::ModifierCmd::Add(Amount::Fixed(1)))],
-            ).when(HookCondition::OwnersMultiHitAttackCard)],
+            hooks: vec![
+                ModifierHook::every_turn(
+                    HookEvent::ModifyAttackHitCount,
+                    vec![Command::Modify(sts2_engine::ModifierCmd::Add(
+                        Amount::Fixed(1),
+                    ))],
+                )
+                .when(HookCondition::OwnersMultiHitAttackCard),
+            ],
             ..relics::obtained_only("RELIC.THUMBSCREW", RelicRarity::Event)
         },
         RelicDefinition {
