@@ -492,6 +492,7 @@ fn shared_potions() -> Vec<PotionDefinition> {
                 count: Amount::Fixed(3),
                 position: DrawPilePosition::Top,
                 force_exhaust: false,
+                upgrade: false,
             })],
         ),
         // A droplet lays the draw pile out and takes one card of it into hand.

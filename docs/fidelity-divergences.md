@@ -15,6 +15,26 @@ Every entry answers four questions: what the build does, what this simulator
 does instead, whether the difference can reach a conformance claim, and what
 would change that.
 
+## Fool content boundary
+
+**The build.** Fool has 77 HP, 99 gold, five Strikes, four Defends, Foolish
+Shot, one arrow slot, and Song Bow (Aim 6 on combat-room entry). Its pool
+contains 90 cards in declaration order, including six multiplayer-only cards.
+
+**This simulator.** Fool's loadout and all 90 card identities are registered;
+the solo reward pool preserves order while excluding basics, ancients and
+multiplayer-only cards. Song Bow fails explicitly at combat-room entry, and
+Foolish Shot and later-batch card bodies fail explicitly. Arrow slots, Aim,
+melodies and Stretch are not simulated. All 30 first-batch card bodies are
+implemented. Fool relic and potion generation pools are not yet transcribed.
+The veteran preset already includes all seven Fool epochs.
+
+**Whether it can reach a conformance claim.** A Fool run cannot claim combat
+parity: its starter relic stops the first fight.
+
+**What would change this.** Transcribe the remaining mechanics and item pools
+before claiming full Fool run parity.
+
 ## Beta shared-content hooks not yet modeled
 
 **The build.** Extra-turn arbitration chooses the first source in the early
@@ -39,7 +59,7 @@ upgrades, but attempting the second upgrade fails explicitly with the model
 and unsupported level instead of disappearing from upgrade choices.
 Its `u8` fingerprint and combat upgrade command need repeatable-upgrade support.
 Storyteller is registered with its Starter rarity but obtaining it is
-unsupported: its Aim mechanics belong to the excluded Fool character.
+unsupported: its Aim mechanics are outside the supported Fool content batch.
 
 **Whether it can reach a conformance claim.** Yes. A playback with Ambergris
 and an unused Pael's Eye, nested block plays under Pael's Legion

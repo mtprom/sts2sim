@@ -1177,6 +1177,7 @@ pub(crate) fn pool_rarity(model_id: &str) -> Option<CardRarity> {
         .chain(NECROBINDER_POOL.iter())
         .chain(REGENT_POOL.iter())
         .chain(DEFECT_POOL.iter())
+        .chain(crate::fool_cards::POOL.iter())
         .chain(COLORLESS_POOL.iter())
         .find(|(id, _, _, _)| *id == model_id)
         .map(|(_, _, rarity, _)| *rarity)
@@ -1246,6 +1247,18 @@ const DEFECT_OUTSIDE_THE_ROLLED_RARITIES: [&str; 8] = [
 /// character whose basics are registered as its cards rather than listed, which
 /// is what `is_the_characters` answers for.
 pub(crate) fn own_pool(model_id: &str, is_the_characters: bool) -> Option<&'static str> {
+    if crate::fool_cards::POOL
+        .iter()
+        .any(|(id, _, _, _)| *id == model_id)
+    {
+        return Some("CARD_POOL.FOOL_CARD_POOL");
+    }
+    if crate::fool_cards::TOKENS.contains(&model_id) {
+        return Some("CARD_POOL.TOKEN_CARD_POOL");
+    }
+    if model_id == "CARD.SADNESS" {
+        return Some("CARD_POOL.STATUS_CARD_POOL");
+    }
     let rolled = |pool: &[(&str, CardType, CardRarity, i32)]| {
         pool.iter().any(|(id, _, _, _)| *id == model_id)
     };
@@ -1301,11 +1314,12 @@ pub(crate) fn visual_pool(model_id: &str, is_the_characters: bool) -> Option<&'s
 }
 
 pub(crate) fn costs_x(model_id: &str) -> bool {
-    COSTS_X.contains(&model_id)
+    COSTS_X.contains(&model_id) || matches!(model_id, "CARD.BRACE" | "CARD.REPEAT_SHOT")
 }
 
 pub(crate) fn can_be_generated_in_combat(model_id: &str) -> bool {
     !NEVER_GENERATED_IN_COMBAT.contains(&model_id)
+        && !matches!(model_id, "CARD.SADNESS" | "CARD.MYTHIC_FORM")
 }
 
 /// The curse card pool, in the pool's own declaration order, and which of its

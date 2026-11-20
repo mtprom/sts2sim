@@ -116,7 +116,7 @@ impl RunConfig {
         // character it becomes is rolled at run start, and a run that rolls
         // one this baseline has no content for fails as unsupported content
         // rather than as a malformed config.
-        let accepted_characters: [ModelId; 6] = [
+        let accepted_characters: [ModelId; 7] = [
             "CHARACTER.IRONCLAD".parse().expect("static character ID"),
             "CHARACTER.SILENT".parse().expect("static character ID"),
             "CHARACTER.REGENT".parse().expect("static character ID"),
@@ -124,6 +124,7 @@ impl RunConfig {
                 .parse()
                 .expect("static character ID"),
             "CHARACTER.DEFECT".parse().expect("static character ID"),
+            "CHARACTER.FOOL".parse().expect("static character ID"),
             "CHARACTER.RANDOM_CHARACTER"
                 .parse()
                 .expect("static character ID"),

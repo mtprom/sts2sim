@@ -11,6 +11,7 @@ mod defect_cards;
 mod enchantments;
 mod encounters;
 mod events;
+mod fool_cards;
 mod map;
 mod merchant;
 mod monsters;
@@ -139,6 +140,11 @@ pub fn registry_at(character: &ModelId, ascension: u8) -> Arc<ContentRegistry> {
             .into_iter()
             .map(|definition| (definition, false)),
     );
+    every_card.extend(
+        fool_cards::cards()
+            .into_iter()
+            .map(|definition| (definition, false)),
+    );
     for (mut definition, is_the_characters) in every_card {
         // A pool is what says how rare the card in it is. A card in no pool is
         // one a character starts with, one an enemy forces in, or one that
@@ -209,6 +215,7 @@ pub fn registry_at(character: &ModelId, ascension: u8) -> Arc<ContentRegistry> {
     for definition in beta_shared::relics() {
         content.add_relic(definition);
     }
+    content.add_relic(fool_cards::song_bow());
 
     for definition in relics::silent_relics() {
         content.add_relic(definition);

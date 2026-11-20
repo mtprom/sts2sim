@@ -23,7 +23,10 @@ fn act_ids(selection: &sts2_content::ActSelection) -> Vec<String> {
 // v0.107.1 recordings pinned no longer roll what they did. Until beta
 // recordings exist, the expected rolls below come from an independent model
 // of the build's derivation (seed hash, named stream, xoshiro256**) written
-// apart from this crate, not from this crate's own output.
+// apart from this crate, not from this crate's own output. The random
+// character rolls are the exception: v0.113.1 added the Fool as a sixth
+// entry of `ModelDb.AllCharacters`, and those expectations were re-read from
+// this crate's roll over six, which no recording has checked yet.
 
 #[test]
 fn seeds_that_roll_the_overgrowth_open_in_it() {
@@ -119,7 +122,7 @@ fn an_undiscovered_alternate_act_is_taken_without_a_roll() {
         act_ids(&selection),
         ["ACT.UNDERDOCKS", "ACT.HIVE", "ACT.GLORY"]
     );
-    assert_eq!(selection.character, id("CHARACTER.DEFECT"));
+    assert_eq!(selection.character, id("CHARACTER.FOOL"));
     assert_eq!(selection.counter, 3);
 
     // The setting still overrides what the shortcut took, and still without
@@ -167,11 +170,12 @@ fn a_locked_alternate_act_is_no_candidate_at_all() {
 fn a_random_character_is_rolled_off_the_same_stream_after_the_acts() {
     let (unlocks, discovered) = baseline();
     for (seed, expected) in [
-        ("N3Z9EE2CXB", "CHARACTER.DEFECT"),
+        ("N3Z9EE2CXB", "CHARACTER.FOOL"),
         ("X7JFABM2QS", "CHARACTER.IRONCLAD"),
         ("R8F8NFB8Y1", "CHARACTER.SILENT"),
-        ("BPK46736W9", "CHARACTER.NECROBINDER"),
-        ("03Z9EE2CXB", "CHARACTER.REGENT"),
+        ("BPK46736W9", "CHARACTER.DEFECT"),
+        ("03Z9EE2CXB", "CHARACTER.NECROBINDER"),
+        ("07Z9EE2CXB", "CHARACTER.REGENT"),
     ] {
         let selection = select_acts(
             seed,
@@ -187,15 +191,15 @@ fn a_random_character_is_rolled_off_the_same_stream_after_the_acts() {
 }
 
 /// A lobby that left the choice to chance stands the run up as whichever of
-/// the five characters the roll names. This seed rolls the Defect, so the
+/// the six characters the roll names. This seed rolls the Defect, so the
 /// run is his: his health, his starting relic, his orb slots.
 ///
 /// There is no rollable character for a run to stop on. What stops a run
-/// is a character with no loadout, and the build carries five characters.
+/// is a character with no loadout, and the build carries six characters.
 #[test]
 fn a_run_that_rolls_the_defect_is_stood_up_as_his() {
     let simulator = sts2_content::standard_ironclad_run_with(
-        "N3Z9EE2CXB",
+        "BPK46736W9",
         ActOneSetting::Random,
         &id(RANDOM_CHARACTER),
     )
@@ -215,7 +219,7 @@ fn a_run_that_rolls_the_defect_is_stood_up_as_his() {
 #[test]
 fn a_run_that_rolls_the_regent_is_stood_up_as_his() {
     let simulator = sts2_content::standard_ironclad_run_with(
-        "03Z9EE2CXB",
+        "07Z9EE2CXB",
         ActOneSetting::Random,
         &id(RANDOM_CHARACTER),
     )
@@ -233,7 +237,7 @@ fn a_run_that_rolls_the_regent_is_stood_up_as_his() {
 #[test]
 fn a_run_that_rolls_the_necrobinder_is_stood_up_as_hers() {
     let simulator = sts2_content::standard_ironclad_run_with(
-        "BPK46736W9",
+        "03Z9EE2CXB",
         ActOneSetting::Random,
         &id(RANDOM_CHARACTER),
     )

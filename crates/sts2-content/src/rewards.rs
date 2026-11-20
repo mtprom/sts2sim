@@ -14,12 +14,13 @@ use crate::id;
 
 /// The characters this baseline registers pools for, in the order the build
 /// declares them.
-pub(crate) const IMPLEMENTED_CHARACTERS: [&str; 5] = [
+pub(crate) const IMPLEMENTED_CHARACTERS: [&str; 6] = [
     "CHARACTER.IRONCLAD",
     "CHARACTER.SILENT",
     "CHARACTER.REGENT",
     "CHARACTER.NECROBINDER",
     "CHARACTER.DEFECT",
+    "CHARACTER.FOOL",
 ];
 
 /// A character's pool, as the tables carry it.
@@ -32,6 +33,7 @@ pub(crate) fn character_pool(
         "CHARACTER.NECROBINDER" => Some(&NECROBINDER_POOL),
         "CHARACTER.REGENT" => Some(&REGENT_POOL),
         "CHARACTER.DEFECT" => Some(&DEFECT_POOL),
+        "CHARACTER.FOOL" => Some(&crate::fool_cards::REWARD_POOL),
         _ => None,
     }
 }
@@ -44,6 +46,7 @@ pub(crate) fn character_card_pool_id(character: &ModelId) -> Option<ModelId> {
         "CHARACTER.NECROBINDER" => Some(id("CARD_POOL.NECROBINDER_CARD_POOL")),
         "CHARACTER.REGENT" => Some(id("CARD_POOL.REGENT_CARD_POOL")),
         "CHARACTER.DEFECT" => Some(id("CARD_POOL.DEFECT_CARD_POOL")),
+        "CHARACTER.FOOL" => Some(id("CARD_POOL.FOOL_CARD_POOL")),
         _ => None,
     }
 }
