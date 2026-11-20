@@ -230,6 +230,16 @@ impl Visit {
         });
         let mut simulator =
             Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        let generation_before = simulator
+            .state()
+            .player_rng
+            .stream(sts2_rng::PlayerStream::NonCombatGeneration)
+            .counter();
+        let niche_before = simulator
+            .state()
+            .rng
+            .stream(sts2_rng::RunStream::Niche)
+            .counter();
         simulator
             .step(Action::ChooseMap {
                 destination: MapCoord { col: 0, row: 1 },
@@ -776,6 +786,23 @@ fn museum_take_obtains_the_displayed_relic_and_one_curse_or_names_the_missing_ho
             assert_eq!(result.unwrap_err().details["model_id"], model);
         } else {
             result.unwrap();
+            // MuseumOfTorture.TakeRelic draws its curse on the player's stream.
+            assert_eq!(
+                simulator
+                    .state()
+                    .player_rng
+                    .stream(sts2_rng::PlayerStream::NonCombatGeneration)
+                    .counter(),
+                generation_before + 1
+            );
+            assert_eq!(
+                simulator
+                    .state()
+                    .rng
+                    .stream(sts2_rng::RunStream::Niche)
+                    .counter(),
+                niche_before
+            );
             assert!(holds_relic(&simulator, model));
             let registry = sts2_content::standard_registry();
             assert_eq!(
@@ -957,9 +984,25 @@ fn beating_up_the_waterfall_gremlin_obtains_a_relic_and_two_guilty() {
         &mut simulator,
         "WATERFALL_OF_OBVIOUS_SECRETS.pages.INITIAL.options.ENTER",
     );
+    let rewards_before = simulator
+        .state()
+        .player_rng
+        .stream(sts2_rng::PlayerStream::Rewards)
+        .counter();
+    let event_before = event_die(&simulator);
     choose(
         &mut simulator,
         "WATERFALL_OF_OBVIOUS_SECRETS.pages.ENTER.options.BEAT_UP",
+    );
+    // WaterfallOfObviousSecrets.BeatUp passes the event RNG to RelicFactory.
+    assert_eq!(event_die(&simulator), event_before + 1);
+    assert_eq!(
+        simulator
+            .state()
+            .player_rng
+            .stream(sts2_rng::PlayerStream::Rewards)
+            .counter(),
+        rewards_before
     );
     assert!(holds_relic(&simulator, "RELIC.LANTERN"));
     assert_eq!(

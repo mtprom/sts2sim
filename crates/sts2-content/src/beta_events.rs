@@ -44,7 +44,6 @@ pub(crate) fn museum_of_torture() -> EventDefinition {
                         "Take",
                         vec![
                             EventEffect::ObtainRelic(id(relic)),
-                            // stream: port-v0113-foundation (non_combat_generation).
                             EventEffect::Run(vec![Command::CardPile(
                                 CardPileCmd::AddCursesToDeck {
                                     pool: id("CARD_POOL.CURSE_CARD_POOL"),
@@ -211,7 +210,6 @@ pub(crate) fn waterfall_of_obvious_secrets() -> EventDefinition {
             "BEAT_UP",
             EventCondition::Always,
             vec![
-                // stream: port-v0113-foundation (event RNG relic rarity).
                 EventEffect::ObtainRolledRelic,
                 add("CARD.GUILTY"),
                 add("CARD.GUILTY"),
