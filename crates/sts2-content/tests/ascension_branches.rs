@@ -73,6 +73,7 @@ fn damage_of_one_turn(simulator: &mut Simulator) -> i32 {
 #[test]
 fn the_earlier_monsters_roll_their_ascended_sizes() {
     let sizes = [
+        ("MONSTER.AXEBOT", (70, 70), (80, 80)),
         ("MONSTER.SHRINKER_BEETLE", (38, 40), (40, 42)),
         ("MONSTER.KIN_PRIEST", (190, 190), (199, 199)),
         ("MONSTER.KIN_FOLLOWER", (58, 59), (62, 63)),
@@ -121,6 +122,8 @@ fn the_earlier_monsters_roll_their_ascended_sizes() {
 #[test]
 fn the_earlier_monsters_hit_for_their_ascended_damage() {
     let blows = [
+        ("MONSTER.TUNNELER", "FROM_BELOW_MOVE", 24, 28),
+        ("MONSTER.INFESTED_PRISM", "JAB_MOVE_2", 15, 17),
         ("MONSTER.SHRINKER_BEETLE", "CHOMP_MOVE", 7, 8),
         ("MONSTER.SHRINKER_BEETLE", "STOMP_MOVE", 13, 14),
         ("MONSTER.KIN_PRIEST", "ORB_OF_FRAILTY_MOVE", 8, 9),
@@ -155,9 +158,9 @@ fn the_earlier_monsters_hit_for_their_ascended_damage() {
         ("MONSTER.CRUSHER", "THRASH_MOVE", 12, 14),
         ("MONSTER.CRUSHER", "BUG_STING_MOVE", 12, 14),
         ("MONSTER.CRUSHER", "GUARDED_STRIKE_MOVE", 12, 14),
-        ("MONSTER.ROCKET", "TARGETING_RETICLE_MOVE", 3, 4),
-        ("MONSTER.ROCKET", "PRECISION_BEAM_MOVE", 18, 20),
-        ("MONSTER.ROCKET", "LASER_MOVE", 31, 35),
+        ("MONSTER.ROCKET", "CALCULATING_MOVE", 3, 4),
+        ("MONSTER.ROCKET", "PRECISE_SMASH_MOVE", 18, 20),
+        ("MONSTER.ROCKET", "ROCKET_CLAW_MOVE", 31, 35),
     ];
     for (model, move_state, base, deadly) in blows {
         let mut plain = fight(model, move_state, 0);
@@ -328,7 +331,7 @@ fn the_reworked_monsters_buff_for_their_new_amounts() {
 /// the stock the new one holds.
 #[test]
 fn an_axebot_replacement_stands_taller_each_time() {
-    for (stock, ascension, low, high) in [(2, 0, 80, 88), (1, 0, 90, 98), (2, 9, 86, 96)] {
+    for (stock, ascension, low, high) in [(2, 0, 80, 80), (1, 0, 90, 90), (2, 9, 90, 90)] {
         let mut fighting = ScenarioBuilder::new("AXEBOTTEST", id("ENCOUNTER.NIBBITS_WEAK"))
             .player_hp(400, 400)
             .energy(3, 3)

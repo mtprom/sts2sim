@@ -322,7 +322,10 @@ fn ritual_power() -> PowerDefinition {
                     amount: Amount::Fixed(1),
                 })],
             )
-            .when(HookCondition::OwnerIsEnemy),
+            .when(HookCondition::All(vec![
+                HookCondition::OwnerIsEnemy,
+                HookCondition::EnemySideTurn,
+            ])),
             ModifierHook::every_turn(
                 HookEvent::AfterSideTurnEnd,
                 // The skip is read before it is cleared, so the two halves of
@@ -3698,6 +3701,7 @@ pub fn silent_powers() -> Vec<PowerDefinition> {
             ],
             ..counter("POWER.NOXIOUS_FUMES_POWER", PowerType::Buff)
         },
+        // TODO(package 4): TryModifyKeywordsInCombat must replace permanent grants.
         // Phantom blades make every Shiv keep itself, and put their whole worth
         // behind the first Shiv of a turn and nothing behind the rest.
         PowerDefinition {

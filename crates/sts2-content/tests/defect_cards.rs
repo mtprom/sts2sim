@@ -525,6 +525,26 @@ fn a_helix_drill_hits_once_per_energy_spent() {
     assert_eq!(before - creature(&simulator, 1).current_hp, 6);
 }
 
+/// A free Helix Drill subtracts zero actually spent, even if consuming the
+/// free-Attack power reveals a positive cost before its damage is calculated.
+#[test]
+fn helix_drill_refunds_actual_payment_not_the_revealed_cost() {
+    let simulator = scenario(&Fight {
+        hand: &[("CARD.HELIX_DRILL", 0)],
+        powers: &[(0, "POWER.FREE_ATTACK_POWER", 1, PowerType::Buff)],
+        ..Fight::default()
+    });
+    let mut state = simulator.state().clone();
+    let combat = state.combat.as_mut().expect("a fight");
+    combat.player.energy_spent_this_turn = 2;
+    combat.player.piles.hand[0].cost_this_combat = 2;
+    let mut simulator = Simulator::from_scenario(state, sts2_content::standard_registry())
+        .expect("modified scenario");
+    let before = creature(&simulator, 1).current_hp;
+    play(&mut simulator, "CARD.HELIX_DRILL");
+    assert_eq!(before - creature(&simulator, 1).current_hp, 6);
+}
+
 /// A Flak Cannon burns every status outside the exhaust pile and hits once for
 /// each of them.
 #[test]

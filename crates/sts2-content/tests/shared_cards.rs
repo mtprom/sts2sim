@@ -493,8 +493,8 @@ fn a_luminesce_is_kept_in_hand() {
 #[test]
 fn the_minion_cards_and_a_shiv_land_what_they_declare() {
     for (model_id, upgrade, damage) in [
-        ("CARD.MINION_DIVE_BOMB", 0, 13),
-        ("CARD.MINION_DIVE_BOMB", 1, 16),
+        ("CARD.MINION_DIVE_BOMB", 0, 11),
+        ("CARD.MINION_DIVE_BOMB", 1, 13),
         ("CARD.MINION_STRIKE", 0, 6),
         ("CARD.MINION_STRIKE", 1, 9),
         ("CARD.SHIV", 0, 4),
@@ -765,7 +765,7 @@ fn an_apparition_holds_every_blow_to_one() {
     assert!(!apparition.ethereal_at(1));
 }
 
-/// The brightest flame pays a point of maximum HP for energy and cards.
+/// Brightest Flame pays two maximum HP for energy and cards.
 #[test]
 fn the_brightest_flame_pays_maximum_hp() {
     for (upgrade, gained, cards) in [(0, 2, 2), (1, 3, 3)] {
@@ -781,7 +781,7 @@ fn the_brightest_flame_pays_maximum_hp() {
         play(&mut simulator, "CARD.BRIGHTEST_FLAME");
         assert_eq!(energy(&simulator), before + gained);
         assert_eq!(pile(&simulator, PileName::Hand).len(), cards);
-        assert_eq!(player(&simulator).max_hp, 79);
+        assert_eq!(player(&simulator).max_hp, 78);
     }
 }
 
@@ -1049,6 +1049,10 @@ fn enlightenment_holds_the_hand_to_one_energy() {
             ],
         );
         play(&mut simulator, "CARD.ENLIGHTENMENT");
+        assert!(
+            pile(&simulator, PileName::Discard).contains(&"CARD.ENLIGHTENMENT".to_owned()),
+            "Enlightenment no longer exhausts"
+        );
         assert_eq!(cost_of(&simulator, "CARD.BLUDGEON"), 1, "at +{upgrade}");
         assert_eq!(
             cost_of(&simulator, "CARD.ANGER"),
@@ -2141,8 +2145,8 @@ fn the_offered_colorless_cards_are_what_they_say() {
     for (model_id, upgrade, damage) in [
         ("CARD.BOLAS", 0, 3),
         ("CARD.BOLAS", 1, 4),
-        ("CARD.SALVO", 0, 12),
-        ("CARD.SALVO", 1, 16),
+        ("CARD.SALVO", 0, 10),
+        ("CARD.SALVO", 1, 14),
         ("CARD.THRUMMING_HATCHET", 0, 11),
         ("CARD.THRUMMING_HATCHET", 1, 14),
         ("CARD.ULTIMATE_STRIKE", 0, 14),

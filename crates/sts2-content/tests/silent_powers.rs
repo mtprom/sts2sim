@@ -412,8 +412,8 @@ fn a_speedster_cuts_on_every_draw_but_the_hand() {
     .build();
     play(&mut simulator, "CARD.SPEEDSTER");
     play(&mut simulator, "CARD.PREPARED");
-    assert_eq!(creature(&simulator, 1).current_hp, 39 - 2);
-    assert_eq!(creature(&simulator, 2).current_hp, 39 - 2);
+    assert_eq!(creature(&simulator, 1).current_hp, 39 - 3);
+    assert_eq!(creature(&simulator, 2).current_hp, 39 - 3);
 }
 
 /// Tools of the trade draw one more card a turn and ask for one back.
@@ -597,11 +597,11 @@ fn phantom_blades_pay_for_the_first_shiv_of_a_turn() {
         "every Shiv keeps itself"
     );
     play(&mut simulator, "CARD.SHIV");
-    assert_eq!(creature(&simulator, 1).current_hp, 39 - (4 + 9));
+    assert_eq!(creature(&simulator, 1).current_hp, 39 - (4 + 8));
     play(&mut simulator, "CARD.SHIV");
     assert_eq!(
         creature(&simulator, 1).current_hp,
-        39 - (4 + 9) - 4,
+        39 - (4 + 8) - 4,
         "only the first of the turn is paid for"
     );
 }

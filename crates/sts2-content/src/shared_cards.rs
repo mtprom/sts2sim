@@ -637,9 +637,9 @@ pub(crate) fn token_cards() -> Vec<CardDefinition> {
                         CardType::Attack,
                         TargetType::AnyEnemy,
                         0,
-                        vec![attack(13)],
+                        vec![attack(11)],
                     )),
-                    vec![attack(16)],
+                    vec![attack(13)],
                 ),
                 &[CardTag::Minion],
             ),
@@ -816,7 +816,7 @@ pub(crate) fn quest_cards() -> Vec<CardDefinition> {
 }
 
 /// Dowsing, as a map point's room is entered: the deck's own card counts the
-/// point where it is an unknown one, and on the fifth turns into an Abundance.
+/// point where it is an unknown one, and on the fourth turns into an Abundance.
 /// The transform names its replacement, so it rolls nothing; like any deck
 /// transform it takes the quest out and adds the Abundance at the end.
 fn dowsing() -> CardDefinition {
@@ -841,7 +841,7 @@ fn dowsing() -> CardDefinition {
                     otherwise: Vec::new(),
                     condition: Condition::SourceCardPropertyAtLeast {
                         name: "RoomsEntered".to_owned(),
-                        value: 5,
+                        value: 4,
                     },
                     then: vec![Command::Card(CardCmd::TransformDeckCards {
                         cards: CardSelector::Source,
@@ -944,7 +944,7 @@ pub(crate) fn event_cards() -> Vec<CardDefinition> {
             )))),
             CardRarity::Ancient,
         ),
-        // The brightest flame pays a point of maximum HP for energy and cards.
+        // Brightest Flame pays two maximum HP for energy and cards.
         rarity(
             upgrading(
                 card(
@@ -1050,7 +1050,7 @@ pub(crate) fn event_cards() -> Vec<CardDefinition> {
         // Enlightenment makes the hand cost one, this turn or this fight.
         rarity(
             upgrading(
-                exhausting(card(
+                card(
                     "CARD.ENLIGHTENMENT",
                     CardType::Skill,
                     TargetType::SelfTarget,
@@ -1062,7 +1062,7 @@ pub(crate) fn event_cards() -> Vec<CardDefinition> {
                         },
                         lifetime: sts2_engine::TemporaryCost::this_turn_reduce_only(1),
                     })],
-                )),
+                ),
                 vec![Command::Card(CardCmd::SetTemporaryCost {
                     cards: CardSelector::Pile {
                         pile: PileName::Hand,
@@ -1352,14 +1352,14 @@ fn stun_target() -> Command {
     })
 }
 
-/// Brightest Flame, played: energy, then cards, then a point of maximum HP.
+/// Brightest Flame, played: energy, then cards, then two maximum HP.
 fn brightest_flame(energy_gained: i32, cards: i32) -> Vec<Command> {
     vec![
         energy(energy_gained),
         draw(cards),
         Command::Creature(CreatureCmd::LoseMaxHp {
             target: CreatureSelector::Owner,
-            amount: Amount::Fixed(1),
+            amount: Amount::Fixed(2),
         }),
     ]
 }
@@ -2111,9 +2111,9 @@ pub(crate) fn offered_colorless_cards() -> Vec<CardDefinition> {
                 CardType::Attack,
                 TargetType::AnyEnemy,
                 1,
-                vec![attack(12), buff("POWER.RETAIN_HAND_POWER", 1)],
+                vec![attack(10), buff("POWER.RETAIN_HAND_POWER", 1)],
             ),
-            vec![attack(16), buff("POWER.RETAIN_HAND_POWER", 1)],
+            vec![attack(14), buff("POWER.RETAIN_HAND_POWER", 1)],
         ),
         // A secret technique takes a skill out of the draw pile.
         keeps_itself_when_upgraded(exhausting(card(

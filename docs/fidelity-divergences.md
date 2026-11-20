@@ -260,3 +260,31 @@ rather than an inert asymmetry.
 The distinction is the whole point of this document: the shelf answers both
 clicks the same way, and only where the recorder writes its record separates
 the one that may be filtered out of the action list from the one that may not.
+## v0.113.1 combat-port hook gaps
+
+These differences can change combat state and replay results. They remain
+parity blockers until the named hooks and distinguishing scenarios are added.
+
+- Phantom Blades damage is 8 (11 upgraded), but its Shiv Retain grant still
+  mutates individual cards permanently. TODO(package 4): implement dynamic
+  `TryModifyKeywordsInCombat` so removing the power removes only its grant,
+  including on existing, generated, and upgraded Shivs. A scenario removing the
+  power while holding an otherwise non-retaining Shiv distinguishes this.
+- TODO(package 4): move Draw Cards Next Turn cleanup immediately after hand-draw
+  modification; run `EndOfTurnCleanup` immediately on Nightmare's stored clone
+  before it becomes the next turn's copy template; defer Juggling's
+  remembered clone until after the triggering card resolves. These timing
+  changes need engine scheduling rather than different content values.
+- TODO(package 4): Omnislice splash must be powered but pass only through
+  damage caps (`ModifyDamageHookType.Cap`), not receive Strength/multipliers
+  a second time; remove the Thorns Omnislice exception alongside that hook.
+- TODO(package 4): propagate the causing card through max-HP loss and death.
+  Brightest Flame must bypass Buffer while still reporting its card source;
+  Bone Shards and Sacrifice must identify their card when killing Osty.
+- TODO(package 4): distinguish real `CardPlay` damage from a card's other
+  effects when Lethality counts the current Attack; Shrink must ignore a
+  player's death when removing itself on its applier's death. The generic
+  applier-death cleanup currently does not distinguish a player applier.
+- TODO(package 4): transform results and dupe cloning need the new source/result identity
+  handling. Glam, Sown, and Swift must disable after the play finishes, not
+  during it. These are engine-level changes rather than card balance.

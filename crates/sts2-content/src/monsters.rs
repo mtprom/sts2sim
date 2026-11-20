@@ -652,27 +652,34 @@ fn thievery() -> Command {
                 vec![CardRarity::Basic],
             ],
         },
-        then: vec![
-            Command::CardPile(CardPileCmd::RemoveFromCombat {
-                cards: CardSelector::Chosen,
-            }),
-            Command::CardPile(CardPileCmd::RemoveFromDeck {
-                cards: CardSelector::Chosen,
-            }),
-            // The theft marks whoever it took the card from, which is who the
-            // loot goes back to.
-            Command::Power(PowerCmd::Apply {
-                power: id("POWER.SWIPE_POWER"),
-                target: CreatureSelector::Owner,
-                applier: Some(CreatureSelector::Owner),
-                amount: Amount::Fixed(1),
-                marks: Some(CreatureSelector::AllOpponents),
-            }),
-            Command::Power(PowerCmd::HoldCard {
-                power: PowerRef::owned(id("POWER.SWIPE_POWER")),
-                cards: CardSelector::Chosen,
-            }),
-        ],
+        then: vec![Command::When {
+            condition: Condition::CountAtLeast {
+                count: sts2_engine::Count::ChosenCards,
+                at_least: 1,
+            },
+            otherwise: Vec::new(),
+            then: vec![
+                Command::CardPile(CardPileCmd::RemoveFromCombat {
+                    cards: CardSelector::Chosen,
+                }),
+                Command::CardPile(CardPileCmd::RemoveFromDeck {
+                    cards: CardSelector::Chosen,
+                }),
+                // The theft marks whoever it took the card from, which is who the
+                // loot goes back to.
+                Command::Power(PowerCmd::Apply {
+                    power: id("POWER.SWIPE_POWER"),
+                    target: CreatureSelector::Owner,
+                    applier: Some(CreatureSelector::Owner),
+                    amount: Amount::Fixed(1),
+                    marks: Some(CreatureSelector::AllOpponents),
+                }),
+                Command::Power(PowerCmd::HoldCard {
+                    power: PowerRef::owned(id("POWER.SWIPE_POWER")),
+                    cards: CardSelector::Chosen,
+                }),
+            ],
+        }],
     }
 }
 
@@ -1178,8 +1185,8 @@ fn axebot_at(ascension: u8) -> MonsterDefinition {
     joins_with(
         monster(
             "MONSTER.AXEBOT",
-            asc(AscensionLevel::ToughEnemies, 76, 70),
-            asc(AscensionLevel::ToughEnemies, 86, 78),
+            asc(AscensionLevel::ToughEnemies, 80, 70),
+            asc(AscensionLevel::ToughEnemies, 80, 70),
             "HAMMER_UPPERCUT_MOVE",
             vec![
                 MonsterState::Move(MonsterMove {
@@ -1977,25 +1984,25 @@ fn rocket_at(ascension: u8) -> MonsterDefinition {
             "MONSTER.ROCKET",
             hp,
             hp,
-            "TARGETING_RETICLE_MOVE",
+            "CALCULATING_MOVE",
             vec![
                 attack(
-                    "TARGETING_RETICLE_MOVE",
+                    "CALCULATING_MOVE",
                     asc(AscensionLevel::DeadlyEnemies, 4, 3),
-                    "PRECISION_BEAM_MOVE",
+                    "PRECISE_SMASH_MOVE",
                 ),
                 attack(
-                    "PRECISION_BEAM_MOVE",
+                    "PRECISE_SMASH_MOVE",
                     asc(AscensionLevel::DeadlyEnemies, 20, 18),
                     "CHARGE_UP_MOVE",
                 ),
                 self_buff(
                     "CHARGE_UP_MOVE",
                     asc(AscensionLevel::DeadlyEnemies, 3, 2),
-                    "LASER_MOVE",
+                    "ROCKET_CLAW_MOVE",
                 ),
                 attack(
-                    "LASER_MOVE",
+                    "ROCKET_CLAW_MOVE",
                     asc(AscensionLevel::DeadlyEnemies, 35, 31),
                     "RECHARGE_MOVE",
                 ),
@@ -2003,7 +2010,7 @@ fn rocket_at(ascension: u8) -> MonsterDefinition {
                     state_id: "RECHARGE_MOVE".to_owned(),
                     intent: Intent::new("RECHARGE_MOVE", vec![MoveIntent::of("sleep")]),
                     commands: Vec::new(),
-                    follow_up: "TARGETING_RETICLE_MOVE".to_owned(),
+                    follow_up: "CALCULATING_MOVE".to_owned(),
                 }),
             ],
         ),
@@ -2111,7 +2118,13 @@ fn ceremonial_beast_at(ascension: u8) -> MonsterDefinition {
                 ),
                 commands: vec![
                     strike(plow_damage, 1),
-                    self_power("POWER.STRENGTH_POWER", 2),
+                    Command::When {
+                        condition: Condition::Not(Box::new(Condition::OwnerLacksPower(id(
+                            "POWER.PLOW_POWER",
+                        )))),
+                        then: vec![self_power("POWER.STRENGTH_POWER", 2)],
+                        otherwise: Vec::new(),
+                    },
                 ],
                 follow_up: "PLOW_MOVE".to_owned(),
             }),
@@ -2160,7 +2173,7 @@ fn tunneler_at(ascension: u8) -> MonsterDefinition {
     let hp = asc(AscensionLevel::ToughEnemies, 92, 87);
     let bite = asc(AscensionLevel::DeadlyEnemies, 15, 13);
     let block = asc(AscensionLevel::ToughEnemies, 37, 32);
-    let below = asc(AscensionLevel::DeadlyEnemies, 26, 23);
+    let below = asc(AscensionLevel::DeadlyEnemies, 28, 24);
     monster(
         "MONSTER.TUNNELER",
         hp,
@@ -2182,9 +2195,9 @@ fn tunneler_at(ascension: u8) -> MonsterDefinition {
                         props: ValueProps::NONE,
                     }),
                 ],
-                follow_up: "BELOW_MOVE".to_owned(),
+                follow_up: "FROM_BELOW_MOVE".to_owned(),
             }),
-            attack("BELOW_MOVE", below, "BELOW_MOVE"),
+            attack("FROM_BELOW_MOVE", below, "FROM_BELOW_MOVE"),
             // Nothing walks into the dizzy state: breaking the burrow is what
             // stuns the tunneler, and that names the bite as what follows.
             MonsterState::Move(MonsterMove {
@@ -3857,23 +3870,13 @@ fn infested_prism_at(ascension: u8) -> MonsterDefinition {
                 attack(
                     "JAB_MOVE",
                     asc(AscensionLevel::DeadlyEnemies, 17, 15),
-                    "RADIATE_MOVE",
+                    "JAB_MOVE_2",
                 ),
-                MonsterState::Move(MonsterMove {
-                    state_id: "RADIATE_MOVE".to_owned(),
-                    intent: Intent::new(
-                        "RADIATE_MOVE",
-                        vec![
-                            MoveIntent::attack(asc(AscensionLevel::DeadlyEnemies, 13, 11), 1),
-                            MoveIntent::of("defend"),
-                        ],
-                    ),
-                    commands: vec![
-                        strike(asc(AscensionLevel::DeadlyEnemies, 13, 11), 1),
-                        guard(asc(AscensionLevel::DeadlyEnemies, 13, 11)),
-                    ],
-                    follow_up: "WHIRLWIND_MOVE".to_owned(),
-                }),
+                attack(
+                    "JAB_MOVE_2",
+                    asc(AscensionLevel::DeadlyEnemies, 17, 15),
+                    "WHIRLWIND_MOVE",
+                ),
                 multi_attack(
                     "WHIRLWIND_MOVE",
                     asc(AscensionLevel::DeadlyEnemies, 6, 5),
@@ -3886,13 +3889,13 @@ fn infested_prism_at(ascension: u8) -> MonsterDefinition {
                         "PULSATE_MOVE",
                         vec![
                             MoveIntent::attack(asc(AscensionLevel::DeadlyEnemies, 10, 8), 1),
+                            MoveIntent::of("debuff"),
                             MoveIntent::of("buff"),
-                            MoveIntent::of("defend"),
                         ],
                     ),
                     commands: vec![
                         strike(asc(AscensionLevel::DeadlyEnemies, 10, 8), 1),
-                        guard(asc(AscensionLevel::ToughEnemies, 22, 20)),
+                        debuff("POWER.VULNERABLE_POWER", 1),
                         self_power("POWER.VITAL_SPARK_POWER", spark),
                     ],
                     follow_up: "JAB_MOVE".to_owned(),
