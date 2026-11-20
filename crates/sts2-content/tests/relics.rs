@@ -9016,3 +9016,82 @@ fn a_lords_parasols_purchases_are_all_made_before_the_next_step_lands() {
     assert_eq!(simulator.state().run_player.gold, gold);
     assert_eq!(simulator.state().run_player.deck.len(), deck);
 }
+
+/// Wuppy walked into a fight at its saved HP.
+fn fight_with_wuppy(current_hp: i32, max_hp: i32) -> Simulator {
+    let mut state = run_holding(&["RELIC.WUPPY"]).state().clone();
+    let wuppy = state
+        .run_player
+        .relics
+        .iter_mut()
+        .find(|relic| relic.model_id == id("RELIC.WUPPY"))
+        .unwrap();
+    wuppy.counter = current_hp;
+    wuppy.second_counter = max_hp;
+    let mut simulator =
+        Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+    walk_to(&mut simulator, 3);
+    simulator
+}
+
+fn wuppy(simulator: &Simulator) -> &sts2_engine::Creature {
+    simulator
+        .state()
+        .combat
+        .as_ref()
+        .unwrap()
+        .creatures
+        .iter()
+        .find(|creature| creature.model_id == id("MONSTER.WUPPY"))
+        .expect("Wuppy stands in the fight, dead or alive")
+}
+
+/// Wuppy joins each fight at the relic's saved HP with Loyalty, writes every
+/// HP change back, and takes its owner's powered attacks before block. Its
+/// corpse keeps Loyalty but intercepts nothing.
+#[test]
+fn wuppy_takes_powered_attacks_before_block_and_keeps_its_hp() {
+    let mut simulator = fight_with_wuppy(30, 60);
+    assert_eq!(
+        (wuppy(&simulator).current_hp, wuppy(&simulator).max_hp),
+        (30, 60)
+    );
+    assert_eq!(
+        wuppy(&simulator).power_amount("POWER.WUPPYS_LOYALTY_POWER"),
+        1
+    );
+    end_turn(&mut simulator);
+    let player_hp = player(&simulator).current_hp;
+    end_turn(&mut simulator);
+    assert_eq!(wuppy(&simulator).current_hp, 23);
+    assert_eq!(relic_counter(&simulator, "RELIC.WUPPY"), 23);
+    assert_eq!(player(&simulator).current_hp, player_hp);
+
+    // Chomp 7: Wuppy loses its 1 HP, block takes 5 of the 6 left over.
+    let mut simulator = fight_with_wuppy(1, 60);
+    end_turn(&mut simulator);
+    let mut state = simulator.state().clone();
+    state.combat.as_mut().unwrap().creatures[0].block = 5;
+    let mut simulator =
+        Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+    let player_hp = player(&simulator).current_hp;
+    end_turn(&mut simulator);
+    assert_eq!(player(&simulator).current_hp, player_hp - 1);
+    assert_eq!(wuppy(&simulator).current_hp, 0);
+    assert_eq!(relic_counter(&simulator, "RELIC.WUPPY"), 0);
+    assert_eq!(
+        wuppy(&simulator).power_amount("POWER.WUPPYS_LOYALTY_POWER"),
+        1
+    );
+    let player_hp = player(&simulator).current_hp;
+    end_turn(&mut simulator);
+    assert_eq!(player(&simulator).current_hp, player_hp - 13);
+
+    // A Wuppy saved at zero still joins, as a corpse.
+    let simulator = fight_with_wuppy(0, 60);
+    assert_eq!(wuppy(&simulator).current_hp, 0);
+    assert_eq!(
+        wuppy(&simulator).power_amount("POWER.WUPPYS_LOYALTY_POWER"),
+        1
+    );
+}

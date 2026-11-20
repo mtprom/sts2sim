@@ -36,9 +36,11 @@ fn power(model_id: &str, power_type: PowerType, stack_type: PowerStackType) -> P
         stops_draws_outside_hand_draw: false,
         keeps_hand: false,
         removed_when_applier_dies: false,
+        kept_when_player_applier_dies: false,
         keeps_owners_powers_on_death: false,
         survives_owner_death: false,
         redirects_owners_powered_attacks: false,
+        intercepts_owners_powered_attacks_before_block: false,
         holds_owner_where_it_stands: false,
         holds_owner_only_with_living_kin: false,
         move_on_death: None,
@@ -201,8 +203,10 @@ fn damage_shaping_powers() -> Vec<PowerDefinition> {
         // than nothing is the permanent kind and never wears off.
         PowerDefinition {
             allow_negative: true,
-            // A shrink comes off when whoever worked it goes down.
+            // A shrink comes off when whoever worked it goes down, unless that
+            // was the player.
             removed_when_applier_dies: true,
+            kept_when_player_applier_dies: true,
             hooks: vec![
                 scales_damage_dealt(70),
                 ModifierHook::every_turn(
@@ -428,7 +432,7 @@ fn thorns_power() -> PowerDefinition {
                     props: ValueProps::UNPOWERED,
                 })],
             )
-            .when(HookCondition::OwnerTakesPoweredDamageOrOmnislice),
+            .when(HookCondition::OwnerTookPoweredAttackFromSomebody),
         ],
         ..counter("POWER.THORNS_POWER", PowerType::Buff)
     }
@@ -2917,7 +2921,7 @@ pub fn item_powers() -> Vec<PowerDefinition> {
             hooks: vec![
                 modifies(
                     HookEvent::ModifyHpLostAfterOstyLate,
-                    HookCondition::OwnerTakesDamage,
+                    HookCondition::OwnerTakesDamageNotFromCard(id("CARD.BRIGHTEST_FLAME")),
                     vec![Command::Modify(ModifierCmd::Set(Amount::Fixed(0)))],
                 ),
                 ModifierHook::every_turn(

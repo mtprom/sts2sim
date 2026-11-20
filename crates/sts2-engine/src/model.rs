@@ -1409,7 +1409,10 @@ pub enum HookEvent {
     /// why a cap applies to unpowered damage and a scale does not.
     ModifyDamageAdditive,
     ModifyDamageMultiplicative,
+    ModifyDamageMultiplicativeLate,
     ModifyDamageCap,
+    /// The attack's hit count, settled once after `BeforeAttack`.
+    ModifyAttackHitCount,
     /// The two passes over block. There is no cap pass.
     ModifyBlockAdditive,
     ModifyBlockMultiplicative,
@@ -1510,7 +1513,9 @@ impl HookEvent {
             // passes, and the card-changed-piles passes.
             Self::ModifyDamageAdditive
             | Self::ModifyDamageMultiplicative
+            | Self::ModifyDamageMultiplicativeLate
             | Self::ModifyDamageCap
+            | Self::ModifyAttackHitCount
             | Self::ModifyHpLostBeforeOsty
             | Self::ModifyHpLostBeforeOstyLate
             | Self::ModifyHpLostAfterOsty
@@ -1757,13 +1762,12 @@ pub enum HookCondition {
     /// A Paper Cuts' test: the listener's owner dealt it, the player took it,
     /// it was a powered attack, and it cost the player HP.
     OwnerDealtPoweredHpLossToPlayer,
-    /// A Thorns' test: somebody is dealing it, the listener's owner is taking
-    /// it, and it is either a powered attack or the splash an Omnislice makes,
-    /// which is named outright.
-    OwnerTakesPoweredDamageOrOmnislice,
     /// The listener's owner is taking the damage, powered or not. A cap does
     /// not care how the damage was worked out.
     OwnerTakesDamage,
+    /// The same, unless the damage's card source is this model: Buffer lets
+    /// Brightest Flame's own max-HP blow through.
+    OwnerTakesDamageNotFromCard(ModelId),
     /// The listener's owner took the damage and some of it got past block,
     /// which is what a Slippery asks. The pass runs for a blow block stopped
     /// whole too, so a listener that only answers a blow that cost something
@@ -1862,6 +1866,8 @@ pub enum HookCondition {
     /// own play is already in the history and counts itself, and where it is
     /// anywhere else it is not.
     DamageCardIsTheOwnersFirstAttackPlay,
+    /// An owner's Attack card with a current hit count greater than one.
+    OwnersMultiHitAttackCard,
     /// The other way round: the listener's owner just took this power off a
     /// player — the listener's owner applied it, its holder is a player, it is
     /// this model, and the amount was negative. Those are the four tests a
@@ -2048,6 +2054,10 @@ pub struct PowerDefinition {
     /// Guarded and the magic bomb do. A power that does not say so stays.
     #[serde(default)]
     pub removed_when_applier_dies: bool,
+    /// The applier-death removal ignores a player applier, which is what
+    /// Shrink's `AfterDeath` tests.
+    #[serde(default)]
+    pub kept_when_player_applier_dies: bool,
     /// The power answers for every power its owner carries when that owner
     /// dies, which is what an illusion does: a debuff goes, and everything
     /// else stays.
@@ -2065,6 +2075,10 @@ pub struct PowerDefinition {
     /// and the damage is a powered attack.
     #[serde(default)]
     pub redirects_owners_powered_attacks: bool,
+    /// The same three tests before block (`ModifyPreBlockDamageTarget`),
+    /// which is what Wuppy's Loyalty does.
+    #[serde(default)]
+    pub intercepts_owners_powered_attacks_before_block: bool,
     /// The power keeps a fight from ending: every listener is asked before a
     /// fight is called over, so a power that says so keeps the fight standing
     /// with nothing primary left alive.
@@ -4108,6 +4122,9 @@ pub struct ValueContext {
     pub props: crate::ValueProps,
     /// The card the value came from.
     pub card: Option<CardInstanceId>,
+    /// Turn and started-play ordinal, absent for card-sourced non-play effects.
+    #[serde(default)]
+    pub card_play: Option<(u32, u64)>,
     /// The power a power-received pass is carrying, and how much of it is on
     /// its way.
     pub power: Option<(ModelId, i32)>,
@@ -4434,6 +4451,9 @@ pub enum ResumeFrame {
         rest: Vec<CreatureCombatId>,
         /// The maximum HP each of those still loses.
         amount: i32,
+        /// The card the loss came from, which deals each blow.
+        #[serde(default)]
+        card: Option<CardInstanceId>,
     },
     /// An automatic play: what the play still owes once a screen it opened
     /// has been answered. A play the player chose queues its whole tail up
@@ -4739,6 +4759,7 @@ pub struct DamageFrame {
     pub targets: Vec<CreatureCombatId>,
     pub dealer: Option<CreatureCombatId>,
     pub card: Option<CardInstanceId>,
+    pub card_play: Option<(u32, u64)>,
     pub props: crate::ValueProps,
     /// The value the caller worked out once, before the call.
     pub amount: i32,
@@ -5821,6 +5842,9 @@ pub struct CardPreview {
     /// and not what its print says. Nothing where the card carries no damage
     /// number at all.
     pub damage: Option<i32>,
+    /// `HitCountVar` preview, through the same pass as the actual attack.
+    #[serde(default)]
+    pub hits: Option<i32>,
     /// The block the card draws, on the same footing. The creature the block
     /// passes are asked about is the one gaining the block, which is always
     /// the card's own owner whatever the card is pointed at, so aiming never
@@ -5847,6 +5871,7 @@ impl CardPreview {
         Self {
             card_id,
             damage: None,
+            hits: None,
             block: None,
             aimed_damage: Vec::new(),
             multi_target_damage: None,

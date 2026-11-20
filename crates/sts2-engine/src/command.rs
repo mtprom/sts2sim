@@ -1248,6 +1248,10 @@ pub enum PlayerCmd {
     /// wraps this in the max-HP and revive rules Osty has and those two do
     /// not.
     AddPet { monster: ModelId },
+    /// A pet with this power that stands at the listening relic's saved HP
+    /// (counter current, second counter maximum), even at zero, which is
+    /// what Wuppy summons.
+    AddCompanionPet { monster: ModelId, power: ModelId },
 }
 
 /// The Necrobinder's pet.
@@ -2629,6 +2633,8 @@ pub enum Count {
     /// What the announced creature just lost off its HP, and nothing where it
     /// gained instead.
     HpTheAnnouncedCreatureLost,
+    /// The announced creature's current HP.
+    AnnouncedCreatureCurrentHp,
     /// The whole of one blow, which is the half block stopped plus the half
     /// that got through. It is what a reaper form dooms for and is not the
     /// same as the unblocked half on its own.
@@ -3101,6 +3107,10 @@ pub struct ValueProps {
     /// The listeners that scale it do not apply to it. A listener that caps it
     /// still does, because a cap makes no such test.
     pub unpowered: bool,
+    /// Only the cap pass modifies it (`ModifyDamageHookType.Cap`), which is
+    /// what an Omnislice splash asks for. It stays powered.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cap_only: bool,
 }
 
 impl ValueProps {
@@ -3108,16 +3118,19 @@ impl ValueProps {
     pub const NONE: Self = Self {
         unblockable: false,
         unpowered: false,
+        cap_only: false,
     };
     /// What a power's own damage and block carry: nothing scales them.
     pub const UNPOWERED: Self = Self {
         unblockable: false,
         unpowered: true,
+        cap_only: false,
     };
     /// Damage nothing scales and nothing stops.
     pub const UNBLOCKABLE: Self = Self {
         unblockable: true,
         unpowered: true,
+        cap_only: false,
     };
 }
 
@@ -3146,6 +3159,9 @@ pub struct CommandContext {
     pub target: Option<CreatureCombatId>,
     /// The card the command came from.
     pub card: Option<CardInstanceId>,
+    /// The actual play that issued the command, not merely its card source.
+    #[serde(default)]
+    pub card_play: Option<(u32, u64)>,
     /// The power whose listener issued the command.
     pub power: Option<ModelId>,
     /// What the enclosing [`Command::WithAmount`] worked out, bound for the

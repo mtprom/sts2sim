@@ -2518,7 +2518,8 @@ impl Simulator {
                 settling,
                 rest,
                 amount,
-            } => self.run_lose_max_hp(settling, &rest, amount, events),
+                card,
+            } => self.run_lose_max_hp(settling, &rest, amount, card, events),
             Frame::OrbTurnPass(frame) => self.run_orb_turn_pass(*frame, events).map(|()| false),
             // The draw asked its refusal before its first card; what is picked
             // back up is the loop over the cards it still owes.
@@ -6004,6 +6005,38 @@ impl Simulator {
             .ok()
             .and_then(|creature| creature.pet_owner)
             .unwrap_or(id)
+    }
+
+    /// A pet with `power` standing at the listening relic's saved HP: the
+    /// counter is its current HP and the second counter its maximum.
+    fn add_companion_pet(
+        &mut self,
+        monster: &ModelId,
+        power: &ModelId,
+        context: &CommandContext,
+        events: &mut Vec<SemanticEvent>,
+    ) -> Result<(), EngineError> {
+        let saved = context.relic.as_ref().and_then(|relic| {
+            self.state
+                .run_player
+                .relics
+                .iter()
+                .find(|held| held.model_id == *relic)
+                .map(|held| (held.counter, held.second_counter))
+        });
+        let (Some(owner), Some((current_hp, max_hp))) = (context.owner, saved) else {
+            return Ok(());
+        };
+        if let Some(pet) = self.add_pet(monster, owner)? {
+            self.apply_power(pet, None, power, 1, None, None)?;
+            let creature = self.creature_mut(pet)?;
+            creature.max_hp = max_hp.max(0);
+            creature.current_hp = current_hp.clamp(0, creature.max_hp);
+            // A companion saved at zero joins as a corpse, not a new death.
+            creature.death_handled = creature.current_hp == 0;
+        }
+        self.emit("pet.added", BTreeMap::new(), events);
+        Ok(())
     }
 
     /// A creature of this monster model joins the player's own side of the
@@ -10453,6 +10486,7 @@ impl Simulator {
             props: ValueProps::default(),
             card,
             power: Some((model_id.clone(), amount)),
+            card_play: None,
             applier: Some(applier),
             amount: 0,
             damage: None,
@@ -10519,6 +10553,7 @@ impl Simulator {
             props: ValueProps::default(),
             card: None,
             power: Some((model_id.clone(), amount)),
+            card_play: None,
             applier: None,
             amount: 0,
             damage: None,
@@ -11912,6 +11947,7 @@ impl Simulator {
                         props: *props,
                         amount,
                         results: Vec::new(),
+                        card_play: context.card_play,
                         announced: 0,
                         given: false,
                     },
@@ -12150,6 +12186,7 @@ impl Simulator {
                         targets,
                         dealer: context.owner,
                         card: context.card,
+                        card_play: context.card_play,
                         props: *props,
                         amount,
                         results: Vec::new(),
@@ -12221,7 +12258,7 @@ impl Simulator {
                     return Ok(false);
                 }
                 let targets = self.resolve_creatures(target.clone(), context)?;
-                return self.run_lose_max_hp(None, &targets, amount, events);
+                return self.run_lose_max_hp(None, &targets, amount, context.card, events);
             }
             // Gaining and losing block both return before anything at all while
             // the fight is over or ending, which a fight that has not been
@@ -12451,7 +12488,8 @@ impl Simulator {
         })?;
         // The hit-count pass settles the count before the loop opens, so it is
         // worked out once and never again.
-        let count = self.resolve_amount(hits, context)?;
+        let base_count = self.resolve_amount(hits, context)?;
+        let count = self.modify_attack_hit_count(base_count, attack_value)?;
         let frame = crate::AttackFrame {
             amount: amount.clone(),
             props,
@@ -12462,6 +12500,20 @@ impl Simulator {
             then,
         };
         self.run_attack_hits(frame, events)
+    }
+
+    fn modify_attack_hit_count(
+        &mut self,
+        count: i32,
+        mut value: ValueContext,
+    ) -> Result<i32, EngineError> {
+        value.amount = count;
+        let (count, _) = self.modifier_pass_by_value(
+            HookEvent::ModifyAttackHitCount,
+            HookContext::over(value),
+            i64::from(count),
+        )?;
+        Ok(i32::try_from(count).unwrap_or(i32::MAX).max(0))
     }
 
     /// The hit loop, entered at its start or at the hit a screen stopped it on.
@@ -12509,6 +12561,7 @@ impl Simulator {
                     targets,
                     dealer: Some(source),
                     card: frame.context.card,
+                    card_play: frame.context.card_play,
                     props: frame.props,
                     amount: base,
                     results: Vec::new(),
@@ -12955,7 +13008,7 @@ impl Simulator {
                 let base = self.card_damage_var(&fingerprint, growth).unwrap_or(0);
                 let owner = self.combat()?.player.creature_id;
                 let modified =
-                    self.modify_damage_at(Some(owner), None, base, ValueProps::NONE, read)?;
+                    self.modify_damage_at(Some(owner), None, base, ValueProps::NONE, read, None)?;
                 for card in self.combat_mut()?.player.piles.all_cards_mut() {
                     if card.id == source {
                         card.damage_bonus += modified;
@@ -13553,7 +13606,7 @@ impl Simulator {
             (Some(upgrade), 1) => upgrade.effects.clone(),
             _ => definition.effects.clone(),
         };
-        let context = CommandContext::by(self.combat()?.player.creature_id)
+        let mut context = CommandContext::by(self.combat()?.player.creature_id)
             .at(target)
             .from_card(card_id);
         let announced_target = (self.card_target(&definition, &card.fingerprint)
@@ -13579,6 +13632,7 @@ impl Simulator {
                     &definition,
                     announced_target,
                 )?;
+                context.card_play = Some(self.started_play_identity()?);
                 won |= self.run_commands_to_end(&commands, &context, events)?;
                 if self.suspended() {
                     self.push_resume(Effect::Resume(Box::new(crate::ResumeFrame::AutoPlay(
@@ -14727,6 +14781,9 @@ impl Simulator {
                     self.add_pet(monster, owner)?;
                 }
                 self.emit("pet.added", BTreeMap::new(), events);
+            }
+            PlayerCmd::AddCompanionPet { monster, power } => {
+                self.add_companion_pet(monster, power, context, events)?;
             }
             PlayerCmd::GainEnergy(amount) => {
                 if self.combat_is_ending() {
@@ -17158,6 +17215,11 @@ impl Simulator {
             // What the announced creature lost, and nothing where it gained
             // instead.
             Count::HpTheAnnouncedCreatureLost => (-self.hook_context.hp_delta).max(0),
+            Count::AnnouncedCreatureCurrentHp => self
+                .hook_context
+                .announced_creature
+                .and_then(|id| self.creature(id).ok())
+                .map_or(0, |creature| creature.current_hp),
             // The whole of the blow — what block stopped plus what went through
             // — which this engine keeps as the block that stopped it, the health
             // it cost, and whatever was left over past that health.
@@ -21507,6 +21569,26 @@ impl Simulator {
             return Ok(preview);
         };
         let unaimed = CommandContext::by(player_id).from_card(card_id);
+        let effects = match (&definition.upgrade, fingerprint.upgrade_level) {
+            (Some(upgrade), 1) => &upgrade.effects,
+            _ => &definition.effects,
+        };
+        if let Some(hits) = effects.iter().find_map(|command| match command {
+            Command::Damage(DamageCmd::Attack { hits, .. }) | Command::Strike { hits, .. } => {
+                Some(hits)
+            }
+            _ => None,
+        }) {
+            let count = self.resolve_amount(hits, &unaimed)?;
+            preview.hits = Some(self.modify_attack_hit_count(
+                count,
+                ValueContext {
+                    dealer: Some(player_id),
+                    card: Some(card_id),
+                    ..ValueContext::default()
+                },
+            )?);
+        }
         if let Some((amount, props)) = self.card_block_var_base(fingerprint) {
             let base = self.resolve_amount(&amount, &unaimed)?;
             let (_, block, _) = self.block_value_passes(player_id, base, props, Some(card_id))?;
@@ -21533,15 +21615,21 @@ impl Simulator {
         // what this copy has added to its own var.
         let unaimed_base = self.resolve_amount(&amount, &unaimed)? + growth;
         let unaimed_damage =
-            self.modify_damage_at(dealer, None, unaimed_base, props, Some(card_id))?;
+            self.modify_damage_at(dealer, None, unaimed_base, props, Some(card_id), None)?;
         preview.damage = Some(unaimed_damage);
         match self.card_target(&definition, fingerprint) {
             TargetType::AnyEnemy => {
                 for target in aimable {
                     let aimed = CommandContext::by(player_id).at(*target).from_card(card_id);
                     let base = self.resolve_amount(&amount, &aimed)? + growth;
-                    let damage =
-                        self.modify_damage_at(dealer, Some(*target), base, props, Some(card_id))?;
+                    let damage = self.modify_damage_at(
+                        dealer,
+                        Some(*target),
+                        base,
+                        props,
+                        Some(card_id),
+                        None,
+                    )?;
                     preview.aimed_damage.push(crate::AimedDamage {
                         combat_id: *target,
                         damage,
@@ -21564,6 +21652,7 @@ impl Simulator {
                         unaimed_base,
                         props,
                         Some(card_id),
+                        None,
                     )?;
                     match agreed {
                         None => agreed = Some(damage),
@@ -22803,7 +22892,7 @@ impl Simulator {
         props: ValueProps,
         card: Option<CardInstanceId>,
     ) -> Result<i32, EngineError> {
-        self.modify_damage_at(dealer, Some(target), base, props, card)
+        self.modify_damage_at(dealer, Some(target), base, props, card, None)
     }
 
     /// The same pass with nobody in the target's place: every listener that
@@ -22816,6 +22905,7 @@ impl Simulator {
         base: i32,
         props: ValueProps,
         card: Option<CardInstanceId>,
+        card_play: Option<(u32, u64)>,
     ) -> Result<i32, EngineError> {
         /// How many of the pass's own units make one point of damage.
         const HUNDREDTHS: i64 = 100;
@@ -22824,6 +22914,7 @@ impl Simulator {
             target,
             props,
             card,
+            card_play,
             power: None,
             applier: None,
             amount: 0,
@@ -22841,21 +22932,29 @@ impl Simulator {
         // strength is added to what that came to, fraction and all. The chain is
         // held in hundredths here for the same reason.
         let mut carried = ModifierPass::over_scaled(i64::from(base), HUNDREDTHS);
-        let settled = self.enchant_value_pass_carrying(
-            card,
-            &[
-                crate::HookEvent::EnchantDamageAdditive,
-                crate::HookEvent::EnchantDamageMultiplicative,
-            ],
-            &value,
-            carried,
-        )?;
-        carried = ModifierPass::carrying(settled, HUNDREDTHS);
-        for event in [
-            crate::HookEvent::ModifyDamageAdditive,
-            crate::HookEvent::ModifyDamageMultiplicative,
-            crate::HookEvent::ModifyDamageCap,
-        ] {
+        let mut events = vec![crate::HookEvent::ModifyDamageCap];
+        // A cap-only value skips the enchantment and every scaling pass.
+        if !props.cap_only {
+            let settled = self.enchant_value_pass_carrying(
+                card,
+                &[
+                    crate::HookEvent::EnchantDamageAdditive,
+                    crate::HookEvent::EnchantDamageMultiplicative,
+                ],
+                &value,
+                carried,
+            )?;
+            carried = ModifierPass::carrying(settled, HUNDREDTHS);
+            events.splice(
+                0..0,
+                [
+                    crate::HookEvent::ModifyDamageAdditive,
+                    crate::HookEvent::ModifyDamageMultiplicative,
+                    crate::HookEvent::ModifyDamageMultiplicativeLate,
+                ],
+            );
+        }
+        for event in events {
             let (settled, _) =
                 self.modifier_pass_carrying(event, HookContext::over(value.clone()), carried)?;
             carried = ModifierPass::carrying(settled, HUNDREDTHS);
@@ -23022,10 +23121,19 @@ impl Simulator {
             _ => definition.effects.clone(),
         };
         let owner = self.combat()?.player.creature_id;
-        let context = CommandContext::by(owner)
+        let mut context = CommandContext::by(owner)
             .at(target.unwrap_or(owner))
             .from_card(card_id);
+        context.card_play = Some(self.started_play_identity()?);
         Ok(Some((commands, context)))
+    }
+
+    fn started_play_identity(&self) -> Result<(u32, u64), EngineError> {
+        let player = &self.combat()?.player;
+        Ok((
+            player.turn,
+            u64::try_from(player.play_types_started_this_turn.len()).expect("play count fits u64"),
+        ))
     }
 
     /// What a card's enchantment adds to the play, run once per play after the
@@ -23163,6 +23271,7 @@ impl Simulator {
             // Block off a card belongs to whoever played it, which is what
             // Dexterity tests against.
             dealer: card.and_then(|_| self.combat().ok().map(|combat| combat.player.creature_id)),
+            card_play: None,
             target: Some(target),
             props,
             card,
@@ -23217,6 +23326,7 @@ impl Simulator {
             target: Some(target),
             props,
             card,
+            card_play: None,
             power: None,
             applier: None,
             amount: 0,
@@ -23265,6 +23375,38 @@ impl Simulator {
     /// fight is ending. Only one model in the pinned build redirects anything:
     /// a pet that will die for its owner takes a blow aimed at that owner, while
     /// the pet is standing, and only where the blow is a powered attack.
+    /// `ModifyPreBlockDamageTarget`: a live pet whose power intercepts its
+    /// owner's powered attacks before block takes the blow first.
+    fn modify_pre_block_damage_target(
+        &mut self,
+        original: CreatureCombatId,
+        props: ValueProps,
+    ) -> Result<Option<CreatureCombatId>, EngineError> {
+        let mut receiver = None;
+        if props.unpowered {
+            return Ok(receiver);
+        }
+        for listener in self.hook_listeners(crate::HookEvent::ModifyUnblockedDamageTarget)? {
+            if listener.source != ListenerSource::Power
+                || !self
+                    .content
+                    .power(&listener.model_id)
+                    .is_some_and(|definition| {
+                        definition.intercepts_owners_powered_attacks_before_block
+                    })
+            {
+                continue;
+            }
+            if self
+                .creature(listener.owner)
+                .is_ok_and(|pet| pet.pet_owner == Some(original) && pet.alive())
+            {
+                receiver = Some(listener.owner);
+            }
+        }
+        Ok(receiver)
+    }
+
     fn modify_unblocked_damage_target(
         &mut self,
         original: CreatureCombatId,
@@ -23966,6 +24108,7 @@ impl Simulator {
         settling: Option<(CreatureCombatId, i32)>,
         rest: &[CreatureCombatId],
         amount: i32,
+        card: Option<CardInstanceId>,
         events: &mut Vec<SemanticEvent>,
     ) -> Result<bool, EngineError> {
         // A screen answered between the blow and the maximum leaves exactly one
@@ -23992,8 +24135,10 @@ impl Simulator {
                 self.run_damage(
                     crate::DamageFrame {
                         targets: vec![creature],
-                        dealer: None,
-                        card: None,
+                        // A card source deals the blow as its owner, with no play.
+                        dealer: card.and(Some(self.combat()?.player.creature_id)),
+                        card,
+                        card_play: None,
                         props: crate::ValueProps::UNBLOCKABLE,
                         amount: excess,
                         results: Vec::new(),
@@ -24007,6 +24152,7 @@ impl Simulator {
                         settling: Some((creature, new_max.max(1))),
                         rest: rest[index + 1..].to_vec(),
                         amount,
+                        card,
                     })))?;
                     return Ok(false);
                 }
@@ -24059,8 +24205,14 @@ impl Simulator {
             if !self.creature(target).is_ok_and(Creature::alive) {
                 continue;
             }
-            let dealt =
-                self.modify_damage(frame.dealer, target, frame.amount, frame.props, frame.card)?;
+            let dealt = self.modify_damage_at(
+                frame.dealer,
+                Some(target),
+                frame.amount,
+                frame.props,
+                frame.card,
+                frame.card_play,
+            )?;
             let settled =
                 self.apply_damage(frame.dealer, target, dealt, frame.props, frame.card, events)?;
             frame.results.extend(settled);
@@ -24096,6 +24248,7 @@ impl Simulator {
                 target: Some(target),
                 props,
                 card,
+                card_play: None,
                 power: None,
                 applier: None,
                 amount: 0,
@@ -24117,6 +24270,16 @@ impl Simulator {
         // results empty rather than by reading zeroes off it.
         if self.creature(target).is_err() {
             return Ok(Vec::new());
+        }
+        let mut settled = Vec::new();
+        let mut amount = amount;
+        // A pre-block receiver loses HP first. The build's BeforeWuppy HP-loss
+        // phase has no listeners, and only the overkill goes on to block.
+        if let Some(guard) = self.modify_pre_block_damage_target(target, props)? {
+            let guard_block = self.creature(guard)?.block;
+            let result = self.lose_hp(guard, amount.max(0), 0, guard_block, props, events)?;
+            amount = result.overkill;
+            settled.push((guard, result));
         }
         // A blow aimed at a pet is stopped by its owner's block, not by the
         // pet's own, and the block figures the results carry are read off the
@@ -24150,16 +24313,14 @@ impl Simulator {
             props,
             card,
         )?;
-        let mut settled = vec![(
-            receiver,
-            self.lose_hp(receiver, hp_loss, blocked, block_left, props, events)?,
-        )];
+        let taken = self.lose_hp(receiver, hp_loss, blocked, block_left, props, events)?;
+        settled.push((receiver, taken));
         if receiver != target {
             // The blow was taken by a pet. What it was worth beyond what the
             // pet had left tramples through onto the owner, and the build runs
             // only the after-pet phase over it: the before-pet phase has
             // already had its say on this blow and is not run again.
-            let overkill = settled[0].1.overkill;
+            let overkill = taken.overkill;
             let trample = self.modify_hp_lost(
                 HpLossPhase::AfterOsty,
                 dealer,
@@ -24255,6 +24416,7 @@ impl Simulator {
                 target: Some(target),
                 props: frame.props,
                 card: frame.card,
+                card_play: frame.card_play,
                 power: None,
                 applier: None,
                 amount: 0,
@@ -24477,6 +24639,7 @@ impl Simulator {
         // Only a power that says so comes off when whoever worked it dies:
         // `AfterDeath` testing whether the dead creature applied it. Nothing
         // else notices.
+        let player = self.combat()?.player.creature_id;
         let doomed: Vec<(usize, Vec<bool>)> =
             self.combat()?
                 .creatures
@@ -24493,7 +24656,11 @@ impl Simulator {
                                     .applier
                                     .is_some_and(|applier| removed.contains(&applier))
                                     && self.content.power(&power.model_id).is_some_and(
-                                        |definition| definition.removed_when_applier_dies,
+                                        |definition| {
+                                            definition.removed_when_applier_dies
+                                                && !(definition.kept_when_player_applier_dies
+                                                    && power.applier == Some(player))
+                                        },
                                     )
                             })
                             .collect(),
@@ -25377,6 +25544,26 @@ impl Simulator {
             crate::HookCondition::OwnerDealsPoweredDamageFromACard => {
                 value.dealer == Some(owner) && !value.props.unpowered && value.card.is_some()
             }
+            crate::HookCondition::OwnersMultiHitAttackCard => {
+                let count = self
+                    .modifier
+                    .map_or(i64::from(value.amount), ModifierPass::settled);
+                count > 1
+                    && value.dealer == Some(owner)
+                    && owner == self.combat()?.player.creature_id
+                    && value
+                        .card
+                        .and_then(|id| {
+                            self.combat()
+                                .ok()?
+                                .player
+                                .piles
+                                .all_cards()
+                                .find(|card| card.id == id)
+                        })
+                        .and_then(|card| self.content.card_type_of(&card.fingerprint))
+                        == Some(crate::CardType::Attack)
+            }
             // The run of tests lethality makes before it scales damage, in the
             // build's own order.
             crate::HookCondition::DamageCardIsTheOwnersFirstAttackPlay => {
@@ -25405,7 +25592,7 @@ impl Simulator {
                         .count(),
                 )
                 .unwrap_or(i64::MAX);
-                started <= i64::from(u8::from(in_play))
+                started <= i64::from(u8::from(in_play && value.card_play.is_some()))
             }
             crate::HookCondition::OwnersPetDealsPoweredDamageFromACard => {
                 !value.props.unpowered
@@ -25422,8 +25609,6 @@ impl Simulator {
             crate::HookCondition::OwnerTookPoweredAttackFromSomebody => {
                 value.target == Some(owner) && value.dealer.is_some() && !value.props.unpowered
             }
-            // The owner took a blow from somebody, and it was either a powered
-            // attack or an Omnislice's.
             // The owner dealt a powered attack to a player and something of it
             // went through.
             crate::HookCondition::OwnerIsEnemy => self.creature(owner)?.side == CombatSide::Enemy,
@@ -25458,21 +25643,18 @@ impl Simulator {
                     && !value.props.unpowered
                     && value.damage.is_some_and(|damage| damage.unblocked > 0)
             }
-            crate::HookCondition::OwnerTakesPoweredDamageOrOmnislice => {
-                let from_omnislice = value.card.is_some_and(|card| {
-                    self.combat().is_ok_and(|combat| {
-                        combat.player.piles.all_cards().any(|instance| {
-                            instance.id == card
-                                && instance.fingerprint.model_id.entry() == "OMNISLICE"
-                        })
-                    })
-                });
-                value.target == Some(owner)
-                    && value.dealer.is_some()
-                    && (!value.props.unpowered || from_omnislice)
-            }
             crate::HookCondition::OwnerTakesDamage | crate::HookCondition::PowerAppliedToOwner => {
                 value.target == Some(owner)
+            }
+            crate::HookCondition::OwnerTakesDamageNotFromCard(model_id) => {
+                value.target == Some(owner)
+                    && !value.card.is_some_and(|card| {
+                        self.combat().is_ok_and(|combat| {
+                            combat.player.piles.all_cards().any(|instance| {
+                                instance.id == card && instance.fingerprint.model_id == *model_id
+                            })
+                        })
+                    })
             }
             crate::HookCondition::PowerAppliedToOwnerIs(model_id) => {
                 value.target == Some(owner)
@@ -29940,6 +30122,7 @@ struct KeyHandCardView<'a> {
 #[derive(serde::Serialize)]
 struct KeyPreviewView<'a> {
     damage: Option<i32>,
+    hits: Option<i32>,
     block: Option<i32>,
     aimed_damage: &'a [crate::AimedDamage],
     multi_target_damage: Option<i32>,
@@ -30047,6 +30230,7 @@ fn key_hand_views<'a>(
                 .find(|preview| preview.card_id == card.card_id)
                 .map(|preview| KeyPreviewView {
                     damage: preview.damage,
+                    hits: preview.hits,
                     block: preview.block,
                     aimed_damage: &preview.aimed_damage,
                     multi_target_damage: preview.multi_target_damage,
@@ -31143,6 +31327,7 @@ mod card_view_sort_tests {
                     face: card.face.clone(),
                     preview: damage.map(|damage| KeyPreviewView {
                         damage: Some(damage),
+                        hits: None,
                         block: None,
                         aimed_damage: &[],
                         multi_target_damage: None,

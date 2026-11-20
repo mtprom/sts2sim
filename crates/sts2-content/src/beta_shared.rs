@@ -156,9 +156,10 @@ pub(crate) fn powers() -> Vec<PowerDefinition> {
             ],
             ..powers::counter("POWER.FREE_CARD_POWER", PowerType::Buff)
         },
-        // TODO(package 4): ModifyPreBlockDamageTarget and BeforeWuppy loss
-        // ordering; retain the loyalty power on the dead companion.
+        // Loyalty takes its owner's powered attacks on Wuppy before block,
+        // and stays on the corpse.
         PowerDefinition {
+            intercepts_owners_powered_attacks_before_block: true,
             survives_owner_death: true,
             owner_removed_from_combat_on_death: false,
             ..powers::single("POWER.WUPPYS_LOYALTY_POWER", PowerType::Buff)
@@ -268,9 +269,16 @@ pub(crate) fn relics() -> Vec<RelicDefinition> {
             )],
             ..relics::obtained_only("RELIC.BYRDINE", RelicRarity::Event)
         },
-        // TODO(package 4): ModifyAttackHitCount for Thumbscrew.
         RelicDefinition {
-            on_obtained: vec![Command::Unsupported(id("RELIC.THUMBSCREW"))],
+            hooks: vec![
+                ModifierHook::every_turn(
+                    HookEvent::ModifyAttackHitCount,
+                    vec![Command::Modify(sts2_engine::ModifierCmd::Add(
+                        Amount::Fixed(1),
+                    ))],
+                )
+                .when(HookCondition::OwnersMultiHitAttackCard),
+            ],
             ..relics::obtained_only("RELIC.THUMBSCREW", RelicRarity::Event)
         },
         RelicDefinition {
@@ -285,12 +293,27 @@ pub(crate) fn relics() -> Vec<RelicDefinition> {
             adds_rest_site_option: Some(sts2_engine::RestSiteOffer::of(
                 sts2_engine::RestSiteOption::Restore,
             )),
-            // TODO(package 4): spawn using CurrentHp/MaxHp, synchronize HP
-            // changes, and redirect powered attacks before the owner's block.
-            hooks: vec![ModifierHook::every_turn(
-                HookEvent::BeforeCombatStart,
-                vec![Command::Unsupported(id("POWER.WUPPYS_LOYALTY_POWER"))],
-            )],
+            // Wuppy stands at the saved CurrentHp/MaxHp each fight, dead or
+            // not, and every HP change is written back.
+            hooks: vec![
+                ModifierHook::every_turn(
+                    HookEvent::BeforeCombatStart,
+                    vec![Command::Player(PlayerCmd::AddCompanionPet {
+                        monster: id("MONSTER.WUPPY"),
+                        power: id("POWER.WUPPYS_LOYALTY_POWER"),
+                    })],
+                ),
+                ModifierHook::every_turn(
+                    HookEvent::AfterCurrentHpChanged,
+                    vec![Command::When {
+                        condition: Condition::AnnouncedCreatureIsMonster(id("MONSTER.WUPPY")),
+                        then: vec![Command::Relic(sts2_engine::RelicCmd::SetListeningCounter(
+                            Amount::counting(Count::AnnouncedCreatureCurrentHp),
+                        ))],
+                        otherwise: Vec::new(),
+                    }],
+                ),
+            ],
             ..relics::obtained_only("RELIC.WUPPY", RelicRarity::Event)
         },
         RelicDefinition {

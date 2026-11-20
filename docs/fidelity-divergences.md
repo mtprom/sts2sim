@@ -23,7 +23,7 @@ Pael's Legion binds its multiplier to a particular card play, not all nested
 plays. Byrdpip unlocks Evolve after six Swoops; Evolve replaces it with Byrdine,
 preserving the skin as Hair. Wuppy persists 30 or 60 HP between fights, redirects
 powered attack damage before block, keeps its corpse and loyalty power, and
-adds Restore at rest sites. Thumbscrew adds a hit to multi-hit card attacks.
+ adds Restore at rest sites.
 Dingy Dagger supports repeated upgrades, adding 3 plus the new upgrade level
 to damage each time.
 
@@ -32,9 +32,8 @@ dispatcher still notifies every source. Pael's Legion still uses its old
 boolean latch rather than a card-play identity. Byrdpip counts Swoops and
 Evolve preserves its skin as Byrdine's Hair while transforming Swoops to God Byrd.
 Both companion models are registered. Wuppy in Trouble's three choices and
-Restore work outside combat, with CurrentHp and MaxHp saved on the relic.
-Starting combat with Wuppy fails explicitly pending its interception and HP
-synchronization hooks. Obtaining Thumbscrew fails explicitly.
+Restore work, with CurrentHp and MaxHp saved on the relic; in combat Wuppy
+takes its owner's powered attacks before block and writes its HP back.
 Dingy Dagger supports only levels 0 and 1. It stays eligible for further
 upgrades, but attempting the second upgrade fails explicitly with the model
 and unsupported level instead of disappearing from upgrade choices.
@@ -43,15 +42,12 @@ Storyteller is registered with its Starter rarity but obtaining it is
 unsupported: its Aim mechanics belong to the excluded Fool character.
 
 **Whether it can reach a conformance claim.** Yes. A playback with Ambergris
-and an unused Pael's Eye, nested block plays under Pael's Legion,
-combat with Wuppy, Thumbscrew, or repeated Dagger
-upgrades exposes these differences. These rules must not be reported as
+and an unused Pael's Eye, nested block plays under Pael's Legion
+or repeated Dagger upgrades exposes these differences. These rules must not be reported as
 fully beta-conformant.
 
 **What would change this.** Engine support for source-specific early extra
-turns, card-play identity, combat synchronization of event-pet HP and
-`ModifyPreBlockDamageTarget`/`BeforeWuppy`, `ModifyAttackHitCount`, and
-repeatable card upgrades. Museum's curse generation must use
+turns, card-play identity and repeatable card upgrades. Museum's curse generation must use
 `non_combat_generation`; Waterfall's relic rarity must use its event RNG,
 not the old streams.
 
@@ -315,16 +311,10 @@ parity blockers until the named hooks and distinguishing scenarios are added.
   before it becomes the next turn's copy template; defer Juggling's
   remembered clone until after the triggering card resolves. These timing
   changes need engine scheduling rather than different content values.
-- TODO(package 4): Omnislice splash must be powered but pass only through
-  damage caps (`ModifyDamageHookType.Cap`), not receive Strength/multipliers
-  a second time; remove the Thorns Omnislice exception alongside that hook.
-- TODO(package 4): propagate the causing card through max-HP loss and death.
-  Brightest Flame must bypass Buffer while still reporting its card source;
-  Bone Shards and Sacrifice must identify their card when killing Osty.
-- TODO(package 4): distinguish real `CardPlay` damage from a card's other
-  effects when Lethality counts the current Attack; Shrink must ignore a
-  player's death when removing itself on its applier's death. The generic
-  applier-death cleanup currently does not distinguish a player applier.
+- TODO(package 4): `AfterDeath` receives no causing card. Bone Shards and
+  Sacrifice must identify their card when killing Osty, and Doom must kill
+  with an explicit null source. Only the Fool's Impaled reads that source, so
+  this lands with the Fool substrate.
 - TODO(package 4): transform results and dupe cloning need the new source/result identity
   handling. Glam, Sown, and Swift must disable after the play finishes, not
   during it. These are engine-level changes rather than card balance.
