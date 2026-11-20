@@ -984,6 +984,20 @@ fn beating_up_the_waterfall_gremlin_obtains_a_relic_and_two_guilty() {
         &mut simulator,
         "WATERFALL_OF_OBVIOUS_SECRETS.pages.INITIAL.options.ENTER",
     );
+    // Keep the page standing so its final RNG counter remains observable.
+    let mut state = simulator.state().clone();
+    let Some(ActiveRoom::Event { options, .. }) = state.run.as_mut().unwrap().active_room.as_mut()
+    else {
+        panic!("the waterfall page is standing");
+    };
+    options
+        .iter_mut()
+        .find(|option| option.option_id.ends_with(".BEAT_UP"))
+        .unwrap()
+        .effects
+        .push(EventEffect::SetPage(Vec::new()));
+    let mut simulator =
+        Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
     let rewards_before = simulator
         .state()
         .player_rng
