@@ -2920,7 +2920,7 @@ pub fn item_powers() -> Vec<PowerDefinition> {
             hooks: vec![
                 modifies(
                     HookEvent::ModifyHpLostAfterOstyLate,
-                    HookCondition::OwnerTakesDamage,
+                    HookCondition::OwnerTakesDamageNotFromCard(id("CARD.BRIGHTEST_FLAME")),
                     vec![Command::Modify(ModifierCmd::Set(Amount::Fixed(0)))],
                 ),
                 ModifierHook::every_turn(

@@ -1765,6 +1765,9 @@ pub enum HookCondition {
     /// The listener's owner is taking the damage, powered or not. A cap does
     /// not care how the damage was worked out.
     OwnerTakesDamage,
+    /// The same, unless the damage's card source is this model: Buffer lets
+    /// Brightest Flame's own max-HP blow through.
+    OwnerTakesDamageNotFromCard(ModelId),
     /// The listener's owner took the damage and some of it got past block,
     /// which is what a Slippery asks. The pass runs for a blow block stopped
     /// whole too, so a listener that only answers a blow that cost something
@@ -4444,6 +4447,9 @@ pub enum ResumeFrame {
         rest: Vec<CreatureCombatId>,
         /// The maximum HP each of those still loses.
         amount: i32,
+        /// The card the loss came from, which deals each blow.
+        #[serde(default)]
+        card: Option<CardInstanceId>,
     },
     /// An automatic play: what the play still owes once a screen it opened
     /// has been answered. A play the player chose queues its whole tail up

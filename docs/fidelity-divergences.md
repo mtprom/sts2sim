@@ -315,9 +315,10 @@ parity blockers until the named hooks and distinguishing scenarios are added.
   before it becomes the next turn's copy template; defer Juggling's
   remembered clone until after the triggering card resolves. These timing
   changes need engine scheduling rather than different content values.
-- TODO(package 4): propagate the causing card through max-HP loss and death.
-  Brightest Flame must bypass Buffer while still reporting its card source;
-  Bone Shards and Sacrifice must identify their card when killing Osty.
+- TODO(package 4): `AfterDeath` receives no causing card. Bone Shards and
+  Sacrifice must identify their card when killing Osty, and Doom must kill
+  with an explicit null source. Only the Fool's Impaled reads that source, so
+  this lands with the Fool substrate.
 - TODO(package 4): transform results and dupe cloning need the new source/result identity
   handling. Glam, Sown, and Swift must disable after the play finishes, not
   during it. These are engine-level changes rather than card balance.

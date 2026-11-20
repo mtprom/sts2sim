@@ -2518,7 +2518,8 @@ impl Simulator {
                 settling,
                 rest,
                 amount,
-            } => self.run_lose_max_hp(settling, &rest, amount, events),
+                card,
+            } => self.run_lose_max_hp(settling, &rest, amount, card, events),
             Frame::OrbTurnPass(frame) => self.run_orb_turn_pass(*frame, events).map(|()| false),
             // The draw asked its refusal before its first card; what is picked
             // back up is the loop over the cards it still owes.
@@ -12225,7 +12226,7 @@ impl Simulator {
                     return Ok(false);
                 }
                 let targets = self.resolve_creatures(target.clone(), context)?;
-                return self.run_lose_max_hp(None, &targets, amount, events);
+                return self.run_lose_max_hp(None, &targets, amount, context.card, events);
             }
             // Gaining and losing block both return before anything at all while
             // the fight is over or ending, which a fight that has not been
@@ -24035,6 +24036,7 @@ impl Simulator {
         settling: Option<(CreatureCombatId, i32)>,
         rest: &[CreatureCombatId],
         amount: i32,
+        card: Option<CardInstanceId>,
         events: &mut Vec<SemanticEvent>,
     ) -> Result<bool, EngineError> {
         // A screen answered between the blow and the maximum leaves exactly one
@@ -24061,8 +24063,9 @@ impl Simulator {
                 self.run_damage(
                     crate::DamageFrame {
                         targets: vec![creature],
-                        dealer: None,
-                        card: None,
+                        // A card source deals the blow as its owner, with no play.
+                        dealer: card.and(Some(self.combat()?.player.creature_id)),
+                        card,
                         card_play: None,
                         props: crate::ValueProps::UNBLOCKABLE,
                         amount: excess,
@@ -24077,6 +24080,7 @@ impl Simulator {
                         settling: Some((creature, new_max.max(1))),
                         rest: rest[index + 1..].to_vec(),
                         amount,
+                        card,
                     })))?;
                     return Ok(false);
                 }
@@ -25561,6 +25565,16 @@ impl Simulator {
             }
             crate::HookCondition::OwnerTakesDamage | crate::HookCondition::PowerAppliedToOwner => {
                 value.target == Some(owner)
+            }
+            crate::HookCondition::OwnerTakesDamageNotFromCard(model_id) => {
+                value.target == Some(owner)
+                    && !value.card.is_some_and(|card| {
+                        self.combat().is_ok_and(|combat| {
+                            combat.player.piles.all_cards().any(|instance| {
+                                instance.id == card && instance.fingerprint.model_id == *model_id
+                            })
+                        })
+                    })
             }
             crate::HookCondition::PowerAppliedToOwnerIs(model_id) => {
                 value.target == Some(owner)

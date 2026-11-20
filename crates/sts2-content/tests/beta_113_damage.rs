@@ -285,3 +285,33 @@ fn omnislice_splash_is_powered_and_cap_only() {
     assert_eq!(enemy(3), Some((99, 0)));
     assert_eq!(combat.creatures[0].current_hp, 77);
 }
+
+/// LoseMaxHp damages the HP above the new maximum with its card as the
+/// source. Buffer returns the amount unchanged for Brightest Flame, so it is
+/// not a modifying listener and keeps its stack.
+#[test]
+fn brightest_flame_bypasses_buffer_through_max_hp_loss() {
+    let mut simulator = ScenarioBuilder::new("FLAME113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .player_hp(80, 80)
+        .energy(3, 3)
+        .turn(1, 1)
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
+        .power(0, id("POWER.BUFFER_POWER"), 1, PowerType::Buff)
+        .card(
+            PileName::Hand,
+            0,
+            CardFingerprint::base(id("CARD.BRIGHTEST_FLAME")),
+            0,
+        )
+        .build(sts2_content::standard_registry())
+        .expect("scenario");
+    play(&mut simulator);
+    let player = &simulator.state().combat.as_ref().unwrap().creatures[0];
+    assert_eq!((player.current_hp, player.max_hp), (78, 78));
+    assert!(
+        player
+            .powers
+            .iter()
+            .any(|power| power.model_id == id("POWER.BUFFER_POWER") && power.amount == 1)
+    );
+}
