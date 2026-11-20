@@ -123,6 +123,24 @@ fn loadout(character: &sts2_core::ModelId) -> Option<Loadout> {
             // build that walks in with orb slots of their own.
             orb_slots: 3,
         }),
+        "CHARACTER.FOOL" => Some(Loadout {
+            max_hp: 77,
+            gold: 99,
+            deck: vec![
+                "CARD.STRIKE_FOOL",
+                "CARD.STRIKE_FOOL",
+                "CARD.STRIKE_FOOL",
+                "CARD.STRIKE_FOOL",
+                "CARD.STRIKE_FOOL",
+                "CARD.DEFEND_FOOL",
+                "CARD.DEFEND_FOOL",
+                "CARD.DEFEND_FOOL",
+                "CARD.DEFEND_FOOL",
+                "CARD.FOOLISH_SHOT",
+            ],
+            relic: "RELIC.SONG_BOW",
+            orb_slots: 0,
+        }),
         _ => None,
     }
 }

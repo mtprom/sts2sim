@@ -64,12 +64,13 @@ pub const ACT_INDEX_COUNT: usize = 3;
 /// Every character, in the order the game lists them. A random character is an
 /// index into this list, so the order is part of the roll, and the list is not
 /// filtered by unlock state.
-const ALL_CHARACTERS: [&str; 5] = [
+const ALL_CHARACTERS: [&str; 6] = [
     "CHARACTER.IRONCLAD",
     "CHARACTER.SILENT",
     "CHARACTER.REGENT",
     "CHARACTER.NECROBINDER",
     "CHARACTER.DEFECT",
+    "CHARACTER.FOOL",
 ];
 
 /// The stand-in a lobby carries until the roll names a real character.

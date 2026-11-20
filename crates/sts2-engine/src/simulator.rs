@@ -29381,22 +29381,24 @@ fn refined_starter(
 }
 
 /// Every character, in the build's own order.
-const EVERY_CHARACTER: [&str; 5] = [
+const EVERY_CHARACTER: [&str; 6] = [
     "CHARACTER.IRONCLAD",
     "CHARACTER.SILENT",
     "CHARACTER.REGENT",
     "CHARACTER.NECROBINDER",
     "CHARACTER.DEFECT",
+    "CHARACTER.FOOL",
 ];
 
 /// Every character's card pool, in the build's own order. Every character is
 /// unlocked at this baseline, so all five stand.
-const EVERY_CHARACTER_POOL: [&str; 5] = [
+const EVERY_CHARACTER_POOL: [&str; 6] = [
     "CARD_POOL.IRONCLAD_CARD_POOL",
     "CARD_POOL.SILENT_CARD_POOL",
     "CARD_POOL.REGENT_CARD_POOL",
     "CARD_POOL.NECROBINDER_CARD_POOL",
     "CARD_POOL.DEFECT_CARD_POOL",
+    "CARD_POOL.FOOL_CARD_POOL",
 ];
 
 /// The Claw, the card a scroll box deals three of.

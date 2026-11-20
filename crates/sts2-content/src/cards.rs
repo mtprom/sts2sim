@@ -96,6 +96,9 @@ pub(crate) fn gains_block(model_id: &str) -> bool {
     matches!(
         model_id,
         "CARD.ARMAMENTS"
+            | "CARD.DEFEND_FOOL"
+            | "CARD.JEST"
+            | "CARD.TEMPERANCE"
             | "CARD.MIGHTY_SHIELD"
             | "CARD.BACKFLIP"
             | "CARD.BLOOD_WALL"
