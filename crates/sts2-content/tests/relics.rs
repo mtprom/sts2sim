@@ -8104,8 +8104,8 @@ fn a_power_cell_deals_the_free_cards_up_front() {
     assert_eq!(celled.len(), plain.len() + 1);
 }
 
-/// PowerCell reads local cost, ignoring Spiked Gauntlets, and takes non-Innate
-/// cards before Innate cards (PowerCell.BeforeSideTurnStart).
+/// Power Cell reads local cost, ignoring Spiked Gauntlets, and takes non-Innate
+/// cards before Innate cards (`PowerCell.BeforeSideTurnStart`).
 #[test]
 fn power_cell_uses_local_cost_and_takes_innate_last() {
     let mut state = run_holding(&["RELIC.POWER_CELL", "RELIC.SPIKED_GAUNTLETS"])
