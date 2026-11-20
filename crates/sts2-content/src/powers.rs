@@ -3064,6 +3064,7 @@ pub fn colorless_powers() -> Vec<PowerDefinition> {
                     count: stacks(),
                     position: sts2_engine::DrawPilePosition::Top,
                     force_exhaust: false,
+                    upgrade: false,
                 })],
             )],
             ..counter("POWER.MAYHEM_POWER", PowerType::Buff)

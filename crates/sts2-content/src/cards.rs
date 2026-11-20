@@ -1244,6 +1244,7 @@ fn cascade(count: Amount) -> Command {
         count,
         position: sts2_engine::DrawPilePosition::Top,
         force_exhaust: false,
+        upgrade: false,
     })
 }
 
@@ -1982,6 +1983,7 @@ fn overgrowth_pickups() -> Vec<CardDefinition> {
                     count: Amount::Fixed(1),
                     position: sts2_engine::DrawPilePosition::Top,
                     force_exhaust: true,
+                    upgrade: false,
                 })],
             ),
             0,

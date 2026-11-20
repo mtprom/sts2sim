@@ -1635,6 +1635,7 @@ fn plays_itself_off_the_draw_pile(mut definition: CardDefinition) -> CardDefinit
                 count: Amount::Fixed(1),
                 position: DrawPilePosition::Top,
                 force_exhaust: false,
+                upgrade: false,
             })],
             otherwise: Vec::new(),
         }],

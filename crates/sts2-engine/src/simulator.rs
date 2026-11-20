@@ -13279,6 +13279,7 @@ impl Simulator {
         count: usize,
         position: crate::DrawPilePosition,
         force_exhaust: bool,
+        upgrade: bool,
         events: &mut Vec<SemanticEvent>,
     ) -> Result<bool, EngineError> {
         if self.combat_is_ending() || self.state.combat.is_none() {
@@ -13295,6 +13296,10 @@ impl Simulator {
                     self.combat()?.player.piles.draw.len().saturating_sub(1)
                 }
             };
+            if upgrade {
+                let id = self.combat()?.player.piles.draw[index].id;
+                self.upgrade_cards(&[id])?;
+            }
             let card = self.combat_mut()?.player.piles.draw.remove(index);
             let id = card.id;
             self.combat_mut()?.player.piles.play.push(card);
@@ -13699,10 +13704,17 @@ impl Simulator {
                 count,
                 position,
                 force_exhaust,
+                upgrade,
             } => {
                 let count = self.resolve_amount(count, context)?;
                 let count = usize::try_from(count).unwrap_or(0);
-                return self.auto_play_from_draw_pile(count, *position, *force_exhaust, events);
+                return self.auto_play_from_draw_pile(
+                    count,
+                    *position,
+                    *force_exhaust,
+                    *upgrade,
+                    events,
+                );
             }
             CardPileCmd::AddGeneratedToCombat {
                 card,
@@ -17284,6 +17296,15 @@ impl Simulator {
                 .expect("card count fits game integer")
             }
             Count::PlayerGold => self.state.run_player.gold,
+            Count::TargetCurrentHp => context
+                .target
+                .and_then(|id| self.creature(id).ok())
+                .map_or(0, |creature| creature.current_hp),
+            Count::TotalFloor => self
+                .state
+                .run
+                .as_ref()
+                .map_or(0, |run| i32::try_from(run.floor).unwrap_or(i32::MAX)),
             Count::ListeningEnchantmentAmount => self
                 .listening_enchantment(context)
                 .map_or(0, |(amount, _)| amount),

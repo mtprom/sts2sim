@@ -3,14 +3,15 @@
 
 use sts2_engine::{
     Amount, CardCmd, CardDefinition, CardFilter, CardOrigin, CardPileCmd, CardPoolRef, CardRarity,
-    CardSelectCmd, CardSelector, CardType, Command, Condition, Count, CreatureSelector,
-    DrawPilePosition, HookCondition, HookEvent, ModifierHook, OrbCmd, OrbSource, PileName,
-    PlayerCmd, RelicDefinition, RelicRarity, SelectorPrefs, TargetType, TemporaryCost, ValueProps,
+    CardSelectCmd, CardSelector, CardType, Command, Condition, Count, CreatureCmd,
+    CreatureSelector, DrawPilePosition, HookCondition, HookEvent, ModifierHook, OrbCmd, OrbSource,
+    PileName, PlayerCmd, RelicDefinition, RelicRarity, SelectorPrefs, TargetType, TemporaryCost,
+    ValueProps,
 };
 
 use crate::cards::{
-    attack, block, buff, card, debuff, defending, draw, exhausting, rarity, striking, sweep,
-    upgrading,
+    attack, block, buff, card, debuff, defending, draw, exhausting, multi_attack, rarity, striking,
+    sweep, upgrading,
 };
 use crate::id;
 
@@ -467,6 +468,39 @@ fn magician(count: i32) -> Vec<Command> {
     ]
 }
 
+fn judgement(threshold: i32) -> Command {
+    Command::When {
+        condition: Condition::All(vec![
+            Condition::TargetIsAlive,
+            Condition::Not(Box::new(Condition::CountAtLeast {
+                count: Count::TargetCurrentHp,
+                at_least: threshold + 1,
+            })),
+        ]),
+        then: vec![
+            Command::Creature(CreatureCmd::SetCurrentHp {
+                target: CreatureSelector::Target,
+                amount: Amount::Fixed(0),
+            }),
+            Command::Creature(CreatureCmd::Kill {
+                target: CreatureSelector::Target,
+            }),
+        ],
+        otherwise: Vec::new(),
+    }
+}
+
+fn tower(per_floor: i32) -> Command {
+    multi_attack(
+        Amount::Scaled {
+            base: 0,
+            per: per_floor,
+            count: Count::TotalFloor,
+        },
+        Amount::Fixed(1),
+    )
+}
+
 fn second_ten() -> Vec<CardDefinition> {
     let mut priestess = tarot(
         "CARD.THE_HIGH_PRIESTESS",
@@ -481,8 +515,8 @@ fn second_ten() -> Vec<CardDefinition> {
             "CARD.JUDGEMENT",
             CardType::Skill,
             TargetType::AnyEnemy,
-            vec![Command::Unsupported(id("CARD.JUDGEMENT"))],
-            vec![Command::Unsupported(id("CARD.JUDGEMENT"))],
+            vec![judgement(30)],
+            vec![judgement(40)],
         ),
         priestess,
         tarot(
@@ -554,8 +588,8 @@ fn second_ten() -> Vec<CardDefinition> {
             "CARD.THE_TOWER",
             CardType::Attack,
             TargetType::AnyEnemy,
-            vec![Command::Unsupported(id("CARD.THE_TOWER"))],
-            vec![Command::Unsupported(id("CARD.THE_TOWER"))],
+            vec![tower(2)],
+            vec![tower(3)],
         ),
     ]
 }
@@ -567,7 +601,7 @@ fn hand() -> CardSelector {
     }
 }
 
-fn devil() -> Command {
+fn devil(upgrade: bool) -> Command {
     Command::Select {
         cards: hand(),
         then: vec![Command::WithAmount {
@@ -580,6 +614,7 @@ fn devil() -> Command {
                     count: Amount::counting(Count::Bound),
                     position: DrawPilePosition::Top,
                     force_exhaust: false,
+                    upgrade,
                 }),
             ],
         }],
@@ -679,8 +714,8 @@ fn third_ten() -> Vec<CardDefinition> {
             "CARD.THE_DEVIL",
             CardType::Skill,
             TargetType::SelfTarget,
-            vec![devil()],
-            vec![Command::Unsupported(id("CARD.THE_DEVIL"))],
+            vec![devil(false)],
+            vec![devil(true)],
         ),
         tarot(
             "CARD.THE_HERMIT",

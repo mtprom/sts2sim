@@ -415,15 +415,70 @@ fn wheel_draws_even_when_hand_is_empty_and_discards_otherwise() {
 }
 
 #[test]
+fn upgraded_devil_upgrades_each_card_as_it_is_taken_for_autoplay() {
+    let mut sim = fight("CARD.THE_DEVIL", 1, 2, 3, 100);
+    play(&mut sim, "CARD.THE_DEVIL");
+    assert_eq!(creature(&sim, 0).block, 16);
+    let piles = &sim.state().combat.as_ref().expect("combat").player.piles;
+    assert!(
+        piles
+            .discard
+            .iter()
+            .all(|card| card.fingerprint.upgrade_level == 1)
+    );
+    assert!(
+        piles
+            .draw
+            .iter()
+            .all(|card| card.fingerprint.upgrade_level == 0)
+    );
+}
+
+#[test]
+fn judgement_sets_a_target_at_or_below_its_threshold_to_zero() {
+    for (upgrade, threshold) in [(0, 30), (1, 40)] {
+        let mut sim = fight("CARD.JUDGEMENT", upgrade, 0, 0, threshold);
+        play(&mut sim, "CARD.JUDGEMENT");
+        let combat = sim.state().combat.as_ref().expect("combat");
+        assert!(
+            combat
+                .creatures
+                .iter()
+                .all(|creature| creature.id.get() != 1 || !creature.alive())
+        );
+        assert_eq!(creature(&sim, 2).current_hp, 100);
+        assert_eq!(pile(&sim, PileName::Exhaust), ["CARD.JUDGEMENT"]);
+        let mut sim = fight("CARD.JUDGEMENT", upgrade, 0, 0, threshold + 1);
+        play(&mut sim, "CARD.JUDGEMENT");
+        assert_eq!(creature(&sim, 1).current_hp, threshold + 1);
+    }
+}
+
+#[test]
+fn tower_deals_its_multiplier_times_the_total_floor() {
+    let run = sts2_content::standard_run_on_preset(
+        "N3Z9EE2CXB",
+        &id("CHARACTER.FOOL"),
+        &sts2_core::UnlockPresetManifest::pinned().expect("preset"),
+    )
+    .expect("Fool run starts");
+    for (upgrade, per_floor) in [(0, 2), (1, 3)] {
+        let mut state = fight("CARD.THE_TOWER", upgrade, 0, 0, 100).state().clone();
+        let mut walked = run.state().run.clone().expect("run state");
+        walked.floor = 7;
+        state.run = Some(walked);
+        let mut sim =
+            Simulator::from_scenario(state, sts2_content::registry_for(&id("CHARACTER.FOOL")))
+                .expect("scenario with a run");
+        play(&mut sim, "CARD.THE_TOWER");
+        assert_eq!(creature(&sim, 1).current_hp, 100 - 7 * per_floor);
+        assert_eq!(creature(&sim, 2).current_hp, 100);
+    }
+}
+
+#[test]
 fn missing_primitives_fail_explicitly_without_fake_effects() {
-    for (model, upgrade) in [
-        ("CARD.JUDGEMENT", 0),
-        ("CARD.JUDGEMENT", 1),
-        ("CARD.THE_TOWER", 0),
-        ("CARD.THE_TOWER", 1),
-        ("CARD.THE_DEVIL", 1),
-        ("CARD.FOOLISH_SHOT", 0),
-    ] {
+    for (model, upgrade) in [("CARD.FOOLISH_SHOT", 0)] {
         let mut sim = fight(model, upgrade, 0, 0, 100);
         let action = sim
             .legal_actions()
@@ -520,13 +575,23 @@ fn fool_reward_pool_preserves_order_and_excludes_basics_ancients_and_multiplayer
 #[test]
 fn song_bow_stops_combat_entry_rather_than_silently_omitting_aim() {
     let mut sim = sts2_content::standard_run_on_preset(
-        "N3Z9EE2CXB", &id("CHARACTER.FOOL"),
+        "N3Z9EE2CXB",
+        &id("CHARACTER.FOOL"),
         &sts2_core::UnlockPresetManifest::pinned().expect("preset"),
-    ).expect("Fool run starts");
+    )
+    .expect("Fool run starts");
     for _ in 0..200 {
-        let action = sim.legal_actions().iter().find(|action| matches!(
-            action, Action::ChooseCards { cards, .. } if !cards.is_empty()
-        )).or_else(|| sim.legal_actions().first()).cloned().expect("live run");
+        let action = sim
+            .legal_actions()
+            .iter()
+            .find(|action| {
+                matches!(
+                    action, Action::ChooseCards { cards, .. } if !cards.is_empty()
+                )
+            })
+            .or_else(|| sim.legal_actions().first())
+            .cloned()
+            .expect("live run");
         if let Err(error) = sim.step(action) {
             assert_eq!(error.code, sts2_engine::ErrorCode::UnsupportedContent);
             assert!(format!("{error:?}").contains("RELIC.SONG_BOW"), "{error:?}");

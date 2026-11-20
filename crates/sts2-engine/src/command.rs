@@ -842,6 +842,9 @@ pub enum CardPileCmd {
         count: Amount,
         position: DrawPilePosition,
         force_exhaust: bool,
+        /// Each card is upgraded as it is taken, before it reaches the play
+        /// pile.
+        upgrade: bool,
     },
     /// Draws this many cards.
     Draw { count: Amount },
@@ -2671,6 +2674,11 @@ pub enum Count {
     DealtDamageWithOverkill,
     /// The maximum HP of whoever the play or the move was aimed at.
     TargetMaxHp,
+    /// The current HP of whoever the play or the move was aimed at.
+    TargetCurrentHp,
+    /// Map points the run has walked onto, across every act, the one it
+    /// stands on included.
+    TotalFloor,
     /// What the card that issued the command has grown its own damage to: the
     /// value the card is written for, plus everything a body has added to it.
     SourceCardDamage,
