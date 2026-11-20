@@ -57,8 +57,8 @@ fn naming_the_baseline_level_generates_the_baseline_run() {
 
 /// What one reference run opens with at one level: the level, the health it
 /// opens on, its potion slots, its deck size, how many elite points each of its
-/// maps carries, and the second boss its last act drew, if any.
-type ReferenceRun = (u8, i32, usize, usize, usize, Option<&'static str>);
+/// maps carries, and whether its last act draws a second boss.
+type ReferenceRun = (u8, i32, usize, usize, usize, bool);
 
 /// One reference seed generated at each of the eleven levels, pinned detail by
 /// detail: what the run opens with, what its maps are shaped like, and which
@@ -70,18 +70,30 @@ type ReferenceRun = (u8, i32, usize, usize, usize, Option<&'static str>);
 fn the_reference_seed_generates_the_same_run_at_every_level_but_for_the_rules() {
     // level, opening hp, potion slots, deck size, elites per act, second boss
     let expected: [ReferenceRun; 11] = [
-        (0, 80, 3, 10, 5, None),
-        (1, 80, 3, 10, 8, None),
-        (2, 64, 3, 10, 8, None),
-        (3, 64, 3, 10, 8, None),
-        (4, 64, 2, 10, 8, None),
-        (5, 64, 2, 11, 8, None),
-        (6, 64, 2, 11, 8, None),
-        (7, 64, 2, 11, 8, None),
-        (8, 64, 2, 11, 8, None),
-        (9, 64, 2, 11, 8, None),
-        (10, 64, 2, 11, 8, Some("ENCOUNTER.AEONGLASS_BOSS")),
+        (0, 80, 3, 10, 5, false),
+        (1, 80, 3, 10, 8, false),
+        (2, 64, 3, 10, 8, false),
+        (3, 64, 3, 10, 8, false),
+        (4, 64, 2, 10, 8, false),
+        (5, 64, 2, 11, 8, false),
+        (6, 64, 2, 11, 8, false),
+        (7, 64, 2, 11, 8, false),
+        (8, 64, 2, 11, 8, false),
+        (9, 64, 2, 11, 8, false),
+        (10, 64, 2, 11, 8, true),
     ];
+    // ActModel.GenerateRooms shuffles events before drawing the bosses, so
+    // added beta events change seed-specific identities, not ascension rules.
+    let baseline = run_at(0);
+    let bosses: Vec<_> = baseline
+        .state()
+        .run
+        .as_ref()
+        .unwrap()
+        .acts
+        .iter()
+        .map(|act| act.boss.to_string())
+        .collect();
     for (ascension, hp, potions, deck, elites, second_boss) in expected {
         let simulator = run_at(ascension);
         let state = simulator.state();
@@ -123,16 +135,12 @@ fn the_reference_seed_generates_the_same_run_at_every_level_but_for_the_rules() 
                 .iter()
                 .map(|act| act.boss.to_string())
                 .collect::<Vec<_>>(),
-            [
-                "ENCOUNTER.VANTOM_BOSS",
-                "ENCOUNTER.KAISER_CRAB_BOSS",
-                "ENCOUNTER.TEST_SUBJECT_BOSS"
-            ],
+            bosses,
             "bosses at {ascension}"
         );
         assert_eq!(
-            run.acts[2].second_boss.as_ref().map(ToString::to_string),
-            second_boss.map(ToOwned::to_owned),
+            run.acts[2].second_boss.is_some(),
+            second_boss,
             "second boss at {ascension}"
         );
         // Only the last act draws one, so the two before it never hold one.
@@ -429,7 +437,12 @@ fn double_boss_puts_a_second_fight_behind_the_last_act_s_boss() {
     assert_ne!(second, at.acts[2].boss);
     // It is drawn out of the act's own boss table.
     assert!(
-        ["ENCOUNTER.AEONGLASS_BOSS", "ENCOUNTER.QUEEN_BOSS"].contains(&second.to_string().as_str())
+        [
+            "ENCOUNTER.AEONGLASS_BOSS",
+            "ENCOUNTER.QUEEN_BOSS",
+            "ENCOUNTER.TEST_SUBJECT_BOSS"
+        ]
+        .contains(&second.to_string().as_str())
     );
     let point = at.maps[2]
         .second_boss

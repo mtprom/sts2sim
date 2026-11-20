@@ -532,6 +532,7 @@ fn the_colorless_card_pool_is_the_fifty_three_single_player_cards() {
             "CARD.MASTER_OF_STRATEGY",
             "CARD.MAYHEM",
             "CARD.MIND_BLAST",
+            "CARD.MY_SHINIES",
             "CARD.NOSTALGIA",
             "CARD.OMNISLICE",
             "CARD.PANACHE",
@@ -604,7 +605,7 @@ fn the_deprecated_card_pool_holds_only_the_stand_in() {
 /// The event card pool, whole. The last two are out of alphabetical order in
 /// the build as well.
 #[test]
-fn the_event_card_pool_is_the_twenty_eight_an_event_hands_over() {
+fn the_event_card_pool_is_the_thirty_two_an_event_hands_over() {
     assert_eq!(
         card_pool("CARD_POOL.EVENT_CARD_POOL"),
         [
@@ -615,16 +616,20 @@ fn the_event_card_pool_is_the_twenty_eight_an_event_hands_over() {
             "CARD.BYRD_SWOOP",
             "CARD.CALTROPS",
             "CARD.CLASH",
+            "CARD.DINGY_DAGGER",
             "CARD.DISTRACTION",
             "CARD.DUAL_WIELD",
             "CARD.ENLIGHTENMENT",
             "CARD.ENTRENCH",
             "CARD.EXTERMINATE",
             "CARD.FEEDING_FRENZY",
+            "CARD.GOD_BYRD",
             "CARD.HELLO_WORLD",
             "CARD.MAD_SCIENCE",
             "CARD.MAUL",
             "CARD.METAMORPHOSIS",
+            "CARD.MIGHTY_SHIELD",
+            "CARD.MIGHTY_WEAPON",
             "CARD.NEOWS_FURY",
             "CARD.OUTMANEUVER",
             "CARD.PECK",
@@ -669,6 +674,7 @@ fn the_status_card_pool_is_the_twelve_a_status_transforms_into() {
             "CARD.FRANTIC_ESCAPE",
             "CARD.INFECTION",
             "CARD.WITHER",
+            "CARD.SADNESS",
             "CARD.SLIMED",
             "CARD.SOOT",
             "CARD.TOXIC",
@@ -927,7 +933,7 @@ fn the_defect_relic_pool_is_the_eight_the_character_carries() {
 /// three that stand in the shared pool as well.
 #[test]
 #[allow(clippy::too_many_lines, reason = "one line per relic of the pool")]
-fn the_event_relic_pool_is_the_hundred_and_forty_two_only_an_event_deals() {
+fn the_event_relic_pool_is_the_hundred_and_fifty_one_only_an_event_deals() {
     assert_eq!(
         relic_pool("RELIC_POOL.EVENT_RELIC_POOL"),
         [
@@ -935,6 +941,8 @@ fn the_event_relic_pool_is_the_hundred_and_forty_two_only_an_event_deals() {
             "RELIC.ARCANE_SCROLL",
             "RELIC.ARCHAIC_TOOTH",
             "RELIC.ASTROLABE",
+            "RELIC.BATH_ROBES",
+            "RELIC.BATH_TOWEL",
             "RELIC.BEAUTIFUL_BRACELET",
             "RELIC.BIG_MUSHROOM",
             "RELIC.BIIIG_HUG",
@@ -946,6 +954,7 @@ fn the_event_relic_pool_is_the_hundred_and_forty_two_only_an_event_deals() {
             "RELIC.BONE_TEA",
             "RELIC.BOOMING_CONCH",
             "RELIC.BRILLIANT_SCARF",
+            "RELIC.BYRDINE",
             "RELIC.BYRDPIP",
             "RELIC.CALLING_BELL",
             "RELIC.CHOICES_PARADOX",
@@ -1005,6 +1014,7 @@ fn the_event_relic_pool_is_the_hundred_and_forty_two_only_an_event_deals() {
             "RELIC.MASSIVE_SCROLL",
             "RELIC.MAW_BANK",
             "RELIC.MEAT_CLEAVER",
+            "RELIC.MIGHTY_WINGS",
             "RELIC.MR_STRUGGLES",
             "RELIC.MUSIC_BOX",
             "RELIC.NEOWS_BONES",
@@ -1014,6 +1024,7 @@ fn the_event_relic_pool_is_the_hundred_and_forty_two_only_an_event_deals() {
             "RELIC.NEW_LEAF",
             "RELIC.NUTRITIOUS_OYSTER",
             "RELIC.NUTRITIOUS_SOUP",
+            "RELIC.OBSIDIAN_VICE",
             "RELIC.PAELS_BLOOD",
             "RELIC.PAELS_CLAW",
             "RELIC.PAELS_EYE",
@@ -1056,13 +1067,16 @@ fn the_event_relic_pool_is_the_hundred_and_forty_two_only_an_event_deals() {
             "RELIC.SPIKED_GAUNTLETS",
             "RELIC.STONE_HUMIDIFIER",
             "RELIC.STORYBOOK",
+            "RELIC.STORYTELLER",
             "RELIC.SWORD_OF_JADE",
             "RELIC.SWORD_OF_STONE",
             "RELIC.TANXS_WHISTLE",
             "RELIC.TEA_OF_DISCOURTESY",
             "RELIC.THE_BOOT",
             "RELIC.THROWING_AXE",
+            "RELIC.THUMBSCREW",
             "RELIC.TOASTY_MITTENS",
+            "RELIC.TORMENTOUS_COLLAR",
             "RELIC.TOUCH_OF_OROBAS",
             "RELIC.TOY_BOX",
             "RELIC.TRI_BOOMERANG",
@@ -1072,6 +1086,7 @@ fn the_event_relic_pool_is_the_hundred_and_forty_two_only_an_event_deals() {
             "RELIC.WINGED_BOOTS",
             "RELIC.WONGO_CUSTOMER_APPRECIATION_BADGE",
             "RELIC.WONGOS_MYSTERY_TICKET",
+            "RELIC.WUPPY",
             "RELIC.YUMMY_COOKIE",
         ]
     );

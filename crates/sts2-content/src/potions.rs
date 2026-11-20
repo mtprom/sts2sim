@@ -882,7 +882,7 @@ fn event_potions() -> Vec<PotionDefinition> {
                 }),
                 Command::When {
                     condition: Condition::InACombat,
-                    then: vec![applied("POWER.AMBERGRIS_POWER", 1)],
+                    then: vec![applied("POWER.EXTRA_TURN_POWER", 1)],
                     otherwise: Vec::new(),
                 },
             ],

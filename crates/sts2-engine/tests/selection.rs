@@ -64,6 +64,7 @@ fn card(model_id: &str, rarity: CardRarity, effects: Vec<Command>) -> CardDefini
 fn upgradable(mut definition: CardDefinition) -> CardDefinition {
     definition.supported_upgrade_levels.push(1);
     definition.upgrade = Some(sts2_engine::CardUpgrade {
+        repeatable: false,
         energy_cost: None,
         innate: false,
         retain: false,

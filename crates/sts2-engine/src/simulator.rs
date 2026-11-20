@@ -3162,6 +3162,7 @@ impl Simulator {
             Condition::ActIndexAbove(index) => run.current_act > *index,
             Condition::ActIndexBelow(index) => run.current_act < *index,
             Condition::ActIndexIs(index) => run.current_act == *index,
+            Condition::ActAncientIsNot(ancient) => run.acts[run.current_act].ancient != *ancient,
             // The total floor counts every floor the run has walked, and acts
             // continue the count rather than restarting it.
             Condition::TotalFloorAtLeast(floor) => total_floor >= *floor,
@@ -7059,7 +7060,7 @@ impl Simulator {
                     .collect();
                 if whole_deck {
                     for index in upgradable {
-                        self.upgrade_deck_card(index);
+                        self.upgrade_deck_card(index)?;
                     }
                 } else if !upgradable.is_empty() {
                     let model_id = self.event_model_id()?;
@@ -7073,7 +7074,7 @@ impl Simulator {
                         })?
                         .expect("the list was checked for emptiness");
                     self.set_event_rng_counter(rng.counter())?;
-                    self.upgrade_deck_card(upgradable[rolled]);
+                    self.upgrade_deck_card(upgradable[rolled])?;
                 }
             }
             // Losing maximum HP on its own: the maximum comes down and takes
@@ -7190,6 +7191,24 @@ impl Simulator {
                 });
                 finish_room = false;
             }
+            EventEffect::ObtainWuppy { max_hp } => {
+                if !matches!(max_hp, 30 | 60) {
+                    return Err(EngineError::new(ErrorCode::InvalidConfig)
+                        .with_detail("wuppy_max_hp", max_hp.to_string()));
+                }
+                let model = "RELIC.WUPPY".parse().expect("static model ID");
+                self.run_out_of_combat(&Command::Relic(RelicCmd::Obtain(model)))?;
+                if let Some(relic) = self
+                    .state
+                    .run_player
+                    .relics
+                    .iter_mut()
+                    .find(|relic| relic.model_id.entry() == "WUPPY")
+                {
+                    relic.counter = max_hp;
+                    relic.second_counter = max_hp;
+                }
+            }
             // The rarity rolls on the event's own stream, so an event's relic
             // leaves the card-reward odds' rewards stream alone.
             EventEffect::ObtainRolledRelic => {
@@ -7262,6 +7281,20 @@ impl Simulator {
             // An option body that is a run of commands over the shared surface.
             EventEffect::Run(commands) => {
                 self.run_out_of_combat_commands(&commands)?;
+            }
+            EventEffect::SetConditionalPage(options) => {
+                let mut page = Vec::with_capacity(options.len());
+                for conditional in options {
+                    let mut option = conditional.option;
+                    if !self.event_condition_holds(&conditional.available)? {
+                        option.option_id = conditional.locked_option_id;
+                        option.effects.clear();
+                        option.locked = true;
+                    }
+                    page.push(option);
+                }
+                self.set_event_page(page);
+                finish_room = false;
             }
             EventEffect::SetPage(options) => {
                 self.set_event_page(options);
@@ -7603,7 +7636,7 @@ impl Simulator {
                 self.set_event_rng_counter(rng.counter())?;
                 upgradable.truncate(count);
                 for index in upgradable {
-                    self.upgrade_deck_card(index);
+                    self.upgrade_deck_card(index)?;
                 }
             }
             // Grabbing something off the belt.
@@ -7689,7 +7722,7 @@ impl Simulator {
                 if !upgradable.is_empty() {
                     let rolled =
                         self.roll_on_shuffle_stream(crate::ShuffleStream::Event, upgradable.len())?;
-                    self.upgrade_deck_card(upgradable[rolled]);
+                    self.upgrade_deck_card(upgradable[rolled])?;
                 }
             }
             EventEffect::RemoveRelic(model_id) => {
@@ -9071,6 +9104,17 @@ impl Simulator {
                 _ => None,
             };
             let Some(offer) = offer else { continue };
+            if offer.option == crate::RestSiteOption::Evolve
+                && self
+                    .state
+                    .run_player
+                    .relics
+                    .iter()
+                    .find(|relic| relic.model_id == listener.model_id)
+                    .is_none_or(|relic| relic.counter < 6)
+            {
+                continue;
+            }
             // A Girya stops answering once it has been lifted its three times,
             // and the option is not added.
             if let Some(limit) = offer.while_counter_below
@@ -9100,6 +9144,9 @@ impl Simulator {
     /// cannot be taken.
     fn rest_site_option_is_enabled(&self, option: crate::RestSiteOption) -> bool {
         match option {
+            crate::RestSiteOption::Restore => self.state.run_player.relics.iter().any(|relic| {
+                relic.model_id.entry() == "WUPPY" && relic.counter < relic.second_counter
+            }),
             // The deck holds at least one upgradable card.
             crate::RestSiteOption::Smith => {
                 self.state.run_player.deck.iter().any(|fingerprint| {
@@ -9175,6 +9222,47 @@ impl Simulator {
             // One more lift on the Girya.
             crate::RestSiteOption::Lift => {
                 self.raise_relic_counter("RELIC.GIRYA", 1);
+                true
+            }
+            crate::RestSiteOption::Evolve => {
+                let original = "RELIC.BYRDPIP".parse().expect("static model ID");
+                let Some(relic) = self
+                    .state
+                    .run_player
+                    .relics
+                    .iter()
+                    .find(|relic| relic.model_id == original)
+                else {
+                    return Ok(());
+                };
+                let hair = relic
+                    .saved_strings
+                    .iter()
+                    .find(|(key, _)| key == "Skin")
+                    .map_or("version1", |(_, value)| value.as_str())
+                    .replace("version", "hair/v");
+                let replacement = "RELIC.BYRDINE".parse().expect("static model ID");
+                self.run_out_of_combat(&Command::Relic(RelicCmd::Replace {
+                    original,
+                    replacement,
+                }))?;
+                if let Some(relic) = self
+                    .state
+                    .run_player
+                    .relics
+                    .iter_mut()
+                    .find(|relic| relic.model_id.entry() == "BYRDINE")
+                {
+                    relic.saved_strings.push(("Hair".to_owned(), hair));
+                }
+                true
+            }
+            crate::RestSiteOption::Restore => {
+                for relic in &mut self.state.run_player.relics {
+                    if relic.model_id.entry() == "WUPPY" {
+                        relic.counter = relic.second_counter;
+                    }
+                }
                 true
             }
         };
@@ -9352,7 +9440,7 @@ impl Simulator {
             // and an option that is offered at all always has one.
             if !chosen.is_empty() {
                 for deck_index in chosen.iter().filter_map(ChosenCard::deck_index) {
-                    self.upgrade_deck_card(deck_index);
+                    self.upgrade_deck_card(deck_index)?;
                 }
                 self.owe_rest_settlement(index)?;
             }
@@ -11592,7 +11680,7 @@ impl Simulator {
                 Ok(false)
             }
             Command::Rewards(RewardsCmd::UpgradeCardOptions(filter)) => {
-                self.upgrade_card_options(*filter);
+                self.upgrade_card_options(*filter)?;
                 Ok(false)
             }
             Command::Rewards(RewardsCmd::EnchantCardOptions {
@@ -12253,7 +12341,12 @@ impl Simulator {
                 let counted: Vec<CreatureCombatId> = doomed
                     .iter()
                     .copied()
-                    .filter(|id| self.death_would_trigger_fatal(*id))
+                    .filter(|id| {
+                        self.death_would_trigger_fatal(*id)
+                            && self
+                                .creature(*id)
+                                .is_ok_and(|creature| creature.side == CombatSide::Enemy)
+                    })
                     .collect();
                 for creature in doomed {
                     self.creature_mut(creature)?.current_hp = 0;
@@ -12576,7 +12669,7 @@ impl Simulator {
                 let cards = self.select_cards(cards, context)?;
                 self.upgrade_cards(&card_ids(&cards))?;
                 for index in cards.iter().filter_map(ChosenCard::deck_index) {
-                    self.upgrade_deck_card(index);
+                    self.upgrade_deck_card(index)?;
                 }
             }
             // The upgrade comes off the card it is on.
@@ -15563,7 +15656,8 @@ impl Simulator {
                         cost
                     }
                 }
-                crate::CardCostRule::FreeInHandOrPlay => {
+                crate::CardCostRule::FreeInHandOrPlay
+                | crate::CardCostRule::FreeEnergyInHandOrPlay => {
                     if matches!(pile, PileName::Hand | PileName::Play) {
                         0
                     } else {
@@ -19245,11 +19339,7 @@ impl Simulator {
             }),
             CardFilter::UpgradableOfType(card_type) => definition.is_some_and(|definition| {
                 self.content.card_type_of(fingerprint) == Some(*card_type)
-                    && definition.upgrade.is_some()
-                    && definition
-                        .supported_upgrade_levels
-                        .iter()
-                        .any(|level| *level > fingerprint.upgrade_level)
+                    && definition.can_upgrade_from(fingerprint.upgrade_level)
             }),
             CardFilter::BasicOfTag(tag) => definition.is_some_and(|definition| {
                 definition.rarity == crate::CardRarity::Basic && definition.tags.contains(tag)
@@ -19261,13 +19351,8 @@ impl Simulator {
             }),
             // Whether the card is upgraded at all.
             CardFilter::Upgraded => fingerprint.upgrade_level > 0,
-            CardFilter::Upgradable => definition.is_some_and(|definition| {
-                definition.upgrade.is_some()
-                    && definition
-                        .supported_upgrade_levels
-                        .iter()
-                        .any(|level| *level > fingerprint.upgrade_level)
-            }),
+            CardFilter::Upgradable => definition
+                .is_some_and(|definition| definition.can_upgrade_from(fingerprint.upgrade_level)),
         })
     }
 
@@ -21968,7 +22053,7 @@ impl Simulator {
                 if !cards.is_empty() {
                     let chosen = self.bind_chosen(suspended.identity, cards)?;
                     for deck_index in chosen.iter().filter_map(ChosenCard::deck_index) {
-                        self.upgrade_deck_card(deck_index);
+                        self.upgrade_deck_card(deck_index)?;
                     }
                     self.owe_rest_settlement(index)?;
                 }
@@ -26135,16 +26220,48 @@ impl Simulator {
 
     /// Upgrading a run-deck card, which is what a rest site's smith and the
     /// events that upgrade do.
-    fn upgrade_deck_card(&mut self, index: usize) {
+    fn upgrade_deck_card(&mut self, index: usize) -> Result<(), EngineError> {
+        if let Some(card) = self.state.run_player.deck.get(index) {
+            self.ensure_supported_card_upgrade(card)?;
+        }
         if let Some(card) = self.state.run_player.deck.get_mut(index) {
             card.upgrade_level = card.upgrade_level.saturating_add(1);
         }
+        Ok(())
+    }
+
+    fn ensure_supported_card_upgrade(&self, card: &CardFingerprint) -> Result<(), EngineError> {
+        if let Some(definition) = self.content.card(&card.model_id)
+            && definition
+                .upgrade
+                .as_ref()
+                .is_some_and(|upgrade| upgrade.repeatable)
+            && card
+                .upgrade_level
+                .checked_add(1)
+                .is_none_or(|next| !definition.supported_upgrade_levels.contains(&next))
+        {
+            return Err(unsupported_content(&card.model_id).with_detail(
+                "upgrade_level",
+                (u16::from(card.upgrade_level) + 1).to_string(),
+            ));
+        }
+        Ok(())
     }
 
     /// Upgrading cards. A card with no upgraded form is passed over.
     fn upgrade_cards(&mut self, cards: &[CardInstanceId]) -> Result<(), EngineError> {
         if cards.is_empty() || self.state.combat.is_none() {
             return Ok(());
+        }
+        for card in self
+            .combat()?
+            .player
+            .piles
+            .all_cards()
+            .filter(|card| cards.contains(&card.id))
+        {
+            self.ensure_supported_card_upgrade(&card.fingerprint)?;
         }
         let upgrades: Vec<(CardInstanceId, u8, i32)> = self
             .combat()?
@@ -26673,13 +26790,7 @@ impl Simulator {
     fn card_is_upgradable(&self, fingerprint: &crate::CardFingerprint) -> bool {
         self.content
             .card(&fingerprint.model_id)
-            .is_some_and(|definition| {
-                definition.upgrade.is_some()
-                    && definition
-                        .supported_upgrade_levels
-                        .iter()
-                        .any(|level| *level > fingerprint.upgrade_level)
-            })
+            .is_some_and(|definition| definition.can_upgrade_from(fingerprint.upgrade_level))
     }
 
     /// A card leaving the run deck, which is the only way the deck loses one.
@@ -26925,15 +27036,20 @@ impl Simulator {
     /// offer's cards that pass the filter are each replaced by an upgraded
     /// clone. It answers true wherever it is reached, whether or not the offer
     /// held anything to upgrade.
-    fn upgrade_card_options(&mut self, filter: CardFilter) {
+    fn upgrade_card_options(&mut self, filter: CardFilter) -> Result<(), EngineError> {
         let Some(options) = self.reward_options.as_ref() else {
-            return;
+            return Ok(());
         };
         let upgraded: Vec<bool> = options
             .cards
             .iter()
             .map(|card| self.fingerprint_passes(card, &[filter]))
             .collect();
+        for (card, upgrade) in options.cards.iter().zip(&upgraded) {
+            if *upgrade {
+                self.ensure_supported_card_upgrade(card)?;
+            }
+        }
         if let Some(options) = self.reward_options.as_mut() {
             for (card, upgrade) in options.cards.iter_mut().zip(upgraded) {
                 if upgrade {
@@ -26942,6 +27058,7 @@ impl Simulator {
             }
         }
         self.reward_edits += 1;
+        Ok(())
     }
 
     /// Every offered card the enchantment can go on is replaced by a clone
@@ -27483,6 +27600,7 @@ impl Simulator {
         if upgrade_after_generation {
             for card in &mut cards {
                 if self.fingerprint_passes(card, &[CardFilter::Upgradable]) {
+                    self.ensure_supported_card_upgrade(card)?;
                     card.upgrade_level += 1;
                 }
             }
@@ -28663,8 +28781,8 @@ impl Simulator {
                 | None => {}
             }
         }
-        // A relic can refuse a play the same way, off the count it keeps for
-        // itself rather than off the combat's.
+        // Play limits count started plays, including an autoplay that has not
+        // finished yet, rather than a relic-local completion counter.
         for relic in self.state.run_player.relics.iter().filter(|r| !r.melted) {
             let Some(allowed) = self
                 .content
@@ -28673,7 +28791,10 @@ impl Simulator {
             else {
                 continue;
             };
-            if relic.counter >= allowed {
+            if i32::try_from(combat.player.play_types_started_this_turn.len())
+                .expect("play count fits game integer")
+                >= allowed
+            {
                 return false;
             }
         }
@@ -30193,6 +30314,12 @@ fn settle_option_vars(option: &mut crate::EventOption, vars: &[i32]) {
             *amount = crate::EventAmount::Fixed(vars.get(index).copied().unwrap_or(0));
         }
         match effect {
+            crate::EventEffect::SetConditionalPage(options) => {
+                for conditional in options {
+                    conditional.available = settle_condition_vars(&conditional.available, vars);
+                    settle_option_vars(&mut conditional.option, vars);
+                }
+            }
             crate::EventEffect::SetPage(options) => {
                 for option in options {
                     settle_option_vars(option, vars);

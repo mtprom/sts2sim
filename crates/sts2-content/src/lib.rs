@@ -3,6 +3,8 @@
 //! the acts and their maps, and run generation.
 
 mod acts;
+mod beta_events;
+mod beta_shared;
 mod card_pool;
 mod cards;
 mod defect_cards;
@@ -106,6 +108,11 @@ pub fn registry_at(character: &ModelId, ascension: u8) -> Arc<ContentRegistry> {
             .into_iter()
             .map(|definition| (definition, false)),
     );
+    every_card.extend(
+        beta_shared::cards()
+            .into_iter()
+            .map(|definition| (definition, false)),
+    );
     // The Silent's transcribed cards belong to the Silent's pool, not to the
     // run's own character pool.
     every_card.extend(
@@ -196,6 +203,12 @@ pub fn registry_at(character: &ModelId, ascension: u8) -> Arc<ContentRegistry> {
     for definition in powers::item_powers() {
         content.add_power(definition);
     }
+    for definition in beta_shared::powers() {
+        content.add_power(definition);
+    }
+    for definition in beta_shared::relics() {
+        content.add_relic(definition);
+    }
 
     for definition in relics::silent_relics() {
         content.add_relic(definition);
@@ -231,6 +244,9 @@ pub fn registry_at(character: &ModelId, ascension: u8) -> Arc<ContentRegistry> {
     // The registry is built at the run's own ascension, because that is what
     // decides which side of a branch a monster's numbers take.
     for definition in monsters::monsters_at_ascension(ascension) {
+        content.add_monster(definition);
+    }
+    for definition in beta_shared::monsters() {
         content.add_monster(definition);
     }
 
@@ -329,6 +345,11 @@ pub fn registry_at(character: &ModelId, ascension: u8) -> Arc<ContentRegistry> {
     }
 
     let transcribed_events = vec![
+        beta_events::museum_of_torture(),
+        beta_events::shrine_of_the_warlord(),
+        beta_events::thermae_nonupeipe(),
+        beta_events::waterfall_of_obvious_secrets(),
+        beta_events::wuppy_in_trouble(character),
         events::darv(),
         events::doors_of_light_and_dark(),
         events::tea_master(),

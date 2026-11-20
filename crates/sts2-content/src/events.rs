@@ -860,7 +860,7 @@ pub fn orobas() -> EventDefinition {
     }
 }
 
-fn option(option_id: &str, label: &str, effects: Vec<EventEffect>) -> EventOption {
+pub(crate) fn option(option_id: &str, label: &str, effects: Vec<EventEffect>) -> EventOption {
     EventOption {
         option_id: option_id.to_owned(),
         label: label.to_owned(),
@@ -1067,8 +1067,7 @@ pub fn tea_master() -> EventDefinition {
     }
 }
 
-/// Two doors. The light one upgrades two cards of the deck, rolled on the
-/// event's own stream; the dark one takes one away.
+/// Two doors. Light upgrades one chosen card; Dark removes one.
 #[must_use]
 pub fn doors_of_light_and_dark() -> EventDefinition {
     EventDefinition {
@@ -1081,13 +1080,12 @@ pub fn doors_of_light_and_dark() -> EventDefinition {
             option(
                 "DOORS_OF_LIGHT_AND_DARK.pages.INITIAL.options.LIGHT",
                 "Light",
-                vec![EventEffect::Run(vec![sts2_engine::Command::Card(
-                    sts2_engine::CardCmd::Upgrade {
-                        cards: sts2_engine::CardSelector::StablyShuffledFromDeck {
-                            filter: sts2_engine::CardFilter::Upgradable,
-                            take: sts2_engine::Amount::Fixed(2),
-                            stream: sts2_engine::ShuffleStream::Event,
-                        },
+                vec![EventEffect::Run(vec![sts2_engine::Command::CardSelect(
+                    sts2_engine::CardSelectCmd::FromDeckForUpgrade {
+                        prefs: sts2_engine::SelectorPrefs::exactly(1),
+                        then: vec![sts2_engine::Command::Card(sts2_engine::CardCmd::Upgrade {
+                            cards: sts2_engine::CardSelector::Chosen,
+                        })],
                     },
                 )])],
             ),
@@ -1237,7 +1235,7 @@ pub fn colossal_flower() -> EventDefinition {
     }
 }
 
-/// The Zen Weaver: two cards of enlightenment for a little gold, or a card off
+/// The Zen Weaver: one Enlightenment for a little gold, or a card off
 /// the deck for a lot of it.
 #[must_use]
 pub fn zen_weaver() -> EventDefinition {
@@ -1257,10 +1255,7 @@ pub fn zen_weaver() -> EventDefinition {
                     "ZEN_WEAVER.pages.INITIAL.options.BREATHING_TECHNIQUES",
                     "Breathing techniques",
                     vec![
-                        EventEffect::LoseGold(EventAmount::Fixed(50)),
-                        EventEffect::AddCard(sts2_engine::CardFingerprint::base(id(
-                            "CARD.ENLIGHTENMENT",
-                        ))),
+                        EventEffect::LoseGold(EventAmount::Fixed(25)),
                         EventEffect::AddCard(sts2_engine::CardFingerprint::base(id(
                             "CARD.ENLIGHTENMENT",
                         ))),
@@ -2578,7 +2573,7 @@ pub fn wood_carvings() -> EventDefinition {
 }
 
 /// A waterlogged scriptorium: bloody ink for six maximum HP, a tentacle quill
-/// for fifty-five gold and a steady card, or a prickly sponge for ninety-nine
+/// for fifty-five gold and a steady card, or a prickly sponge for 120
 /// and two of them.
 #[must_use]
 pub fn waterlogged_scriptorium() -> EventDefinition {
@@ -2605,12 +2600,12 @@ pub fn waterlogged_scriptorium() -> EventDefinition {
                     "WATERLOGGED_SCRIPTORIUM.pages.INITIAL.options.TENTACLE_QUILL_LOCKED".to_owned(),
             },
             sts2_engine::ConditionalOption {
-                available: EventCondition::GoldAtLeast(99),
+                available: EventCondition::GoldAtLeast(120),
                 option: option(
                     "WATERLOGGED_SCRIPTORIUM.pages.INITIAL.options.PRICKLY_SPONGE",
                     "Prickly sponge",
                     vec![
-                        EventEffect::LoseGold(EventAmount::Fixed(99)),
+                        EventEffect::LoseGold(EventAmount::Fixed(120)),
                         enchant_deck_cards("ENCHANTMENT.STEADY", 2),
                     ],
                 ),

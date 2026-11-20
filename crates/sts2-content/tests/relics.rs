@@ -4086,7 +4086,7 @@ fn the_ancients_that_stock_the_hand_from_a_pile() {
     assert_eq!(
         held.temporary_costs
             .last()
-            .expect("and made free for the turn")
+            .expect("and made free for the combat")
             .cost,
         0
     );
@@ -4129,6 +4129,14 @@ fn a_jeweled_mask_prefers_a_power_that_is_not_innate() {
         free("CARD.ENTROPY"),
         Some(None),
         "drawn as innate, at its own cost"
+    );
+    let power = hand
+        .iter()
+        .find(|card| card.fingerprint.model_id == id("CARD.INFLAME"))
+        .expect("the mask chose Inflame");
+    assert!(
+        !power.temporary_costs.last().unwrap().clears_when_turn_ends,
+        "the mask's discount lasts throughout combat"
     );
 }
 
@@ -4325,10 +4333,11 @@ fn spiked_gauntlets_charge_more_for_a_power() {
     );
 }
 
-/// A brilliant scarf makes the fifth card of every turn free.
+/// A brilliant scarf makes the sixth card of every turn free.
 #[test]
-fn a_brilliant_scarf_makes_the_fifth_card_free() {
+fn a_brilliant_scarf_makes_the_sixth_card_free() {
     let hand = [
+        ("CARD.DEFEND_IRONCLAD", 0),
         ("CARD.DEFEND_IRONCLAD", 0),
         ("CARD.DEFEND_IRONCLAD", 0),
         ("CARD.DEFEND_IRONCLAD", 0),
@@ -4336,16 +4345,16 @@ fn a_brilliant_scarf_makes_the_fifth_card_free() {
         ("CARD.DEFEND_IRONCLAD", 0),
     ];
     let mut simulator = fight_tough(&["RELIC.BRILLIANT_SCARF"], &hand);
-    for _ in 0..4 {
+    for _ in 0..5 {
         assert_eq!(hand_cost(&simulator, "CARD.DEFEND_IRONCLAD"), 1);
         play(&mut simulator, "CARD.DEFEND_IRONCLAD");
     }
     assert_eq!(
         hand_cost(&simulator, "CARD.DEFEND_IRONCLAD"),
         0,
-        "the fifth is free"
+        "the sixth is free"
     );
-    assert_eq!(relic_counter(&simulator, "RELIC.BRILLIANT_SCARF"), 4);
+    assert_eq!(relic_counter(&simulator, "RELIC.BRILLIANT_SCARF"), 5);
 
     // A card nobody chose is not counted: a havoc plays the top of the draw
     // pile itself, and the scarf's own body skips an auto-play.
@@ -4383,6 +4392,222 @@ fn a_velvet_choker_allows_six_cards_a_turn() {
             .iter()
             .any(|action| matches!(action, Action::PlayCard { .. })),
         "and the next turn starts the count over"
+    );
+}
+
+/// The choker counts a play before its body can start an autoplay.
+#[test]
+fn a_velvet_choker_stops_an_autoplay_started_by_the_sixth_card() {
+    let mut hand = vec![("CARD.DEFEND_IRONCLAD", 0); 5];
+    hand.push(("CARD.HAVOC", 0));
+    let mut simulator = fight_tough(&["RELIC.VELVET_CHOKER"], &hand);
+    for _ in 0..5 {
+        play(&mut simulator, "CARD.DEFEND_IRONCLAD");
+    }
+    play(&mut simulator, "CARD.HAVOC");
+    assert_eq!(
+        simulator
+            .state()
+            .combat
+            .as_ref()
+            .unwrap()
+            .player
+            .first_plays_started_this_turn,
+        6,
+        "Havoc is the sixth started play; its autoplay is refused"
+    );
+}
+
+#[test]
+fn a_velvet_choker_counts_each_replay_in_a_series() {
+    let mut scenario = ScenarioBuilder::new(SEED, id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .energy(30, 30)
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 999, 999, "SHRINKER_MOVE")
+        .relics(&[id("RELIC.VELVET_CHOKER")])
+        .power(
+            0,
+            id("POWER.DUPLICATION_POWER"),
+            1,
+            sts2_engine::PowerType::Buff,
+        );
+    for index in 0..7 {
+        scenario = scenario.card(PileName::Hand, index, card("CARD.DEFEND_IRONCLAD", 0), 0);
+    }
+    let mut simulator = scenario.build(sts2_content::standard_registry()).unwrap();
+    for _ in 0..5 {
+        play(&mut simulator, "CARD.DEFEND_IRONCLAD");
+    }
+    assert!(
+        !simulator
+            .legal_actions()
+            .iter()
+            .any(|action| matches!(action, Action::PlayCard { .. }))
+    );
+}
+
+/// Opening Retain is a power now, rather than a first-hand flush exception.
+#[test]
+fn a_ringing_triangle_applies_retain_hand_when_combat_is_entered() {
+    let simulator = fight_from_run(&["RELIC.RINGING_TRIANGLE"]);
+    assert_eq!(power_amount(&simulator, 0, "POWER.RETAIN_HAND_POWER"), 1);
+}
+
+#[test]
+fn an_obsidian_vice_deals_unpowered_damage_for_cards_still_in_hand() {
+    let mut simulator = fight_tough(
+        &["RELIC.OBSIDIAN_VICE"],
+        &[("CARD.DEFEND_IRONCLAD", 0), ("CARD.DEFEND_IRONCLAD", 0)],
+    );
+    let before = simulator.state().combat.as_ref().unwrap().creatures[1].current_hp;
+    end_turn(&mut simulator);
+    assert_eq!(
+        simulator.state().combat.as_ref().unwrap().creatures[1].current_hp,
+        before - 2
+    );
+}
+
+#[test]
+fn mighty_wings_uses_total_powered_damage_and_triggers_per_hit() {
+    let mut simulator = fight_tough(&["RELIC.MIGHTY_WINGS"], &[("CARD.BLUDGEON", 0)]);
+    play(&mut simulator, "CARD.BLUDGEON");
+    assert_eq!(power_amount(&simulator, 0, "POWER.STRENGTH_POWER"), 2);
+}
+
+#[test]
+fn byrdpip_counts_swoops_and_caps_the_persistent_count_at_six() {
+    let mut simulator = fight_tough(&["RELIC.BYRDPIP"], &[("CARD.BYRD_SWOOP", 0); 7]);
+    for _ in 0..7 {
+        play(&mut simulator, "CARD.BYRD_SWOOP");
+    }
+    assert_eq!(relic_counter(&simulator, "RELIC.BYRDPIP"), 6);
+}
+
+#[test]
+fn a_bath_towel_heals_eight_only_on_the_opening_turn() {
+    let mut towel = fight_from_run(&["RELIC.BATH_TOWEL"]);
+    let mut plain = fight_from_run(&[]);
+    assert_eq!(player(&towel).current_hp, player(&plain).current_hp + 8);
+    end_turn(&mut towel);
+    end_turn(&mut plain);
+    assert_eq!(player(&towel).current_hp, player(&plain).current_hp + 8);
+}
+
+#[test]
+fn bath_robes_heal_to_full_before_a_boss_and_are_spent_once() {
+    for used in [false, true] {
+        let mut state = run_holding(&["RELIC.BATH_ROBES"]).state().clone();
+        state
+            .run_player
+            .relics
+            .iter_mut()
+            .find(|relic| relic.model_id == id("RELIC.BATH_ROBES"))
+            .unwrap()
+            .latched = used;
+        state.run.as_mut().unwrap().maps[0]
+            .points
+            .iter_mut()
+            .find(|point| point.coord.col == 3)
+            .unwrap()
+            .point_type = MapPointType::Boss;
+        let mut simulator =
+            Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        walk_to(&mut simulator, 3);
+        assert_eq!(player(&simulator).current_hp, if used { 40 } else { 80 });
+        assert!(
+            simulator
+                .state()
+                .run_player
+                .relics
+                .iter()
+                .find(|relic| relic.model_id == id("RELIC.BATH_ROBES"))
+                .unwrap()
+                .latched
+        );
+    }
+}
+
+#[test]
+fn a_tormentous_collar_weakens_elites_for_two_turns_only_on_opening() {
+    let mut state = run_holding(&["RELIC.TORMENTOUS_COLLAR"]).state().clone();
+    state.run.as_mut().unwrap().maps[0]
+        .points
+        .iter_mut()
+        .find(|point| point.coord.col == 3)
+        .unwrap()
+        .point_type = MapPointType::Elite;
+    let mut simulator =
+        Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+    walk_to(&mut simulator, 3);
+    assert_eq!(power_amount(&simulator, 1, "POWER.WEAK_POWER"), 2);
+    end_turn(&mut simulator);
+    end_turn(&mut simulator);
+    assert_eq!(power_amount(&simulator, 1, "POWER.WEAK_POWER"), 0);
+}
+
+#[test]
+fn juzu_excludes_both_monster_and_elite_unknown_room_rolls() {
+    for elite in [false, true] {
+        for held in [false, true] {
+            let relics = if held {
+                vec!["RELIC.JUZU_BRACELET"]
+            } else {
+                Vec::new()
+            };
+            let mut state = run_holding(&relics).state().clone();
+            let run = state.run.as_mut().unwrap();
+            run.rooms[0].retain(|room| room.coord.col != 2);
+            run.acts[0].elite_encounters = vec![id("ENCOUNTER.SHRINKER_BEETLE_WEAK")];
+            run.acts[0].events = vec![id("EVENT.DOORS_OF_LIGHT_AND_DARK")];
+            run.unknown_room_odds = sts2_engine::UnknownRoomOdds {
+                monster_bits: (if elite { 0.0_f32 } else { 1.0 }).to_bits(),
+                elite_bits: (if elite { 1.0_f32 } else { 0.0 }).to_bits(),
+                treasure_bits: 0.0_f32.to_bits(),
+                shop_bits: 0.0_f32.to_bits(),
+            };
+            let mut simulator =
+                Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+            let step = simulator.step(Action::ChooseMap {
+                destination: MapCoord { col: 2, row: 1 },
+            });
+            if elite && !held {
+                // The absent pre-generated elite room makes the positive
+                // control fail explicitly, naming the elite that was rolled.
+                assert_eq!(step.unwrap_err().details["room_type"], "elite");
+            } else {
+                step.unwrap();
+                assert_eq!(simulator.state().combat.is_some(), !held);
+            }
+        }
+    }
+}
+
+#[test]
+fn byrdine_transforms_swoops_preserving_upgrade_and_brings_its_pet() {
+    let mut state = run_holding_with_treasure(&[], "RELIC.BYRDINE")
+        .state()
+        .clone();
+    state.run_player.deck.push(card("CARD.BYRD_SWOOP", 1));
+    let mut simulator =
+        Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+    take_the_treasure(&mut simulator);
+    assert!(
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .any(|card| card.model_id == id("CARD.GOD_BYRD") && card.upgrade_level == 1)
+    );
+    let simulator = fight_from_run(&["RELIC.BYRDINE"]);
+    assert!(
+        simulator
+            .state()
+            .combat
+            .as_ref()
+            .unwrap()
+            .creatures
+            .iter()
+            .any(|creature| creature.model_id == id("MONSTER.BYRDINE_MONSTER"))
     );
 }
 
@@ -5472,6 +5697,106 @@ fn a_girya_is_lifted_three_times() {
     back_to_the_start(&mut spent);
     walk_to(&mut spent, 1);
     assert_eq!(rest_options(&spent), ["HEAL", "SMITH"]);
+}
+
+#[test]
+fn six_swoops_unlock_evolve_and_preserve_the_pet_skin_and_upgrade() {
+    for count in [5, 6] {
+        let mut state = run_holding(&["RELIC.BYRDPIP"]).state().clone();
+        state.run_player.deck.push(card("CARD.BYRD_SWOOP", 1));
+        let index = state
+            .run_player
+            .relics
+            .iter()
+            .position(|relic| relic.model_id == id("RELIC.BYRDPIP"))
+            .unwrap();
+        state.run_player.relics[index].counter = count;
+        state.run_player.relics[index].saved_strings =
+            vec![("Skin".to_owned(), "version3".to_owned())];
+        let mut simulator =
+            Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        walk_to(&mut simulator, 1);
+        assert_eq!(rest_options(&simulator).contains(&"EVOLVE"), count == 6);
+        if count == 6 {
+            simulator.step(rest_option(&simulator, "EVOLVE")).unwrap();
+            let byrdine = &simulator.state().run_player.relics[index];
+            assert_eq!(byrdine.model_id, id("RELIC.BYRDINE"));
+            assert!(
+                byrdine
+                    .saved_strings
+                    .contains(&("Hair".to_owned(), "hair/v3".to_owned()))
+            );
+            assert!(
+                simulator
+                    .state()
+                    .run_player
+                    .deck
+                    .iter()
+                    .any(|card| card.model_id == id("CARD.GOD_BYRD") && card.upgrade_level == 1)
+            );
+        }
+    }
+}
+
+#[test]
+fn dingy_dagger_remains_in_smith_choices_but_its_second_upgrade_fails_explicitly() {
+    let mut state = run_holding(&[]).state().clone();
+    state.run_player.deck = vec![
+        card("CARD.DINGY_DAGGER", 0),
+        card("CARD.STRIKE_IRONCLAD", 0),
+    ];
+    let registry = sts2_content::standard_registry();
+    let mut simulator = Simulator::from_generated_state(state, registry.clone()).unwrap();
+    for level in 0..=1 {
+        walk_to(&mut simulator, 1);
+        simulator.step(rest_option(&simulator, "SMITH")).unwrap();
+        let dagger = simulator
+            .legal_actions()
+            .iter()
+            .find(|action| {
+                matches!(action, Action::ChooseCards { cards, .. }
+                if cards.len() == 1 && cards[0].fingerprint.model_id == id("CARD.DINGY_DAGGER"))
+            })
+            .cloned()
+            .expect("Dingy Dagger stays selectable after its first upgrade");
+        let result = simulator.step(dagger);
+        if level == 0 {
+            result.unwrap();
+            assert_eq!(simulator.state().run_player.deck[0].upgrade_level, 1);
+            back_to_the_start(&mut simulator);
+        } else {
+            let error = result.unwrap_err();
+            assert_eq!(error.code, sts2_engine::ErrorCode::UnsupportedContent);
+            assert_eq!(error.details["model_id"], "CARD.DINGY_DAGGER");
+            assert_eq!(error.details["upgrade_level"], "2");
+            assert_eq!(simulator.state().run_player.deck[0].upgrade_level, 1);
+            assert!(!registry.supports_card(&card("CARD.DINGY_DAGGER", 2)));
+        }
+    }
+}
+
+#[test]
+fn restore_is_disabled_at_full_hp_and_revives_a_dead_wuppy_to_its_maximum() {
+    for hp in [0, 20, 30] {
+        let mut state = run_holding(&["RELIC.WUPPY"]).state().clone();
+        let wuppy = state
+            .run_player
+            .relics
+            .iter_mut()
+            .find(|relic| relic.model_id == id("RELIC.WUPPY"))
+            .unwrap();
+        wuppy.counter = hp;
+        wuppy.second_counter = 30;
+        let mut simulator =
+            Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        walk_to(&mut simulator, 1);
+        assert!(rest_options(&simulator).contains(&"RESTORE"));
+        assert_eq!(offered_options(&simulator).contains(&"RESTORE"), hp < 30);
+        if hp < 30 {
+            simulator.step(rest_option(&simulator, "RESTORE")).unwrap();
+            assert_eq!(relic_counter(&simulator, "RELIC.WUPPY"), 30);
+        }
+    }
 }
 
 /// A meat cleaver's cook takes two cards out of the deck for five more maximum
@@ -7060,12 +7385,12 @@ fn a_bone_flute_pays_for_every_swing_the_pet_finishes() {
     assert_eq!(player(&simulator).block, 4);
 }
 
-/// A book repair knife heals three for every creature other than its owner that
+/// A book repair knife heals three for every enemy that
 /// a Doom kill took down and whose death counted. Doom takes the whole doomed
 /// list down at once as the side it stands on ends its turn, so one kill of two
 /// creatures is one pass of six rather than two passes of three.
 #[test]
-fn a_book_repair_knife_heals_for_every_creature_a_doom_kill_took() {
+fn a_book_repair_knife_heals_for_every_enemy_a_doom_kill_took() {
     let doomed = |relics: &[&str], doom: i32, minions: u64| {
         let mut scenario = necrobinder_scenario("SHRINKER_MOVE", 3, relics, &[])
             .player_hp(40, 80)
@@ -7104,6 +7429,47 @@ fn a_book_repair_knife_heals_for_every_creature_a_doom_kill_took() {
     // A minion going down is not a death that counts, because the power that
     // makes it a minion says so, so only the other one is paid for.
     assert_eq!(doomed(&["RELIC.BOOK_REPAIR_KNIFE"], 39, 1), 40 + 3);
+}
+
+#[test]
+fn a_book_repair_knife_does_not_heal_for_a_doomed_ally() {
+    let simulator = necrobinder_scenario("SHRINKER_MOVE", 2, &["RELIC.BOOK_REPAIR_KNIFE"], &[])
+        .player_hp(40, 80)
+        .power(
+            1,
+            id("POWER.DOOM_POWER"),
+            39,
+            sts2_engine::PowerType::Debuff,
+        )
+        .build(sts2_content::standard_registry())
+        .unwrap();
+    let mut state = simulator.state().clone();
+    state
+        .combat
+        .as_mut()
+        .unwrap()
+        .creatures
+        .iter_mut()
+        .find(|creature| creature.id.get() == 1)
+        .unwrap()
+        .side = sts2_engine::CombatSide::Player;
+    let mut simulator = Simulator::from_scenario(state, sts2_content::standard_registry()).unwrap();
+    end_turn(&mut simulator);
+    assert_eq!(
+        player(&simulator).current_hp,
+        40,
+        "only enemy Doom deaths pay a heal"
+    );
+    assert!(
+        !simulator
+            .state()
+            .combat
+            .as_ref()
+            .unwrap()
+            .creatures
+            .iter()
+            .any(|creature| creature.id.get() == 1 && creature.current_hp > 0)
+    );
 }
 
 /// A funerary mask shuffles three Souls through the draw pile before the first

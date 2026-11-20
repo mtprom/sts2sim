@@ -661,7 +661,7 @@ fn a_waterlogged_scriptorium_locks_what_the_purse_cannot_reach() {
     );
 
     let mut rich = Visit::new("EVENT.WATERLOGGED_SCRIPTORIUM")
-        .gold(99)
+        .gold(120)
         .deck(&["CARD.STRIKE_IRONCLAD", "CARD.DEFEND_IRONCLAD", "CARD.BASH"])
         .enter();
     assert_eq!(
@@ -680,6 +680,380 @@ fn a_waterlogged_scriptorium_locks_what_the_purse_cannot_reach() {
         .and_then(|run| run.suspended_choice.as_ref())
         .expect("the enchantment screen is standing");
     assert_eq!((choice.minimum, choice.maximum), (2, 2));
+}
+
+#[test]
+fn light_upgrades_one_card_the_player_chooses() {
+    let mut simulator = Visit::new("EVENT.DOORS_OF_LIGHT_AND_DARK").enter();
+    choose(
+        &mut simulator,
+        "DOORS_OF_LIGHT_AND_DARK.pages.INITIAL.options.LIGHT",
+    );
+    assert!(
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .all(|card| card.upgrade_level == 0),
+        "no random upgrades happen before the choice"
+    );
+    let choice = simulator
+        .state()
+        .run
+        .as_ref()
+        .unwrap()
+        .suspended_choice
+        .as_ref()
+        .unwrap();
+    assert_eq!((choice.minimum, choice.maximum), (1, 1));
+    assert_eq!(choice.candidates.len(), 2);
+}
+
+#[test]
+fn breathing_techniques_costs_25_and_adds_one_enlightenment() {
+    let mut simulator = Visit::new("EVENT.ZEN_WEAVER").gold(125).enter();
+    choose(
+        &mut simulator,
+        "ZEN_WEAVER.pages.INITIAL.options.BREATHING_TECHNIQUES",
+    );
+    assert_eq!(simulator.state().run_player.gold, 100);
+    assert_eq!(
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .filter(|card| card.model_id == id("CARD.ENLIGHTENMENT"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn the_museum_breakout_costs_ten_max_hp_after_two_dialogue_pages() {
+    let mut simulator = Visit::new("EVENT.MUSEUM_OF_TORTURE").act(1).enter();
+    for option in [
+        "MUSEUM_OF_TORTURE.pages.INITIAL.options.CONTINUE",
+        "MUSEUM_OF_TORTURE.pages.LOCKED.options.CONTINUE",
+        "MUSEUM_OF_TORTURE.pages.DISPLAY.options.BREAK_OUT",
+    ] {
+        choose(&mut simulator, option);
+    }
+    assert_eq!(simulator.state().run_player.max_hp, 70);
+    assert_eq!(simulator.state().run_player.current_hp, 70);
+}
+
+#[test]
+fn museum_take_obtains_the_displayed_relic_and_one_curse_or_names_the_missing_hook() {
+    for model in [
+        "RELIC.OBSIDIAN_VICE",
+        "RELIC.THUMBSCREW",
+        "RELIC.TORMENTOUS_COLLAR",
+    ] {
+        let mut simulator = Visit::new("EVENT.MUSEUM_OF_TORTURE").act(1).enter();
+        for page in ["INITIAL", "LOCKED"] {
+            choose(
+                &mut simulator,
+                &format!("MUSEUM_OF_TORTURE.pages.{page}.options.CONTINUE"),
+            );
+        }
+        // Each of the three CalculateVars outcomes is a valid display state.
+        let mut state = simulator.state().clone();
+        let Some(ActiveRoom::Event { options, .. }) =
+            state.run.as_mut().unwrap().active_room.as_mut()
+        else {
+            panic!("the museum's display is standing")
+        };
+        options[0].effects[0] = EventEffect::ObtainRelic(id(model));
+        let mut simulator =
+            Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        let result = simulator.step(Action::ChooseEvent {
+            index: 0,
+            option_id: "MUSEUM_OF_TORTURE.pages.DISPLAY.options.TAKE".to_owned(),
+        });
+        if model == "RELIC.THUMBSCREW" {
+            assert_eq!(result.unwrap_err().details["model_id"], model);
+        } else {
+            result.unwrap();
+            assert!(holds_relic(&simulator, model));
+            let registry = sts2_content::standard_registry();
+            assert_eq!(
+                simulator
+                    .state()
+                    .run_player
+                    .deck
+                    .iter()
+                    .filter(|card| registry.card(&card.model_id).unwrap().rarity
+                        == sts2_engine::CardRarity::Curse)
+                    .count(),
+                1
+            );
+            assert_eq!(
+                simulator.state().run_player.max_hp,
+                80,
+                "taking the relic is not breaking out"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_shrine_gives_the_selected_mighty_card_or_wings_and_clumsy() {
+    for (option, card) in [
+        ("TAKE_WEAPON", "CARD.MIGHTY_WEAPON"),
+        ("TAKE_SHIELD", "CARD.MIGHTY_SHIELD"),
+        ("TAKE_WINGS", "CARD.CLUMSY"),
+    ] {
+        let mut simulator = Visit::new("EVENT.SHRINE_OF_THE_WARLORD").enter();
+        choose(
+            &mut simulator,
+            &format!("SHRINE_OF_THE_WARLORD.pages.INITIAL.options.{option}"),
+        );
+        assert!(
+            simulator
+                .state()
+                .run_player
+                .deck
+                .iter()
+                .any(|held| held.model_id == id(card))
+        );
+        if option == "TAKE_WINGS" {
+            assert!(
+                simulator
+                    .state()
+                    .run_player
+                    .relics
+                    .iter()
+                    .any(|held| held.model_id == id("RELIC.MIGHTY_WINGS"))
+            );
+        }
+    }
+}
+
+#[test]
+fn thermae_charges_88_for_a_towel_or_all_gold_for_robes() {
+    for (option, relic, remaining) in [
+        ("THERMAL_BATHS", "RELIC.BATH_TOWEL", 112),
+        ("PRIVATE_OASIS", "RELIC.BATH_ROBES", 0),
+    ] {
+        let mut simulator = Visit::new("EVENT.THERMAE_NONUPEIPE")
+            .gold(200)
+            .hp(60, 80)
+            .enter();
+        choose(
+            &mut simulator,
+            &format!("THERMAE_NONUPEIPE.pages.INITIAL.options.{option}"),
+        );
+        assert_eq!(simulator.state().run_player.gold, remaining);
+        assert!(
+            simulator
+                .state()
+                .run_player
+                .relics
+                .iter()
+                .any(|held| held.model_id == id(relic))
+        );
+    }
+}
+
+#[test]
+fn thermae_drinking_costs_31_hp_and_three_guilty_for_the_preselected_relic() {
+    let mut simulator = Visit::new("EVENT.THERMAE_NONUPEIPE")
+        .gold(200)
+        .hp(60, 80)
+        .deck(&[
+            "CARD.STRIKE_IRONCLAD",
+            "CARD.STRIKE_IRONCLAD",
+            "CARD.STRIKE_IRONCLAD",
+            "CARD.DEFEND_IRONCLAD",
+            "CARD.DEFEND_IRONCLAD",
+            "CARD.DEFEND_IRONCLAD",
+        ])
+        .enter();
+    let offered = match page(&simulator)[2].effects.last().unwrap() {
+        EventEffect::ObtainRelic(model) => model.clone(),
+        other => panic!("expected the settled relic, found {other:?}"),
+    };
+    assert_ne!(offered, id("RELIC.LOOMING_FRUIT"));
+    choose(
+        &mut simulator,
+        "THERMAE_NONUPEIPE.pages.INITIAL.options.DRINK_WATERS",
+    );
+    assert_eq!(simulator.state().run_player.current_hp, 29);
+    assert_eq!(simulator.state().run_player.gold, 200);
+    assert!(holds_relic(&simulator, &offered.to_string()));
+    assert_eq!(
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .filter(|card| card.model_id == id("CARD.GUILTY"))
+            .count(),
+        3
+    );
+}
+
+#[test]
+fn waterfall_locks_negotiation_below_70_and_gives_an_unupgraded_rare_card() {
+    for gold in [69, 70] {
+        let mut simulator = Visit::new("EVENT.WATERFALL_OF_OBVIOUS_SECRETS")
+            .gold(gold)
+            .enter();
+        choose(
+            &mut simulator,
+            "WATERFALL_OF_OBVIOUS_SECRETS.pages.INITIAL.options.ENTER",
+        );
+        if gold == 69 {
+            assert_eq!(
+                option_ids(&simulator)[2],
+                "WATERFALL_OF_OBVIOUS_SECRETS.pages.ENTER.options.NEGOTIATE_LOCKED"
+            );
+        } else {
+            choose(
+                &mut simulator,
+                "WATERFALL_OF_OBVIOUS_SECRETS.pages.ENTER.options.NEGOTIATE",
+            );
+            assert_eq!(simulator.state().run_player.gold, 0);
+            let added = simulator.state().run_player.deck.last().unwrap();
+            assert_eq!(added.upgrade_level, 0);
+            assert_eq!(
+                sts2_content::standard_registry()
+                    .card(&added.model_id)
+                    .unwrap()
+                    .rarity,
+                sts2_engine::CardRarity::Rare
+            );
+        }
+    }
+}
+
+#[test]
+fn being_nice_at_the_waterfall_adds_a_base_dingy_dagger_without_payment() {
+    let mut simulator = Visit::new("EVENT.WATERFALL_OF_OBVIOUS_SECRETS")
+        .gold(70)
+        .enter();
+    choose(
+        &mut simulator,
+        "WATERFALL_OF_OBVIOUS_SECRETS.pages.INITIAL.options.ENTER",
+    );
+    choose(
+        &mut simulator,
+        "WATERFALL_OF_OBVIOUS_SECRETS.pages.ENTER.options.BE_NICE",
+    );
+    let dagger = simulator.state().run_player.deck.last().unwrap();
+    assert_eq!(dagger.model_id, id("CARD.DINGY_DAGGER"));
+    assert_eq!(dagger.upgrade_level, 0);
+    assert_eq!(simulator.state().run_player.gold, 70);
+}
+
+#[test]
+fn beating_up_the_waterfall_gremlin_obtains_a_relic_and_two_guilty() {
+    let mut simulator = Visit::new("EVENT.WATERFALL_OF_OBVIOUS_SECRETS")
+        .bag(&["RELIC.LANTERN"])
+        .enter();
+    choose(
+        &mut simulator,
+        "WATERFALL_OF_OBVIOUS_SECRETS.pages.INITIAL.options.ENTER",
+    );
+    choose(
+        &mut simulator,
+        "WATERFALL_OF_OBVIOUS_SECRETS.pages.ENTER.options.BEAT_UP",
+    );
+    assert!(holds_relic(&simulator, "RELIC.LANTERN"));
+    assert_eq!(
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .filter(|card| card.model_id == id("CARD.GUILTY"))
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn helping_wuppy_immediately_gives_60_hp_and_an_injury() {
+    let mut simulator = Visit::new("EVENT.WUPPY_IN_TROUBLE").hp(39, 80).enter();
+    choose(
+        &mut simulator,
+        "WUPPY_IN_TROUBLE.pages.INITIAL.options.HELP_IMMEDIATELY",
+    );
+    let wuppy = simulator
+        .state()
+        .run_player
+        .relics
+        .iter()
+        .find(|relic| relic.model_id == id("RELIC.WUPPY"))
+        .unwrap();
+    assert_eq!((wuppy.counter, wuppy.second_counter), (60, 60));
+    assert_eq!(simulator.state().run_player.current_hp, 39);
+    assert!(
+        simulator
+            .state()
+            .run_player
+            .deck
+            .iter()
+            .any(|card| card.model_id == id("CARD.INJURY"))
+    );
+}
+
+#[test]
+fn cautious_wuppy_has_30_hp_and_truncates_five_percent_current_hp_loss() {
+    for (hp, remaining) in [(19, 19), (39, 38), (40, 38)] {
+        let mut simulator = Visit::new("EVENT.WUPPY_IN_TROUBLE").hp(hp, 80).enter();
+        choose(
+            &mut simulator,
+            "WUPPY_IN_TROUBLE.pages.INITIAL.options.BE_CAUTIOUS",
+        );
+        assert_eq!(simulator.state().run_player.current_hp, remaining);
+        let wuppy = simulator
+            .state()
+            .run_player
+            .relics
+            .iter()
+            .find(|relic| relic.model_id == id("RELIC.WUPPY"))
+            .unwrap();
+        assert_eq!((wuppy.counter, wuppy.second_counter), (30, 30));
+        assert!(
+            !simulator
+                .state()
+                .run_player
+                .deck
+                .iter()
+                .any(|card| card.model_id == id("CARD.INJURY"))
+        );
+    }
+}
+
+#[test]
+fn ignoring_wuppy_offers_one_potion_without_a_companion() {
+    let mut simulator = Visit::new("EVENT.WUPPY_IN_TROUBLE").enter();
+    choose(
+        &mut simulator,
+        "WUPPY_IN_TROUBLE.pages.INITIAL.options.IGNORE",
+    );
+    let rewards = &simulator
+        .state()
+        .run
+        .as_ref()
+        .unwrap()
+        .reward_set
+        .as_ref()
+        .unwrap()
+        .rewards;
+    assert_eq!(rewards.len(), 1);
+    assert_eq!(rewards[0].fingerprint.reward_type, "potion");
+    assert!(
+        !simulator
+            .state()
+            .run_player
+            .relics
+            .iter()
+            .any(|relic| relic.model_id == id("RELIC.WUPPY"))
+    );
 }
 
 #[test]
@@ -1780,7 +2154,7 @@ fn every_event_an_act_can_offer_is_registered() {
 #[test]
 #[allow(clippy::too_many_lines, reason = "one walk per page")]
 fn the_pages_a_recording_walked_are_walked_here_too() {
-    // Doors of light and dark: two upgrades off a sorted-then-shuffled deck, or
+    // Doors of light and dark: one chosen upgrade, or
     // one card removed for nothing.
     let mut light = Visit::new("EVENT.DOORS_OF_LIGHT_AND_DARK")
         .deck(&["CARD.STRIKE_IRONCLAD", "CARD.DEFEND_IRONCLAD", "CARD.BASH"])
@@ -1789,6 +2163,13 @@ fn the_pages_a_recording_walked_are_walked_here_too() {
         &mut light,
         "DOORS_OF_LIGHT_AND_DARK.pages.INITIAL.options.LIGHT",
     );
+    let selection = light
+        .legal_actions()
+        .iter()
+        .find(|action| matches!(action, Action::ChooseCards { .. }))
+        .cloned()
+        .expect("Light asks for one upgrade");
+    light.step(selection).unwrap();
     assert_eq!(
         light
             .state()
@@ -1797,7 +2178,7 @@ fn the_pages_a_recording_walked_are_walked_here_too() {
             .iter()
             .filter(|card| card.upgrade_level > 0)
             .count(),
-        2
+        1
     );
     let mut dark = Visit::new("EVENT.DOORS_OF_LIGHT_AND_DARK")
         .deck(&["CARD.STRIKE_IRONCLAD", "CARD.DEFEND_IRONCLAD", "CARD.BASH"])

@@ -1486,6 +1486,7 @@ fn retain_when_upgraded(mut definition: CardDefinition) -> CardDefinition {
     definition.supported_upgrade_levels.push(1);
     let effects = definition.effects.clone();
     definition.upgrade = Some(CardUpgrade {
+        repeatable: false,
         energy_cost: None,
         innate: false,
         retain: true,
@@ -1502,6 +1503,7 @@ fn keeps_itself_when_upgraded(mut definition: CardDefinition) -> CardDefinition 
     definition.supported_upgrade_levels.push(1);
     let effects = definition.effects.clone();
     definition.upgrade = Some(CardUpgrade {
+        repeatable: false,
         energy_cost: None,
         innate: false,
         retain: false,
@@ -1518,6 +1520,7 @@ fn keeps_ethereal_when_upgraded(mut definition: CardDefinition) -> CardDefinitio
     definition.supported_upgrade_levels.push(1);
     let effects = definition.effects.clone();
     definition.upgrade = Some(CardUpgrade {
+        repeatable: false,
         energy_cost: None,
         innate: false,
         retain: false,

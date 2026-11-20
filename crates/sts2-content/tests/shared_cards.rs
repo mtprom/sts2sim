@@ -10,6 +10,198 @@ use sts2_rng::RunStream;
 
 const SEED: &str = "SHAREDCARDS";
 
+#[test]
+fn my_shinies_truncates_gold_per_hit_and_scales_each_hit_with_strength() {
+    for (upgrade, gold, hits) in [(0, 19, 0), (0, 39, 1), (0, 40, 2), (1, 39, 3)] {
+        let mut simulator = scenario(&[("CARD.MY_SHINIES", upgrade)], &[], 100)
+            .gold(gold)
+            .power(
+                0,
+                id("POWER.STRENGTH_POWER"),
+                2,
+                sts2_engine::PowerType::Buff,
+            )
+            .build(sts2_content::standard_registry())
+            .unwrap();
+        play(&mut simulator, "CARD.MY_SHINIES");
+        assert_eq!(
+            simulator.state().combat.as_ref().unwrap().creatures[1].current_hp,
+            100 - 3 * hits
+        );
+        assert_eq!(
+            simulator.state().run_player.gold,
+            gold,
+            "gold is counted, not spent"
+        );
+    }
+}
+
+#[test]
+fn my_shinies_applies_intangible_to_each_gold_bought_hit_not_the_total() {
+    let mut simulator = scenario(&[("CARD.MY_SHINIES", 0)], &[], 100)
+        .gold(61)
+        .power(
+            0,
+            id("POWER.STRENGTH_POWER"),
+            4,
+            sts2_engine::PowerType::Buff,
+        )
+        .power(
+            1,
+            id("POWER.INTANGIBLE_POWER"),
+            1,
+            sts2_engine::PowerType::Buff,
+        )
+        .build(sts2_content::standard_registry())
+        .unwrap();
+    play(&mut simulator, "CARD.MY_SHINIES");
+    assert_eq!(
+        simulator.state().combat.as_ref().unwrap().creatures[1].current_hp,
+        97,
+        "three hits are each capped at one, rather than one aggregate hit"
+    );
+}
+
+#[test]
+fn mighty_cards_add_dazed_at_random_positions_after_their_effect() {
+    for (model, upgraded, block, damage, dazed) in [
+        ("CARD.MIGHTY_SHIELD", 0, 20, 0, 3),
+        ("CARD.MIGHTY_SHIELD", 1, 25, 0, 3),
+        ("CARD.MIGHTY_WEAPON", 0, 0, 25, 2),
+        ("CARD.MIGHTY_WEAPON", 1, 0, 30, 2),
+    ] {
+        let mut simulator = fight(&[(model, upgraded)]);
+        play(&mut simulator, model);
+        let combat = simulator.state().combat.as_ref().unwrap();
+        assert_eq!(
+            combat
+                .creatures
+                .iter()
+                .find(|creature| creature.id.get() == 0)
+                .unwrap()
+                .block,
+            block
+        );
+        assert_eq!(
+            combat
+                .creatures
+                .iter()
+                .find(|creature| creature.id.get() == 1)
+                .unwrap()
+                .current_hp,
+            39 - damage
+        );
+        assert_eq!(
+            combat
+                .player
+                .piles
+                .draw
+                .iter()
+                .filter(|card| card.fingerprint.model_id == id("CARD.DAZED"))
+                .count(),
+            dazed
+        );
+    }
+}
+
+#[test]
+fn god_byrd_waits_until_next_turn_and_then_deals_unpowered_damage_once() {
+    for (upgrade, damage) in [(0, 30), (1, 40)] {
+        let mut simulator = scenario(&[("CARD.GOD_BYRD", upgrade)], &[], 100)
+            .build(sts2_content::standard_registry())
+            .unwrap();
+        play(&mut simulator, "CARD.GOD_BYRD");
+        assert_eq!(
+            simulator.state().combat.as_ref().unwrap().creatures[1].current_hp,
+            100
+        );
+        end_turn(&mut simulator);
+        assert_eq!(
+            simulator.state().combat.as_ref().unwrap().creatures[1].current_hp,
+            100 - damage
+        );
+        end_turn(&mut simulator);
+        assert_eq!(
+            simulator.state().combat.as_ref().unwrap().creatures[1].current_hp,
+            100 - damage
+        );
+    }
+}
+
+#[test]
+fn dingy_dagger_has_zero_cost_and_four_damage_on_its_first_upgrade() {
+    for (upgrade, damage) in [(0, 7), (1, 11)] {
+        let mut simulator = fight(&[("CARD.DINGY_DAGGER", upgrade)]);
+        let energy = simulator.state().combat.as_ref().unwrap().player.energy;
+        play(&mut simulator, "CARD.DINGY_DAGGER");
+        assert_eq!(
+            simulator.state().combat.as_ref().unwrap().player.energy,
+            energy
+        );
+        assert_eq!(
+            simulator.state().combat.as_ref().unwrap().creatures[1].current_hp,
+            39 - damage
+        );
+    }
+}
+
+#[test]
+fn sadness_is_unplayable_and_retains_across_turns() {
+    let mut simulator = fight(&[("CARD.SADNESS", 0)]);
+    assert!(play_action(&simulator, "CARD.SADNESS").is_none());
+    end_turn(&mut simulator);
+    assert!(
+        simulator
+            .state()
+            .combat
+            .as_ref()
+            .unwrap()
+            .player
+            .piles
+            .hand
+            .iter()
+            .any(|card| card.fingerprint.model_id == id("CARD.SADNESS"))
+    );
+}
+
+#[test]
+fn free_card_is_spent_before_the_first_play_and_not_at_turn_end() {
+    let mut simulator = scenario(
+        &[("CARD.STRIKE_IRONCLAD", 0), ("CARD.STRIKE_IRONCLAD", 0)],
+        &[],
+        100,
+    )
+    .power(
+        0,
+        id("POWER.FREE_CARD_POWER"),
+        1,
+        sts2_engine::PowerType::Buff,
+    )
+    .build(sts2_content::standard_registry())
+    .unwrap();
+    play(&mut simulator, "CARD.STRIKE_IRONCLAD");
+    assert_eq!(simulator.state().combat.as_ref().unwrap().player.energy, 9);
+    play(&mut simulator, "CARD.STRIKE_IRONCLAD");
+    assert_eq!(simulator.state().combat.as_ref().unwrap().player.energy, 8);
+}
+
+#[test]
+fn free_card_does_not_waive_a_regent_cards_star_cost() {
+    let simulator = scenario(&[("CARD.ASTRAL_PULSE", 0)], &[], 100)
+        .power(
+            0,
+            id("POWER.FREE_CARD_POWER"),
+            1,
+            sts2_engine::PowerType::Buff,
+        )
+        .build(sts2_content::standard_registry())
+        .unwrap();
+    assert!(
+        play_action(&simulator, "CARD.ASTRAL_PULSE").is_none(),
+        "Free Card affects energy, not the three-star cost"
+    );
+}
+
 fn id(value: &str) -> sts2_core::ModelId {
     value.parse().expect("static model ID")
 }

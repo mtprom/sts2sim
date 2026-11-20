@@ -687,6 +687,8 @@ pub enum CardCostRule {
     /// Brilliant Scarf: a card of its owner's standing in the hand or in play
     /// costs nothing.
     FreeInHandOrPlay,
+    /// Free Card affects energy alone, unlike Brilliant Scarf.
+    FreeEnergyInHandOrPlay,
     /// Void Form: a card of its owner's standing in the hand or in play costs
     /// nothing while they have played fewer cards this turn than the rule is
     /// worth.
@@ -711,6 +713,7 @@ impl CardCostRule {
                 | Self::FreeSkills
                 | Self::FreeSkillsInHandOrPlay
                 | Self::FreeInHandOrPlay
+                | Self::FreeEnergyInHandOrPlay
                 | Self::FreePowersInHandOrPlay
                 | Self::FreeEtherealInHandOrPlay
                 | Self::FreeInHandOrPlayUnderCount
@@ -3213,6 +3216,9 @@ pub enum CardPlayRestriction {
     reason = "each flag is one keyword an upgrade adds or removes"
 )]
 pub struct CardUpgrade {
+    /// The game allows another upgrade even after the modeled forms run out.
+    #[serde(default)]
+    pub repeatable: bool,
     pub energy_cost: Option<i32>,
     /// Upgrading adds Innate, which is the whole of what upgrading some cards
     /// does.
@@ -3485,6 +3491,18 @@ pub struct CardDefinition {
 }
 
 impl CardDefinition {
+    /// Gameplay eligibility is distinct from which upgrade levels are modeled.
+    #[must_use]
+    pub fn can_upgrade_from(&self, level: u8) -> bool {
+        self.upgrade.as_ref().is_some_and(|upgrade| {
+            upgrade.repeatable
+                || self
+                    .supported_upgrade_levels
+                    .iter()
+                    .any(|next| *next > level)
+        })
+    }
+
     /// Whether the form at this upgrade level burns up when it is played,
     /// which is the card's own keyword unless upgrading removes it.
     #[must_use]

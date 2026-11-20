@@ -588,7 +588,7 @@ fn an_ambergris_heals_half_and_buys_one_more_turn() {
     };
     drink(&mut simulator, "POTION.AMBERGRIS");
     assert_eq!(player(&simulator).current_hp, 70);
-    assert_eq!(power_amount(&simulator, 0, "POWER.AMBERGRIS_POWER"), 1);
+    assert_eq!(power_amount(&simulator, 0, "POWER.EXTRA_TURN_POWER"), 1);
 
     end_turn(&mut simulator);
     assert_eq!(
@@ -596,7 +596,7 @@ fn an_ambergris_heals_half_and_buys_one_more_turn() {
         (1, 2),
         "the enemy never took its turn"
     );
-    assert_eq!(power_amount(&simulator, 0, "POWER.AMBERGRIS_POWER"), 0);
+    assert_eq!(power_amount(&simulator, 0, "POWER.EXTRA_TURN_POWER"), 0);
     assert_eq!(
         power_amount(&simulator, 0, "POWER.SHRINK_POWER"),
         0,

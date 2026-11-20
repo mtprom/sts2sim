@@ -1093,6 +1093,8 @@ pub enum EventCondition {
     ActIndexBelow(usize),
     /// The run is in the act at this index.
     ActIndexIs(usize),
+    /// The act's ancient is not this model.
+    ActAncientIsNot(ModelId),
     /// The run stands on this floor or a later one, counted run-wide.
     TotalFloorAtLeast(u32),
     /// The run stands past this floor, counted run-wide.
@@ -1594,6 +1596,10 @@ pub enum EventEffect {
     /// HP the option costs outright, which nothing can block.
     LoseHp(EventAmount),
     ObtainRelic(ModelId),
+    /// Wuppy is created with the event option's maximum HP before it is kept.
+    ObtainWuppy {
+        max_hp: i32,
+    },
     /// A relic an ancient set up as it offered it, and the card that setup
     /// rolled: a dusty tome picks its card when the page is built, and the
     /// relic carries it from then on.
@@ -1677,6 +1683,8 @@ pub enum EventEffect {
     /// The page is replaced with another set of options, and the room stays
     /// open for them.
     SetPage(Vec<EventOption>),
+    /// A follow-up page whose locked choices depend on the current run.
+    SetConditionalPage(Vec<ConditionalOption>),
     /// The same over a random few: the options are shuffled whole on the
     /// event's own stream and the first few are put up. The shuffle is the
     /// unstable one, so the order the options were written in is what it
@@ -2166,6 +2174,10 @@ pub enum RestSiteOption {
     Kindle,
     /// Lift, which Girya adds while it has lifts left.
     Lift,
+    /// Byrdpip evolves after six Swoops.
+    Evolve,
+    /// Fully restore the event companion's persistent HP.
+    Restore,
 }
 
 impl RestSiteOption {
@@ -2182,6 +2194,8 @@ impl RestSiteOption {
             Self::Hatch => "HATCH",
             Self::Kindle => "KINDLE",
             Self::Lift => "LIFT",
+            Self::Evolve => "EVOLVE",
+            Self::Restore => "RESTORE",
         }
     }
 }
