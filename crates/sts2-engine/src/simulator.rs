@@ -6007,6 +6007,38 @@ impl Simulator {
             .unwrap_or(id)
     }
 
+    /// A pet with `power` standing at the listening relic's saved HP: the
+    /// counter is its current HP and the second counter its maximum.
+    fn add_companion_pet(
+        &mut self,
+        monster: &ModelId,
+        power: &ModelId,
+        context: &CommandContext,
+        events: &mut Vec<SemanticEvent>,
+    ) -> Result<(), EngineError> {
+        let saved = context.relic.as_ref().and_then(|relic| {
+            self.state
+                .run_player
+                .relics
+                .iter()
+                .find(|held| held.model_id == *relic)
+                .map(|held| (held.counter, held.second_counter))
+        });
+        let (Some(owner), Some((current_hp, max_hp))) = (context.owner, saved) else {
+            return Ok(());
+        };
+        if let Some(pet) = self.add_pet(monster, owner)? {
+            self.apply_power(pet, None, power, 1, None, None)?;
+            let creature = self.creature_mut(pet)?;
+            creature.max_hp = max_hp.max(0);
+            creature.current_hp = current_hp.clamp(0, creature.max_hp);
+            // A companion saved at zero joins as a corpse, not a new death.
+            creature.death_handled = creature.current_hp == 0;
+        }
+        self.emit("pet.added", BTreeMap::new(), events);
+        Ok(())
+    }
+
     /// A creature of this monster model joins the player's own side of the
     /// fight as their pet.
     ///
@@ -14751,26 +14783,7 @@ impl Simulator {
                 self.emit("pet.added", BTreeMap::new(), events);
             }
             PlayerCmd::AddCompanionPet { monster, power } => {
-                let saved = context.relic.as_ref().and_then(|relic| {
-                    self.state
-                        .run_player
-                        .relics
-                        .iter()
-                        .find(|held| held.model_id == *relic)
-                        .map(|held| (held.counter, held.second_counter))
-                });
-                let (Some(owner), Some((current_hp, max_hp))) = (context.owner, saved) else {
-                    return Ok(());
-                };
-                if let Some(pet) = self.add_pet(monster, owner)? {
-                    self.apply_power(pet, None, power, 1, None, None)?;
-                    let creature = self.creature_mut(pet)?;
-                    creature.max_hp = max_hp.max(0);
-                    creature.current_hp = current_hp.clamp(0, creature.max_hp);
-                    // A companion saved at zero joins as a corpse, not a new death.
-                    creature.death_handled = creature.current_hp == 0;
-                }
-                self.emit("pet.added", BTreeMap::new(), events);
+                self.add_companion_pet(monster, power, context, events)?;
             }
             PlayerCmd::GainEnergy(amount) => {
                 if self.combat_is_ending() {
@@ -24300,14 +24313,14 @@ impl Simulator {
             props,
             card,
         )?;
-        let received = self.lose_hp(receiver, hp_loss, blocked, block_left, props, events)?;
-        settled.push((receiver, received));
+        let taken = self.lose_hp(receiver, hp_loss, blocked, block_left, props, events)?;
+        settled.push((receiver, taken));
         if receiver != target {
             // The blow was taken by a pet. What it was worth beyond what the
             // pet had left tramples through onto the owner, and the build runs
             // only the after-pet phase over it: the before-pet phase has
             // already had its say on this blow and is not run again.
-            let overkill = received.overkill;
+            let overkill = taken.overkill;
             let trample = self.modify_hp_lost(
                 HpLossPhase::AfterOsty,
                 dealer,

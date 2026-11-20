@@ -83,7 +83,7 @@ fn damage_late_multiplication_precedes_caps() {
     );
 }
 
-/// Thumbscrew modifies a multi-hit Attack card once, including HitCountVar's
+/// Thumbscrew modifies a multi-hit Attack card once, including `HitCountVar`'s
 /// null-CardPlay preview, but never turns a single hit into two.
 #[test]
 fn thumbscrew_preview_matches_attack_hits() {
@@ -138,7 +138,7 @@ fn thumbscrew_preview_matches_attack_hits() {
     );
 }
 
-/// Lethality's in-Play subtraction requires a supplied CardPlay. A card
+/// Lethality's in-Play subtraction requires a supplied `CardPlay`. A card
 /// moved to Play for its held-at-turn-end effect is a card source without a
 /// play, so the turn's one started Attack already used the bonus.
 #[test]
@@ -286,7 +286,7 @@ fn omnislice_splash_is_powered_and_cap_only() {
     assert_eq!(combat.creatures[0].current_hp, 77);
 }
 
-/// LoseMaxHp damages the HP above the new maximum with its card as the
+/// `LoseMaxHp` damages the HP above the new maximum with its card as the
 /// source. Buffer returns the amount unchanged for Brightest Flame, so it is
 /// not a modifying listener and keeps its stack.
 #[test]

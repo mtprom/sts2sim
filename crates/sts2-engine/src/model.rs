@@ -1411,7 +1411,7 @@ pub enum HookEvent {
     ModifyDamageMultiplicative,
     ModifyDamageMultiplicativeLate,
     ModifyDamageCap,
-    /// The attack's hit count, settled once after BeforeAttack.
+    /// The attack's hit count, settled once after `BeforeAttack`.
     ModifyAttackHitCount,
     /// The two passes over block. There is no cap pass.
     ModifyBlockAdditive,
@@ -5842,7 +5842,7 @@ pub struct CardPreview {
     /// and not what its print says. Nothing where the card carries no damage
     /// number at all.
     pub damage: Option<i32>,
-    /// HitCountVar preview, through the same pass as the actual attack.
+    /// `HitCountVar` preview, through the same pass as the actual attack.
     #[serde(default)]
     pub hits: Option<i32>,
     /// The block the card draws, on the same footing. The creature the block
