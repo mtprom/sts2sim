@@ -782,9 +782,7 @@ fn museum_take_obtains_the_displayed_relic_and_one_curse_or_names_the_missing_ho
             index: 0,
             option_id: "MUSEUM_OF_TORTURE.pages.DISPLAY.options.TAKE".to_owned(),
         });
-        if model == "RELIC.THUMBSCREW" {
-            assert_eq!(result.unwrap_err().details["model_id"], model);
-        } else {
+        {
             result.unwrap();
             // MuseumOfTorture.TakeRelic draws its curse on the player's stream.
             assert_eq!(

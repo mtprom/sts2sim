@@ -74,3 +74,42 @@ fn damage_late_multiplication_precedes_caps() {
     play(&mut simulator);
     assert_eq!(simulator.state().combat.as_ref().unwrap().creatures[1].current_hp, 80);
 }
+
+/// Thumbscrew modifies a multi-hit Attack card once, including HitCountVar's
+/// null-CardPlay preview, but never turns a single hit into two.
+#[test]
+fn thumbscrew_preview_matches_attack_hits() {
+    for (card, gold, damage, hits) in [
+        ("CARD.TWIN_STRIKE", 0, 5, 3),
+        ("CARD.STRIKE_IRONCLAD", 0, 6, 1),
+        ("CARD.MY_SHINIES", 40, 1, 3),
+        ("CARD.MY_SHINIES", 20, 1, 1),
+    ] {
+        let mut simulator = ScenarioBuilder::new("HITS113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+            .player_hp(80, 80)
+            .energy(3, 3)
+            .turn(1, 1)
+            .gold(gold)
+            .relics(&[id("RELIC.THUMBSCREW")])
+            .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
+            .card(PileName::Hand, 0, CardFingerprint::base(id(card)), 1)
+            .build(sts2_content::standard_registry())
+            .expect("scenario");
+        assert_eq!(simulator.agent_observation().hand_previews[0].hits, Some(hits), "{card}");
+        play(&mut simulator);
+        assert_eq!(simulator.state().combat.as_ref().unwrap().creatures[1].current_hp, 100 - damage * hits, "{card}");
+    }
+    let mut content = (*sts2_content::standard_registry()).clone();
+    let mut skill = content.card(&id("CARD.TWIN_STRIKE")).unwrap().clone();
+    skill.card_type = sts2_engine::CardType::Skill;
+    content.add_card(skill);
+    let mut simulator = ScenarioBuilder::new("SKILLHITS113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .relics(&[id("RELIC.THUMBSCREW")])
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
+        .card(PileName::Hand, 0, CardFingerprint::base(id("CARD.TWIN_STRIKE")), 1)
+        .build(Arc::new(content))
+        .unwrap();
+    assert_eq!(simulator.agent_observation().hand_previews[0].hits, Some(2));
+    play(&mut simulator);
+    assert_eq!(simulator.state().combat.as_ref().unwrap().creatures[1].current_hp, 90);
+}

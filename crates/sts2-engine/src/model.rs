@@ -1411,6 +1411,8 @@ pub enum HookEvent {
     ModifyDamageMultiplicative,
     ModifyDamageMultiplicativeLate,
     ModifyDamageCap,
+    /// The attack's hit count, settled once after BeforeAttack.
+    ModifyAttackHitCount,
     /// The two passes over block. There is no cap pass.
     ModifyBlockAdditive,
     ModifyBlockMultiplicative,
@@ -1513,6 +1515,7 @@ impl HookEvent {
             | Self::ModifyDamageMultiplicative
             | Self::ModifyDamageMultiplicativeLate
             | Self::ModifyDamageCap
+            | Self::ModifyAttackHitCount
             | Self::ModifyHpLostBeforeOsty
             | Self::ModifyHpLostBeforeOstyLate
             | Self::ModifyHpLostAfterOsty
@@ -1864,6 +1867,8 @@ pub enum HookCondition {
     /// own play is already in the history and counts itself, and where it is
     /// anywhere else it is not.
     DamageCardIsTheOwnersFirstAttackPlay,
+    /// An owner's Attack card with a current hit count greater than one.
+    OwnersMultiHitAttackCard,
     /// The other way round: the listener's owner just took this power off a
     /// player — the listener's owner applied it, its holder is a player, it is
     /// this model, and the amount was negative. Those are the four tests a
@@ -5823,6 +5828,9 @@ pub struct CardPreview {
     /// and not what its print says. Nothing where the card carries no damage
     /// number at all.
     pub damage: Option<i32>,
+    /// HitCountVar preview, through the same pass as the actual attack.
+    #[serde(default)]
+    pub hits: Option<i32>,
     /// The block the card draws, on the same footing. The creature the block
     /// passes are asked about is the one gaining the block, which is always
     /// the card's own owner whatever the card is pointed at, so aiming never
@@ -5849,6 +5857,7 @@ impl CardPreview {
         Self {
             card_id,
             damage: None,
+            hits: None,
             block: None,
             aimed_damage: Vec::new(),
             multi_target_damage: None,

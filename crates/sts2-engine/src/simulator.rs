@@ -12451,7 +12451,8 @@ impl Simulator {
         })?;
         // The hit-count pass settles the count before the loop opens, so it is
         // worked out once and never again.
-        let count = self.resolve_amount(hits, context)?;
+        let base_count = self.resolve_amount(hits, context)?;
+        let count = self.modify_attack_hit_count(base_count, attack_value)?;
         let frame = crate::AttackFrame {
             amount: amount.clone(),
             props,
@@ -12462,6 +12463,20 @@ impl Simulator {
             then,
         };
         self.run_attack_hits(frame, events)
+    }
+
+    fn modify_attack_hit_count(
+        &mut self,
+        count: i32,
+        mut value: ValueContext,
+    ) -> Result<i32, EngineError> {
+        value.amount = count;
+        let (count, _) = self.modifier_pass_by_value(
+            HookEvent::ModifyAttackHitCount,
+            HookContext::over(value),
+            i64::from(count),
+        )?;
+        Ok(i32::try_from(count).unwrap_or(i32::MAX).max(0))
     }
 
     /// The hit loop, entered at its start or at the hit a screen stopped it on.
@@ -21507,6 +21522,26 @@ impl Simulator {
             return Ok(preview);
         };
         let unaimed = CommandContext::by(player_id).from_card(card_id);
+        let effects = match (&definition.upgrade, fingerprint.upgrade_level) {
+            (Some(upgrade), 1) => &upgrade.effects,
+            _ => &definition.effects,
+        };
+        if let Some(hits) = effects.iter().find_map(|command| match command {
+            Command::Damage(DamageCmd::Attack { hits, .. }) | Command::Strike { hits, .. } => {
+                Some(hits)
+            }
+            _ => None,
+        }) {
+            let count = self.resolve_amount(hits, &unaimed)?;
+            preview.hits = Some(self.modify_attack_hit_count(
+                count,
+                ValueContext {
+                    dealer: Some(player_id),
+                    card: Some(card_id),
+                    ..ValueContext::default()
+                },
+            )?);
+        }
         if let Some((amount, props)) = self.card_block_var_base(fingerprint) {
             let base = self.resolve_amount(&amount, &unaimed)?;
             let (_, block, _) = self.block_value_passes(player_id, base, props, Some(card_id))?;
@@ -25377,6 +25412,15 @@ impl Simulator {
             }
             crate::HookCondition::OwnerDealsPoweredDamageFromACard => {
                 value.dealer == Some(owner) && !value.props.unpowered && value.card.is_some()
+            }
+            crate::HookCondition::OwnersMultiHitAttackCard => {
+                let count = self.modifier.map_or(i64::from(value.amount), ModifierPass::settled);
+                count > 1
+                    && value.dealer == Some(owner)
+                    && owner == self.combat()?.player.creature_id
+                    && value.card.and_then(|id| self.combat().ok()?.player.piles.all_cards().find(|card| card.id == id))
+                        .and_then(|card| self.content.card_type_of(&card.fingerprint))
+                        == Some(crate::CardType::Attack)
             }
             // The run of tests lethality makes before it scales damage, in the
             // build's own order.
@@ -29941,6 +29985,7 @@ struct KeyHandCardView<'a> {
 #[derive(serde::Serialize)]
 struct KeyPreviewView<'a> {
     damage: Option<i32>,
+    hits: Option<i32>,
     block: Option<i32>,
     aimed_damage: &'a [crate::AimedDamage],
     multi_target_damage: Option<i32>,
@@ -30048,6 +30093,7 @@ fn key_hand_views<'a>(
                 .find(|preview| preview.card_id == card.card_id)
                 .map(|preview| KeyPreviewView {
                     damage: preview.damage,
+                    hits: preview.hits,
                     block: preview.block,
                     aimed_damage: &preview.aimed_damage,
                     multi_target_damage: preview.multi_target_damage,

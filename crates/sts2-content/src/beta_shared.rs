@@ -268,9 +268,11 @@ pub(crate) fn relics() -> Vec<RelicDefinition> {
             )],
             ..relics::obtained_only("RELIC.BYRDINE", RelicRarity::Event)
         },
-        // TODO(package 4): ModifyAttackHitCount for Thumbscrew.
         RelicDefinition {
-            on_obtained: vec![Command::Unsupported(id("RELIC.THUMBSCREW"))],
+            hooks: vec![ModifierHook::every_turn(
+                HookEvent::ModifyAttackHitCount,
+                vec![Command::Modify(sts2_engine::ModifierCmd::Add(Amount::Fixed(1)))],
+            ).when(HookCondition::OwnersMultiHitAttackCard)],
             ..relics::obtained_only("RELIC.THUMBSCREW", RelicRarity::Event)
         },
         RelicDefinition {

@@ -23,7 +23,7 @@ Pael's Legion binds its multiplier to a particular card play, not all nested
 plays. Byrdpip unlocks Evolve after six Swoops; Evolve replaces it with Byrdine,
 preserving the skin as Hair. Wuppy persists 30 or 60 HP between fights, redirects
 powered attack damage before block, keeps its corpse and loyalty power, and
-adds Restore at rest sites. Thumbscrew adds a hit to multi-hit card attacks.
+ adds Restore at rest sites.
 Dingy Dagger supports repeated upgrades, adding 3 plus the new upgrade level
 to damage each time.
 
@@ -34,7 +34,7 @@ Evolve preserves its skin as Byrdine's Hair while transforming Swoops to God Byr
 Both companion models are registered. Wuppy in Trouble's three choices and
 Restore work outside combat, with CurrentHp and MaxHp saved on the relic.
 Starting combat with Wuppy fails explicitly pending its interception and HP
-synchronization hooks. Obtaining Thumbscrew fails explicitly.
+synchronization hooks.
 Dingy Dagger supports only levels 0 and 1. It stays eligible for further
 upgrades, but attempting the second upgrade fails explicitly with the model
 and unsupported level instead of disappearing from upgrade choices.
@@ -44,13 +44,13 @@ unsupported: its Aim mechanics belong to the excluded Fool character.
 
 **Whether it can reach a conformance claim.** Yes. A playback with Ambergris
 and an unused Pael's Eye, nested block plays under Pael's Legion,
-combat with Wuppy, Thumbscrew, or repeated Dagger
+combat with Wuppy or repeated Dagger
 upgrades exposes these differences. These rules must not be reported as
 fully beta-conformant.
 
 **What would change this.** Engine support for source-specific early extra
 turns, card-play identity, combat synchronization of event-pet HP and
-`ModifyPreBlockDamageTarget`/`BeforeWuppy`, `ModifyAttackHitCount`, and
+`ModifyPreBlockDamageTarget`/`BeforeWuppy`, and
 repeatable card upgrades. Museum's curse generation must use
 `non_combat_generation`; Waterfall's relic rarity must use its event RNG,
 not the old streams.
