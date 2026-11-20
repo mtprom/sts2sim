@@ -22891,22 +22891,29 @@ impl Simulator {
         // strength is added to what that came to, fraction and all. The chain is
         // held in hundredths here for the same reason.
         let mut carried = ModifierPass::over_scaled(i64::from(base), HUNDREDTHS);
-        let settled = self.enchant_value_pass_carrying(
-            card,
-            &[
-                crate::HookEvent::EnchantDamageAdditive,
-                crate::HookEvent::EnchantDamageMultiplicative,
-            ],
-            &value,
-            carried,
-        )?;
-        carried = ModifierPass::carrying(settled, HUNDREDTHS);
-        for event in [
-            crate::HookEvent::ModifyDamageAdditive,
-            crate::HookEvent::ModifyDamageMultiplicative,
-            crate::HookEvent::ModifyDamageMultiplicativeLate,
-            crate::HookEvent::ModifyDamageCap,
-        ] {
+        let mut events = vec![crate::HookEvent::ModifyDamageCap];
+        // A cap-only value skips the enchantment and every scaling pass.
+        if !props.cap_only {
+            let settled = self.enchant_value_pass_carrying(
+                card,
+                &[
+                    crate::HookEvent::EnchantDamageAdditive,
+                    crate::HookEvent::EnchantDamageMultiplicative,
+                ],
+                &value,
+                carried,
+            )?;
+            carried = ModifierPass::carrying(settled, HUNDREDTHS);
+            events.splice(
+                0..0,
+                [
+                    crate::HookEvent::ModifyDamageAdditive,
+                    crate::HookEvent::ModifyDamageMultiplicative,
+                    crate::HookEvent::ModifyDamageMultiplicativeLate,
+                ],
+            );
+        }
+        for event in events {
             let (settled, _) =
                 self.modifier_pass_carrying(event, HookContext::over(value.clone()), carried)?;
             carried = ModifierPass::carrying(settled, HUNDREDTHS);
@@ -25518,8 +25525,6 @@ impl Simulator {
             crate::HookCondition::OwnerTookPoweredAttackFromSomebody => {
                 value.target == Some(owner) && value.dealer.is_some() && !value.props.unpowered
             }
-            // The owner took a blow from somebody, and it was either a powered
-            // attack or an Omnislice's.
             // The owner dealt a powered attack to a player and something of it
             // went through.
             crate::HookCondition::OwnerIsEnemy => self.creature(owner)?.side == CombatSide::Enemy,
@@ -25553,19 +25558,6 @@ impl Simulator {
                     && target_is_player
                     && !value.props.unpowered
                     && value.damage.is_some_and(|damage| damage.unblocked > 0)
-            }
-            crate::HookCondition::OwnerTakesPoweredDamageOrOmnislice => {
-                let from_omnislice = value.card.is_some_and(|card| {
-                    self.combat().is_ok_and(|combat| {
-                        combat.player.piles.all_cards().any(|instance| {
-                            instance.id == card
-                                && instance.fingerprint.model_id.entry() == "OMNISLICE"
-                        })
-                    })
-                });
-                value.target == Some(owner)
-                    && value.dealer.is_some()
-                    && (!value.props.unpowered || from_omnislice)
             }
             crate::HookCondition::OwnerTakesDamage | crate::HookCondition::PowerAppliedToOwner => {
                 value.target == Some(owner)

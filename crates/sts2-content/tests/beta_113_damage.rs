@@ -239,3 +239,49 @@ fn shrink_ignores_a_player_appliers_death() {
     play(&mut simulator);
     assert!(!shrink_on(&simulator, 0));
 }
+
+/// Omnislice splashes its first result's total plus overkill as powered damage
+/// that only the cap pass modifies: no second Strength, but caps, Thorns and
+/// powered-hit listeners all apply.
+#[test]
+fn omnislice_splash_is_powered_and_cap_only() {
+    let simulator = ScenarioBuilder::new("OMNI113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .player_hp(80, 80)
+        .energy(3, 3)
+        .turn(1, 1)
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 3, 100, "SHRINKER_MOVE")
+        .enemy(2, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
+        .enemy(3, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
+        .power(0, id("POWER.STRENGTH_POWER"), 2, PowerType::Buff)
+        .power(2, id("POWER.CURL_UP_POWER"), 5, PowerType::Buff)
+        .power(3, id("POWER.HARD_TO_KILL_POWER"), 1, PowerType::Buff)
+        .power(3, id("POWER.THORNS_POWER"), 3, PowerType::Buff)
+        .card(
+            PileName::Hand,
+            0,
+            CardFingerprint::base(id("CARD.OMNISLICE")),
+            1,
+        )
+        .build(sts2_content::standard_registry())
+        .expect("scenario");
+    let mut state = simulator.state().clone();
+    state.combat.as_mut().unwrap().creatures[1].block = 4;
+    let mut simulator = Simulator::from_scenario(state, sts2_content::standard_registry()).unwrap();
+    step_matching(
+        &mut simulator,
+        |action| matches!(action, Action::PlayCard { target: Some(target), .. } if target.combat_id == sts2_core::CreatureCombatId::from(1)),
+    );
+    let combat = simulator.state().combat.as_ref().unwrap();
+    let enemy = |id: u64| {
+        combat
+            .creatures
+            .iter()
+            .find(|creature| creature.id == sts2_core::CreatureCombatId::from(id))
+            .map(|creature| (creature.current_hp, creature.block))
+    };
+    // 8 + 2 Strength: 4 blocked, 3 lost, 3 overkill, so the splash base is 10.
+    assert_eq!(enemy(1), None);
+    assert_eq!(enemy(2), Some((90, 5)));
+    assert_eq!(enemy(3), Some((99, 0)));
+    assert_eq!(combat.creatures[0].current_hp, 77);
+}

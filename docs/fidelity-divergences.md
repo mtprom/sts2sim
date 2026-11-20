@@ -315,9 +315,6 @@ parity blockers until the named hooks and distinguishing scenarios are added.
   before it becomes the next turn's copy template; defer Juggling's
   remembered clone until after the triggering card resolves. These timing
   changes need engine scheduling rather than different content values.
-- TODO(package 4): Omnislice splash must be powered but pass only through
-  damage caps (`ModifyDamageHookType.Cap`), not receive Strength/multipliers
-  a second time; remove the Thorns Omnislice exception alongside that hook.
 - TODO(package 4): propagate the causing card through max-HP loss and death.
   Brightest Flame must bypass Buffer while still reporting its card source;
   Bone Shards and Sacrifice must identify their card when killing Osty.

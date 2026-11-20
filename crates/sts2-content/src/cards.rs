@@ -2124,7 +2124,7 @@ pub(crate) fn rarity(
 }
 
 /// One blow on the target, and the same blow again on everyone else: what the
-/// first came to, overkill and all, dealt unpowered.
+/// first came to, overkill and all, powered but modified only by caps.
 fn omnislice(damage: i32) -> Command {
     Command::Deal {
         target: CreatureSelector::Target,
@@ -2133,7 +2133,10 @@ fn omnislice(damage: i32) -> Command {
         then: vec![Command::Creature(CreatureCmd::Damage {
             target: CreatureSelector::OtherOpponents,
             amount: Amount::counting(Count::DealtDamageWithOverkill),
-            props: ValueProps::UNPOWERED,
+            props: ValueProps {
+                cap_only: true,
+                ..ValueProps::NONE
+            },
         })],
     }
 }

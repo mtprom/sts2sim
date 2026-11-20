@@ -431,7 +431,7 @@ fn thorns_power() -> PowerDefinition {
                     props: ValueProps::UNPOWERED,
                 })],
             )
-            .when(HookCondition::OwnerTakesPoweredDamageOrOmnislice),
+            .when(HookCondition::OwnerTookPoweredAttackFromSomebody),
         ],
         ..counter("POWER.THORNS_POWER", PowerType::Buff)
     }

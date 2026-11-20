@@ -3101,6 +3101,10 @@ pub struct ValueProps {
     /// The listeners that scale it do not apply to it. A listener that caps it
     /// still does, because a cap makes no such test.
     pub unpowered: bool,
+    /// Only the cap pass modifies it (`ModifyDamageHookType.Cap`), which is
+    /// what an Omnislice splash asks for. It stays powered.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cap_only: bool,
 }
 
 impl ValueProps {
@@ -3108,16 +3112,19 @@ impl ValueProps {
     pub const NONE: Self = Self {
         unblockable: false,
         unpowered: false,
+        cap_only: false,
     };
     /// What a power's own damage and block carry: nothing scales them.
     pub const UNPOWERED: Self = Self {
         unblockable: false,
         unpowered: true,
+        cap_only: false,
     };
     /// Damage nothing scales and nothing stops.
     pub const UNBLOCKABLE: Self = Self {
         unblockable: true,
         unpowered: true,
+        cap_only: false,
     };
 }
 

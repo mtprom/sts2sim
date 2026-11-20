@@ -1762,10 +1762,6 @@ pub enum HookCondition {
     /// A Paper Cuts' test: the listener's owner dealt it, the player took it,
     /// it was a powered attack, and it cost the player HP.
     OwnerDealtPoweredHpLossToPlayer,
-    /// A Thorns' test: somebody is dealing it, the listener's owner is taking
-    /// it, and it is either a powered attack or the splash an Omnislice makes,
-    /// which is named outright.
-    OwnerTakesPoweredDamageOrOmnislice,
     /// The listener's owner is taking the damage, powered or not. A cap does
     /// not care how the damage was worked out.
     OwnerTakesDamage,
