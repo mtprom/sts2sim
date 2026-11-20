@@ -22854,6 +22854,7 @@ impl Simulator {
         for event in [
             crate::HookEvent::ModifyDamageAdditive,
             crate::HookEvent::ModifyDamageMultiplicative,
+            crate::HookEvent::ModifyDamageMultiplicativeLate,
             crate::HookEvent::ModifyDamageCap,
         ] {
             let (settled, _) =

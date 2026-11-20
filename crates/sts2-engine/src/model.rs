@@ -1409,6 +1409,7 @@ pub enum HookEvent {
     /// why a cap applies to unpowered damage and a scale does not.
     ModifyDamageAdditive,
     ModifyDamageMultiplicative,
+    ModifyDamageMultiplicativeLate,
     ModifyDamageCap,
     /// The two passes over block. There is no cap pass.
     ModifyBlockAdditive,
@@ -1510,6 +1511,7 @@ impl HookEvent {
             // passes, and the card-changed-piles passes.
             Self::ModifyDamageAdditive
             | Self::ModifyDamageMultiplicative
+            | Self::ModifyDamageMultiplicativeLate
             | Self::ModifyDamageCap
             | Self::ModifyHpLostBeforeOsty
             | Self::ModifyHpLostBeforeOstyLate
