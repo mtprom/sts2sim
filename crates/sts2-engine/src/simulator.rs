@@ -19177,6 +19177,13 @@ impl Simulator {
                         .card(&card.fingerprint.model_id)
                         .is_some_and(|definition| !definition.costs_x)
             }
+            CardFilter::CostsNothingLocally => {
+                self.local_energy_cost(card) == Some(0)
+                    && self
+                        .content
+                        .card(&card.fingerprint.model_id)
+                        .is_some_and(|definition| !definition.costs_x)
+            }
             // A combat card's pile is never the run deck, so every one of them
             // is transformable however the removable test answers.
             CardFilter::Transformable => true,
@@ -19205,6 +19212,7 @@ impl Simulator {
             | CardFilter::CostsEnergyNow
             | CardFilter::CostsSomethingNowOrX
             | CardFilter::CostsNothingNow
+            | CardFilter::CostsNothingLocally
             | CardFilter::CostsAnything
             | CardFilter::CostsAnythingNow
             | CardFilter::CostsAnythingAsWrittenAndNow

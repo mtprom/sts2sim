@@ -2322,6 +2322,8 @@ pub enum CardFilter {
     /// than the one a bookmark asks, which reads only what the fight put
     /// there.
     CostsNothingNow,
+    /// Zero energy with only the card's local modifiers, excluding X costs.
+    CostsNothingLocally,
     /// An attack, a skill, or a power, which is how the build says "not a
     /// status, a curse, or a quest card" where it means the three playable
     /// families.

@@ -417,7 +417,7 @@ pub fn defect_relics() -> Vec<RelicDefinition> {
             )],
             ..obtained_only("RELIC.EMOTION_CHIP", RelicRarity::Rare)
         },
-        // A power cell deals two of the draw pile's free cards into the hand
+        // A power cell deals two of the draw pile's locally free cards into the hand
         // before the first turn of a fight opens: the non-Innate ones stably
         // shuffled on the combat card-selection stream, then the Innate ones,
         // and the first two of the joined lists taken.
@@ -428,7 +428,7 @@ pub fn defect_relics() -> Vec<RelicDefinition> {
                     vec![Command::CardPile(CardPileCmd::MoveToPile {
                         cards: CardSelector::StablyShuffledInnateLast {
                             pile: sts2_engine::PileName::Draw,
-                            filter: sts2_engine::CardFilter::CostsNothingNow,
+                            filter: sts2_engine::CardFilter::CostsNothingLocally,
                             take: Amount::Fixed(2),
                             stream: sts2_engine::ShuffleStream::CombatCardSelection,
                         },

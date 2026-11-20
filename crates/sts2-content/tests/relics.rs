@@ -8104,6 +8104,48 @@ fn a_power_cell_deals_the_free_cards_up_front() {
     assert_eq!(celled.len(), plain.len() + 1);
 }
 
+/// PowerCell reads local cost, ignoring Spiked Gauntlets, and takes non-Innate
+/// cards before Innate cards (PowerCell.BeforeSideTurnStart).
+#[test]
+fn power_cell_uses_local_cost_and_takes_innate_last() {
+    let mut state = run_holding(&["RELIC.POWER_CELL", "RELIC.SPIKED_GAUNTLETS"])
+        .state()
+        .clone();
+    state.run_player.deck = vec![
+        card("CARD.PANACHE", 0),
+        card("CARD.BULLY", 0),
+        card("CARD.BACKSTAB", 0),
+    ];
+    state
+        .run_player
+        .deck
+        .extend(std::iter::repeat_n(card("CARD.STRIKE_IRONCLAD", 0), 8));
+    let mut simulator =
+        Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+    walk_to(&mut simulator, 3);
+    let hand = &simulator.state().combat.as_ref().unwrap().player.piles.hand;
+    let dealt: Vec<_> = hand
+        .iter()
+        .take(2)
+        .map(|card| card.fingerprint.model_id.clone())
+        .collect();
+    assert!(
+        dealt.contains(&id("CARD.PANACHE")),
+        "global cost must not exclude Panache"
+    );
+    assert!(
+        dealt.contains(&id("CARD.BULLY")),
+        "Innate Backstab comes after both non-Innate cards"
+    );
+    assert_eq!(
+        hand.iter()
+            .find(|card| card.fingerprint.model_id == id("CARD.PANACHE"))
+            .unwrap()
+            .energy_cost,
+        1
+    );
+}
+
 /// A metronome counts the orbs its owner channels and hits everything for
 /// thirty on the seventh.
 #[test]
