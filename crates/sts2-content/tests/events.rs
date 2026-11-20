@@ -230,16 +230,6 @@ impl Visit {
         });
         let mut simulator =
             Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
-        let generation_before = simulator
-            .state()
-            .player_rng
-            .stream(sts2_rng::PlayerStream::NonCombatGeneration)
-            .counter();
-        let niche_before = simulator
-            .state()
-            .rng
-            .stream(sts2_rng::RunStream::Niche)
-            .counter();
         simulator
             .step(Action::ChooseMap {
                 destination: MapCoord { col: 0, row: 1 },
@@ -778,6 +768,16 @@ fn museum_take_obtains_the_displayed_relic_and_one_curse_or_names_the_missing_ho
         options[0].effects[0] = EventEffect::ObtainRelic(id(model));
         let mut simulator =
             Simulator::from_generated_state(state, sts2_content::standard_registry()).unwrap();
+        let generation_before = simulator
+            .state()
+            .player_rng
+            .stream(sts2_rng::PlayerStream::NonCombatGeneration)
+            .counter();
+        let niche_before = simulator
+            .state()
+            .rng
+            .stream(sts2_rng::RunStream::Niche)
+            .counter();
         let result = simulator.step(Action::ChooseEvent {
             index: 0,
             option_id: "MUSEUM_OF_TORTURE.pages.DISPLAY.options.TAKE".to_owned(),
