@@ -2,13 +2,14 @@
 //! Bodies needing arrows, melodies or Stretch fail rather than approximate.
 
 use sts2_engine::{
-    Amount, CardDefinition, CardOrigin, CardPileCmd, CardRarity, CardType, Command, Condition,
-    CreatureSelector, DrawPilePosition, HookCondition, HookEvent, ModifierHook, PileName,
-    PlayerCmd, RelicDefinition, RelicRarity, TargetType, ValueProps,
+    Amount, CardDefinition, CardFilter, CardOrigin, CardPileCmd, CardPoolRef, CardRarity, CardType,
+    Command, Condition, Count, CreatureSelector, DrawPilePosition, HookCondition, HookEvent,
+    ModifierHook, OrbCmd, OrbSource, PileName, PlayerCmd, RelicDefinition, RelicRarity, TargetType,
+    TemporaryCost, ValueProps,
 };
 
 use crate::cards::{
-    attack, block, card, debuff, defending, draw, exhausting, rarity, striking, sweep, upgrading,
+    attack, block, card, dedefending, draw, exhausting, rarity, striking, sweep, upgrading,
 };
 use crate::id;
 
@@ -201,7 +202,19 @@ pub(crate) const REWARD_POOL: [(&str, CardType, CardRarity, i32); 79] = {
     result
 };
 
-pub(crate) const TOKENS: &[&str] = &["CARD.JOY"];
+pub(crate) const TOKENS: &[&str] = &[
+    "CARD.JOY",
+    "CARD.JUDGEMENT",
+    "CARD.THE_HIGH_PRIESTESS",
+    "CARD.THE_EMPEROR",
+    "CARD.THE_EMPRESS",
+    "CARD.THE_HIEROPHANT",
+    "CARD.THE_CHARIOT",
+    "CARD.JUSTICE",
+    "CARD.THE_MAGICIAN",
+    "CARD.THE_MOON",
+    "CARD.THE_TOWER",
+];
 
 pub(crate) fn song_bow() -> RelicDefinition {
     RelicDefinition {
@@ -254,7 +267,8 @@ fn timber(damage: i32, splash: i32) -> Command {
 }
 
 pub(crate) fn cards() -> Vec<CardDefinition> {
-    let implemented = first_ten();
+    let mut implemented = first_ten();
+    implemented.extend(second_ten());
     let mut result: Vec<_> = POOL
         .iter()
         .filter(|(model, _, _, _)| !implemented.iter().any(|card| card.model_id == id(model)))
@@ -390,6 +404,145 @@ fn first_ten() -> Vec<CardDefinition> {
                 vec![timber(20, 30)],
             ),
             vec![timber(25, 35)],
+        ),
+    ]
+}
+
+fn tarot(
+    model: &str,
+    kind: CardType,
+    target: TargetType,
+    base: Vec<Command>,
+    upgrade: Vec<Command>,
+) -> CardDefinition {
+    rarity(
+        exhausting(upgrading(card(model, kind, target, 0, base), upgrade)),
+        CardRarity::Token,
+    )
+}
+
+fn hierophant(count: i32) -> Command {
+    Command::CardPile(CardPileCmd::AddGeneratedFromPool {
+        pool: CardPoolRef::Named(id("CARD_POOL.COLORLESS_CARD_POOL")),
+        count: Amount::Fixed(count),
+        distinct: true,
+        filter: CardFilter::Any,
+        pile: PileName::Hand,
+        position: DrawPilePosition::Bottom,
+        excludes_source: false,
+        upgraded: false,
+        temporary_cost: Some(TemporaryCost {
+            cost: -1,
+            relative: true,
+            clears_when_turn_ends: true,
+            clears_when_played: true,
+            reduce_only: false,
+            frees_the_star_cost: false,
+        }),
+        ethereal: false,
+        rolled_one_at_a_time: false,
+    })
+}
+
+fn magician(count: i32) -> Vec<Command> {
+    vec![
+        Command::Orb(OrbCmd::AddSlots(Amount::Fixed(count))),
+        Command::Repeat {
+            times: Amount::Fixed(count),
+            then: vec![Command::Orb(OrbCmd::Channel(OrbSource::RandomOnCombatOrbs))],
+        },
+    ]
+}
+
+fn second_ten() -> Vec<CardDefinition> {
+    let mut priestess = tarot(
+        "CARD.THE_HIGH_PRIESTESS",
+        CardType::Skill,
+        TargetType::SelfTarget,
+        vec![draw(4)],
+        vec![draw(5)],
+    );
+    priestess.retain = true;
+    vec![
+        tarot(
+            "CARD.JUDGEMENT",
+            CardType::Skill,
+            TargetType::AnyEnemy,
+            vec![Command::Unsupported(id("CARD.JUDGEMENT"))],
+            vec![Command::Unsupported(id("CARD.JUDGEMENT"))],
+        ),
+        priestess,
+        tarot(
+            "CARD.THE_EMPEROR",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            vec![energy(7)],
+            vec![energy(9)],
+        ),
+        tarot(
+            "CARD.THE_EMPRESS",
+            CardType::Skill,
+            TargetType::AnyEnemy,
+            vec![
+                debuff("POWER.WEAK_POWER", 3),
+                debuff("POWER.VULNERABLE_POWER", 3),
+            ],
+            vec![
+                debuff("POWER.WEAK_POWER", 4),
+                debuff("POWER.VULNERABLE_POWER", 4),
+            ],
+        ),
+        tarot(
+            "CARD.THE_HIEROPHANT",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            vec![hierophant(3)],
+            vec![hierophant(4)],
+        ),
+        tarot(
+            "CARD.THE_CHARIOT",
+            CardType::Attack,
+            TargetType::AllEnemies,
+            vec![sweep(25, 1)],
+            vec![sweep(30, 1)],
+        ),
+        tarot(
+            "CARD.JUSTICE",
+            CardType::Attack,
+            TargetType::AnyEnemy,
+            vec![attack(30)],
+            vec![attack(35)],
+        ),
+        tarot(
+            "CARD.THE_MAGICIAN",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            magician(3),
+            magician(4),
+        ),
+        tarot(
+            "CARD.THE_MOON",
+            CardType::Skill,
+            TargetType::SelfTarget,
+            vec![generate(
+                "CARD.SHIV",
+                Amount::counting(Count::SpaceLeftInHand),
+                PileName::Hand,
+                false,
+            )],
+            vec![generate(
+                "CARD.SHIV",
+                Amount::counting(Count::SpaceLeftInHand),
+                PileName::Hand,
+                true,
+            )],
+        ),
+        tarot(
+            "CARD.THE_TOWER",
+            CardType::Attack,
+            TargetType::AnyEnemy,
+            vec![Command::Unsupported(id("CARD.THE_TOWER"))],
+            vec![Command::Unsupported(id("CARD.THE_TOWER"))],
         ),
     ]
 }

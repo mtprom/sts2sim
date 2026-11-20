@@ -6,6 +6,12 @@ fn id(value: &str) -> sts2_core::ModelId {
 }
 
 fn fight(model: &str, upgrade: u8, held: usize, draw: usize, hp: i32) -> Simulator {
+    scenario(model, upgrade, held, draw, hp)
+        .build(sts2_content::registry_for(&id("CHARACTER.FOOL")))
+        .expect("scenario builds")
+}
+
+fn scenario(model: &str, upgrade: u8, held: usize, draw: usize, hp: i32) -> ScenarioBuilder {
     let mut source = CardFingerprint::base(id(model));
     source.upgrade_level = upgrade;
     let mut scenario = ScenarioBuilder::new("FOOLCARDS", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
@@ -29,8 +35,6 @@ fn fight(model: &str, upgrade: u8, held: usize, draw: usize, hp: i32) -> Simulat
         );
     }
     scenario
-        .build(sts2_content::registry_for(&id("CHARACTER.FOOL")))
-        .expect("scenario builds")
 }
 
 fn play(sim: &mut Simulator, model: &str) {
@@ -156,5 +160,103 @@ fn timber_splashes_only_when_the_first_attack_kills() {
         let mut sim = fight("CARD.TIMBER", upgrade, 0, 0, damage);
         play(&mut sim, "CARD.TIMBER");
         assert_eq!(creature(&sim, 2).current_hp, 100 - splash);
+    }
+}
+
+#[test]
+fn priestess_and_emperor_draw_and_grant_energy_then_exhaust() {
+    for (upgrade, draws, gain) in [(0, 4, 7), (1, 5, 9)] {
+        let mut sim = fight("CARD.THE_HIGH_PRIESTESS", upgrade, 0, 7, 100);
+        play(&mut sim, "CARD.THE_HIGH_PRIESTESS");
+        assert_eq!(pile(&sim, PileName::Hand).len(), draws);
+        assert_eq!(pile(&sim, PileName::Exhaust), ["CARD.THE_HIGH_PRIESTESS"]);
+        let mut sim = fight("CARD.THE_EMPEROR", upgrade, 0, 0, 100);
+        play(&mut sim, "CARD.THE_EMPEROR");
+        assert_eq!(
+            sim.state().combat.as_ref().expect("combat").player.energy,
+            9 + gain
+        );
+    }
+}
+
+#[test]
+fn empress_consumes_artifact_on_weak_before_vulnerable() {
+    let mut sim = scenario("CARD.THE_EMPRESS", 0, 0, 0, 100)
+        .power(
+            1,
+            id("POWER.ARTIFACT_POWER"),
+            1,
+            sts2_engine::PowerType::Buff,
+        )
+        .build(sts2_content::standard_registry())
+        .expect("scenario builds");
+    play(&mut sim, "CARD.THE_EMPRESS");
+    assert_eq!(creature(&sim, 1).power_amount("POWER.WEAK_POWER"), 0);
+    assert_eq!(creature(&sim, 1).power_amount("POWER.VULNERABLE_POWER"), 3);
+}
+
+#[test]
+fn justice_hits_one_enemy_and_chariot_hits_both() {
+    for (upgrade, justice, chariot) in [(0, 30, 25), (1, 35, 30)] {
+        for (model, damage, other) in [
+            ("CARD.JUSTICE", justice, 0),
+            ("CARD.THE_CHARIOT", chariot, chariot),
+        ] {
+            let mut sim = fight(model, upgrade, 0, 0, 100);
+            play(&mut sim, model);
+            assert_eq!(creature(&sim, 1).current_hp, 100 - damage);
+            assert_eq!(creature(&sim, 2).current_hp, 100 - other);
+        }
+    }
+}
+
+#[test]
+fn hierophant_generates_distinct_colorless_cards_with_relative_discounts() {
+    for upgrade in [0, 1] {
+        let mut sim = fight("CARD.THE_HIEROPHANT", upgrade, 0, 0, 100);
+        play(&mut sim, "CARD.THE_HIEROPHANT");
+        let combat = sim.state().combat.as_ref().expect("combat");
+        let hand = &combat.player.piles.hand;
+        assert_eq!(hand.len(), 3 + usize::from(upgrade));
+        let unique: std::collections::BTreeSet<_> =
+            hand.iter().map(|card| &card.fingerprint.model_id).collect();
+        assert_eq!(unique.len(), hand.len());
+        for card in hand {
+            assert!(card.temporary_costs.iter().any(|cost| cost.relative
+                && cost.cost == -1
+                && cost.clears_when_turn_ends
+                && cost.clears_when_played));
+        }
+    }
+}
+
+#[test]
+fn magician_adds_slots_before_channeling_and_moon_fills_only_empty_hand_slots() {
+    for upgrade in [0, 1] {
+        let mut sim = fight("CARD.THE_MAGICIAN", upgrade, 0, 0, 100);
+        play(&mut sim, "CARD.THE_MAGICIAN");
+        let player = &sim.state().combat.as_ref().expect("combat").player;
+        assert_eq!(player.orbs.orbs.len(), 3 + usize::from(upgrade));
+        let mut sim = fight("CARD.THE_MOON", upgrade, 7, 0, 100);
+        play(&mut sim, "CARD.THE_MOON");
+        let hand = &sim
+            .state()
+            .combat
+            .as_ref()
+            .expect("combat")
+            .player
+            .piles
+            .hand;
+        assert_eq!(hand.len(), 10);
+        let shivs: Vec<_> = hand
+            .iter()
+            .filter(|card| card.fingerprint.model_id == id("CARD.SHIV"))
+            .collect();
+        assert_eq!(shivs.len(), 3);
+        assert!(
+            shivs
+                .iter()
+                .all(|card| card.fingerprint.upgrade_level == upgrade)
+        );
     }
 }
