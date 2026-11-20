@@ -350,6 +350,7 @@ fn retaining_when_upgraded(mut definition: CardDefinition) -> CardDefinition {
     definition.supported_upgrade_levels.push(1);
     let effects = definition.effects.clone();
     definition.upgrade = Some(sts2_engine::CardUpgrade {
+        repeatable: false,
         energy_cost: None,
         innate: false,
         retain: true,

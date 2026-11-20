@@ -46,23 +46,26 @@ pub(crate) fn cards() -> Vec<CardDefinition> {
         vec![block(25), dazed(3)],
     );
     shield.gains_block = true;
+    let mut dagger = upgrading(
+        card(
+            "CARD.DINGY_DAGGER",
+            CardType::Attack,
+            TargetType::AnyEnemy,
+            0,
+            vec![attack(7)],
+        ),
+        vec![attack(11)],
+    );
+    // TODO(package 4): model further damage values and widen the u8 fingerprint.
+    // Keep later upgrades eligible so attempts fail explicitly, not disappear.
+    dagger
+        .upgrade
+        .as_mut()
+        .expect("the first upgrade exists")
+        .repeatable = true;
     vec![
         my_shinies(),
-        // TODO(package 4): repeatable upgrades; the fingerprint and upgrade
-        // command currently represent only the base and first upgrade.
-        rarity(
-            upgrading(
-                card(
-                    "CARD.DINGY_DAGGER",
-                    CardType::Attack,
-                    TargetType::AnyEnemy,
-                    0,
-                    vec![attack(7)],
-                ),
-                vec![attack(11)],
-            ),
-            CardRarity::Event,
-        ),
+        rarity(dagger, CardRarity::Event),
         rarity(
             upgrading(
                 card(

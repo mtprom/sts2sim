@@ -35,8 +35,10 @@ Both companion models are registered. Wuppy in Trouble's three choices and
 Restore work outside combat, with CurrentHp and MaxHp saved on the relic.
 Starting combat with Wuppy fails explicitly pending its interception and HP
 synchronization hooks. Obtaining Thumbscrew fails explicitly.
-Dingy Dagger supports only levels 0 and 1;
-its `u8` fingerprint and upgrade command need repeatable-upgrade support.
+Dingy Dagger supports only levels 0 and 1. It stays eligible for further
+upgrades, but attempting the second upgrade fails explicitly with the model
+and unsupported level instead of disappearing from upgrade choices.
+Its `u8` fingerprint and combat upgrade command need repeatable-upgrade support.
 Storyteller is registered with its Starter rarity but obtaining it is
 unsupported: its Aim mechanics belong to the excluded Fool character.
 

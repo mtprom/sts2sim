@@ -5648,6 +5648,43 @@ fn six_swoops_unlock_evolve_and_preserve_the_pet_skin_and_upgrade() {
 }
 
 #[test]
+fn dingy_dagger_remains_in_smith_choices_but_its_second_upgrade_fails_explicitly() {
+    let mut state = run_holding(&[]).state().clone();
+    state.run_player.deck = vec![
+        card("CARD.DINGY_DAGGER", 0),
+        card("CARD.STRIKE_IRONCLAD", 0),
+    ];
+    let registry = sts2_content::standard_registry();
+    let mut simulator = Simulator::from_generated_state(state, registry.clone()).unwrap();
+    for level in 0..=1 {
+        walk_to(&mut simulator, 1);
+        simulator.step(rest_option(&simulator, "SMITH")).unwrap();
+        let dagger = simulator
+            .legal_actions()
+            .iter()
+            .find(|action| {
+                matches!(action, Action::ChooseCards { cards, .. }
+                if cards.len() == 1 && cards[0].fingerprint.model_id == id("CARD.DINGY_DAGGER"))
+            })
+            .cloned()
+            .expect("Dingy Dagger stays selectable after its first upgrade");
+        let result = simulator.step(dagger);
+        if level == 0 {
+            result.unwrap();
+            assert_eq!(simulator.state().run_player.deck[0].upgrade_level, 1);
+            back_to_the_start(&mut simulator);
+        } else {
+            let error = result.unwrap_err();
+            assert_eq!(error.code, sts2_engine::ErrorCode::UnsupportedContent);
+            assert_eq!(error.details["model_id"], "CARD.DINGY_DAGGER");
+            assert_eq!(error.details["upgrade_level"], "2");
+            assert_eq!(simulator.state().run_player.deck[0].upgrade_level, 1);
+            assert!(!registry.supports_card(&card("CARD.DINGY_DAGGER", 2)));
+        }
+    }
+}
+
+#[test]
 fn restore_is_disabled_at_full_hp_and_revives_a_dead_wuppy_to_its_maximum() {
     for hp in [0, 20, 30] {
         let mut state = run_holding(&["RELIC.WUPPY"]).state().clone();

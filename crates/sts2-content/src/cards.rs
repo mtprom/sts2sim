@@ -261,6 +261,7 @@ pub(crate) fn upgrading_cost(mut definition: CardDefinition, energy_cost: i32) -
     definition.supported_upgrade_levels.push(1);
     let effects = definition.effects.clone();
     definition.upgrade = Some(CardUpgrade {
+        repeatable: false,
         energy_cost: Some(energy_cost),
         innate: false,
         retain: false,
@@ -277,6 +278,7 @@ pub(crate) fn upgrading_cost(mut definition: CardDefinition, energy_cost: i32) -
 pub(crate) fn upgrading(mut definition: CardDefinition, effects: Vec<Command>) -> CardDefinition {
     definition.supported_upgrade_levels.push(1);
     definition.upgrade = Some(CardUpgrade {
+        repeatable: false,
         energy_cost: None,
         innate: false,
         retain: false,
@@ -322,6 +324,7 @@ pub(crate) fn innate_when_upgraded(mut definition: CardDefinition) -> CardDefini
     if definition.upgrade.is_none() {
         definition.supported_upgrade_levels.push(1);
         definition.upgrade = Some(CardUpgrade {
+            repeatable: false,
             energy_cost: None,
             innate: true,
             retain: false,
