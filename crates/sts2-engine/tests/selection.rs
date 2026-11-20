@@ -99,6 +99,7 @@ fn power(model_id: &str, hooks: Vec<ModifierHook>) -> PowerDefinition {
         keeps_owners_powers_on_death: false,
         survives_owner_death: false,
         redirects_owners_powered_attacks: false,
+        intercepts_owners_powered_attacks_before_block: false,
         holds_owner_where_it_stands: false,
         holds_owner_only_with_living_kin: false,
         move_on_death: None,

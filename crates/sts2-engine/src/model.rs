@@ -2075,6 +2075,10 @@ pub struct PowerDefinition {
     /// and the damage is a powered attack.
     #[serde(default)]
     pub redirects_owners_powered_attacks: bool,
+    /// The same three tests before block (`ModifyPreBlockDamageTarget`),
+    /// which is what Wuppy's Loyalty does.
+    #[serde(default)]
+    pub intercepts_owners_powered_attacks_before_block: bool,
     /// The power keeps a fight from ending: every listener is asked before a
     /// fight is called over, so a power that says so keeps the fight standing
     /// with nothing primary left alive.

@@ -32,9 +32,8 @@ dispatcher still notifies every source. Pael's Legion still uses its old
 boolean latch rather than a card-play identity. Byrdpip counts Swoops and
 Evolve preserves its skin as Byrdine's Hair while transforming Swoops to God Byrd.
 Both companion models are registered. Wuppy in Trouble's three choices and
-Restore work outside combat, with CurrentHp and MaxHp saved on the relic.
-Starting combat with Wuppy fails explicitly pending its interception and HP
-synchronization hooks.
+Restore work, with CurrentHp and MaxHp saved on the relic; in combat Wuppy
+takes its owner's powered attacks before block and writes its HP back.
 Dingy Dagger supports only levels 0 and 1. It stays eligible for further
 upgrades, but attempting the second upgrade fails explicitly with the model
 and unsupported level instead of disappearing from upgrade choices.
@@ -43,15 +42,12 @@ Storyteller is registered with its Starter rarity but obtaining it is
 unsupported: its Aim mechanics belong to the excluded Fool character.
 
 **Whether it can reach a conformance claim.** Yes. A playback with Ambergris
-and an unused Pael's Eye, nested block plays under Pael's Legion,
-combat with Wuppy or repeated Dagger
-upgrades exposes these differences. These rules must not be reported as
+and an unused Pael's Eye, nested block plays under Pael's Legion
+or repeated Dagger upgrades exposes these differences. These rules must not be reported as
 fully beta-conformant.
 
 **What would change this.** Engine support for source-specific early extra
-turns, card-play identity, combat synchronization of event-pet HP and
-`ModifyPreBlockDamageTarget`/`BeforeWuppy`, and
-repeatable card upgrades. Museum's curse generation must use
+turns, card-play identity and repeatable card upgrades. Museum's curse generation must use
 `non_combat_generation`; Waterfall's relic rarity must use its event RNG,
 not the old streams.
 

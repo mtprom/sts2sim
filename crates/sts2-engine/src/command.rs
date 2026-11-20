@@ -1248,6 +1248,10 @@ pub enum PlayerCmd {
     /// wraps this in the max-HP and revive rules Osty has and those two do
     /// not.
     AddPet { monster: ModelId },
+    /// A pet with this power that stands at the listening relic's saved HP
+    /// (counter current, second counter maximum), even at zero, which is
+    /// what Wuppy summons.
+    AddCompanionPet { monster: ModelId, power: ModelId },
 }
 
 /// The Necrobinder's pet.
@@ -2629,6 +2633,8 @@ pub enum Count {
     /// What the announced creature just lost off its HP, and nothing where it
     /// gained instead.
     HpTheAnnouncedCreatureLost,
+    /// The announced creature's current HP.
+    AnnouncedCreatureCurrentHp,
     /// The whole of one blow, which is the half block stopped plus the half
     /// that got through. It is what a reaper form dooms for and is not the
     /// same as the unblocked half on its own.
