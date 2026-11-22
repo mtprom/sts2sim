@@ -326,9 +326,6 @@ parity blockers until the named hooks and distinguishing scenarios are added.
   `TryModifyKeywordsInCombat` so removing the power removes only its grant,
   including on existing, generated, and upgraded Shivs. A scenario removing the
   power while holding an otherwise non-retaining Shiv distinguishes this.
-- TODO(package 4): run `EndOfTurnCleanup` immediately on Nightmare's stored clone
-  before it becomes the next turn's copy template. This timing change needs
-  engine scheduling rather than different content values.
 - TODO(package 4): `AfterDeath` receives no causing card. Bone Shards and
   Sacrifice must identify their card when killing Osty, and Doom must kill
   with an explicit null source. Only the Fool's Impaled reads that source, so

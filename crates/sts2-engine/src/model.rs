@@ -2883,6 +2883,11 @@ pub struct PowerInstance {
     pub instance: u64,
     /// A card this power is holding, which is how a thief carries what it took.
     pub held_card: Option<CardFingerprint>,
+    /// A private, cleaned clone of a combat card this power copies from,
+    /// which is what a Nightmare keeps: combat-long changes stay on it and
+    /// turn-only state and afflictions do not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub held_template: Option<Box<CardInstance>>,
     /// The card the one swing this power bound came from, which is what a
     /// Vigor keeps.
     ///
@@ -2896,7 +2901,7 @@ pub struct PowerInstance {
     pub bound_damage_card: Option<CardInstanceId>,
     /// The card whose started play this power remembered, held as a live
     /// identity rather than a snapshot, the way Juggling's third Attack is.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bound_played_card: Option<CardInstanceId>,
     pub amount: i32,
     /// Per-instance state a few powers count separately from their stacks.

@@ -273,3 +273,66 @@ fn swift_is_disabled_after_its_play_finishes() {
         sts2_engine::EnchantmentStatus::Disabled
     );
 }
+
+/// `NightmarePower.SetSelectedCard` keeps a clone with its affliction cleared
+/// and `EndOfTurnCleanup` run: the copies dealt before the next hand draw keep
+/// the card's fight-long changes, not its turn-only ones, and making the
+/// template leaves the original alone.
+#[test]
+fn nightmare_copies_a_cleaned_clone_before_the_draw() {
+    let mut scenario = ScenarioBuilder::new("NIGHTMARE113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .player_hp(80, 80)
+        .energy(9, 9)
+        .turn(1, 1)
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
+        .card(PileName::Hand, 0, CardFingerprint::base(id("CARD.NIGHTMARE")), 0)
+        .card_with(
+            PileName::Hand,
+            1,
+            CardFingerprint::base(id("CARD.SLICE")),
+            0,
+            |card| {
+                card.cost_this_combat = -1;
+                card.cost_this_turn = 2;
+                card.retain_this_turn = true;
+                card.sly_this_turn = true;
+                card.affliction = Some(id("AFFLICTION.SMOG"));
+            },
+        );
+    for draw in 2..7 {
+        scenario = scenario.card(
+            PileName::Draw,
+            draw,
+            CardFingerprint::base(id("CARD.DEFLECT")),
+            0,
+        );
+    }
+    let mut simulator = scenario
+        .build(sts2_content::standard_registry())
+        .expect("scenario");
+    play(&mut simulator, "CARD.NIGHTMARE");
+    let original = hand(&simulator)
+        .into_iter()
+        .find(|card| card.id == sts2_core::CardInstanceId::from(1))
+        .expect("the original stays in hand");
+    assert_eq!(original.cost_this_turn, 2);
+    assert_eq!(original.affliction, Some(id("AFFLICTION.SMOG")));
+    end_turn(&mut simulator);
+    let hand = hand(&simulator);
+    let copies: Vec<usize> = (0..hand.len())
+        .filter(|at| hand[*at].clone_of.is_some())
+        .collect();
+    assert_eq!(copies.len(), 3);
+    let first_draw = hand
+        .iter()
+        .position(|card| card.fingerprint.model_id == id("CARD.DEFLECT"))
+        .expect("the draw");
+    for at in copies {
+        let copy = &hand[at];
+        assert!(at < first_draw, "copies come before the draw");
+        assert_eq!(copy.cost_this_combat, -1);
+        assert_eq!(copy.cost_this_turn, 0);
+        assert!(!copy.retain_this_turn && !copy.sly_this_turn);
+        assert_eq!(copy.affliction, None);
+    }
+}

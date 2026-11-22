@@ -17,7 +17,7 @@ use sts2_engine::{
     Amount, CardCmd, CardDefinition, CardFilter, CardOrigin, CardPileCmd, CardSelectCmd,
     CardSelector, CardTag, CardType, Command, Condition, Count, CreatureCmd, CreatureSelector,
     DamageCmd, DrawPilePosition, HookCondition, HookEvent, ModifierHook, PileName, PowerCmd,
-    PowerRef, RewardsCmd, SelectorPrefs, TargetType, ValueProps,
+    RewardsCmd, SelectorPrefs, TargetType, ValueProps,
 };
 
 use crate::cards::{
@@ -1421,7 +1421,7 @@ fn malaise(bonus: i32) -> Vec<Command> {
 }
 
 /// Nightmare, played: one card of the hand picked out, and a power that holds
-/// a copy of it and deals three of them into the next hand.
+/// a cleaned clone of it and deals three of them into the next hand.
 fn nightmare() -> Command {
     Command::CardSelect(CardSelectCmd::FromHand {
         prefs: SelectorPrefs::exactly(1),
@@ -1430,8 +1430,8 @@ fn nightmare() -> Command {
         filter: CardFilter::Any,
         then: vec![
             buff("POWER.NIGHTMARE_POWER", 3),
-            Command::Power(PowerCmd::HoldCard {
-                power: PowerRef::owned(id("POWER.NIGHTMARE_POWER")),
+            Command::Power(PowerCmd::HoldCleanedClone {
+                power: id("POWER.NIGHTMARE_POWER"),
                 cards: CardSelector::Chosen,
             }),
         ],

@@ -10666,6 +10666,7 @@ impl Simulator {
             instance,
             model_id: model_id.clone(),
             held_card: None,
+            held_template: None,
             bound_damage_card: None,
             bound_played_card: None,
             amount: landing,
@@ -15149,6 +15150,29 @@ impl Simulator {
                     && let Some(instance) = self.creature_mut(owner)?.powers.get_mut(at)
                 {
                     instance.held_card = Some(card);
+                }
+            }
+            PowerCmd::HoldCleanedClone { power, cards } => {
+                let held = self.select_cards(cards, context)?;
+                let (Some(card_id), Some(owner)) =
+                    (held.first().and_then(ChosenCard::combat_id), context.owner)
+                else {
+                    return Ok(());
+                };
+                let mut template = self.clone_source(card_id)?;
+                template.clone_of = Some(template.id);
+                template.deck_version = None;
+                template.dupe = false;
+                template.affliction = None;
+                card_end_of_turn_cleanup(&self.content, &mut template);
+                if let Some(instance) = self
+                    .creature_mut(owner)?
+                    .powers
+                    .iter_mut()
+                    .rev()
+                    .find(|instance| instance.model_id == *power && instance.held_template.is_none())
+                {
+                    instance.held_template = Some(Box::new(template));
                 }
             }
             PowerCmd::SetLatch(value) => {
@@ -20316,46 +20340,11 @@ impl Simulator {
         if self.state.combat.is_none() {
             return Ok(());
         }
-        let restored: Vec<(CardInstanceId, i32)> = self
-            .combat()?
-            .player
-            .piles
-            .all_cards()
-            .filter(|card| {
-                card.temporary_costs
-                    .iter()
-                    .any(|cost| cost.clears_when_turn_ends)
-            })
-            .filter_map(|card| {
-                self.content
-                    .card(&card.fingerprint.model_id)
-                    .map(|definition| {
-                        (
-                            card.id,
-                            card_energy_cost(
-                                definition,
-                                &card.fingerprint,
-                                self.content.card_enchantment(&card.fingerprint),
-                            ),
-                        )
-                    })
-            })
-            .collect();
+        let content = Arc::clone(&self.content);
+        // The single-turn Retain and Sly marks come off over every card its
+        // owner has rather than over the hand alone.
         for card in self.combat_mut()?.player.piles.all_cards_mut() {
-            card.cost_this_turn = 0;
-            if let Some((_, cost)) = restored.iter().find(|(id, _)| *id == card.id) {
-                card.energy_cost = *cost;
-                card.temporary_costs
-                    .retain(|cost| !cost.clears_when_turn_ends);
-            }
-            // The star list is walked by the same pass and is its own list, so
-            // a card carrying only a star cost is cleared here too.
-            card.temporary_star_costs
-                .retain(|cost| !cost.clears_when_turn_ends);
-            // The single-turn Retain and Sly marks both come off, over every
-            // card its owner has rather than over the hand alone.
-            card.retain_this_turn = false;
-            card.sly_this_turn = false;
+            card_end_of_turn_cleanup(&content, card);
         }
         self.refresh_card_costs();
         Ok(())
@@ -22744,6 +22733,20 @@ impl Simulator {
             // A clone of the card the power wrote down as it was
             // applied.
             CardOrigin::CloneOfHeldByListeningPower => {
+                let template = context
+                    .power
+                    .as_ref()
+                    .zip(context.owner)
+                    .and_then(|(model_id, owner)| {
+                        let at = self.power_index_for(owner, model_id, context.power_instance)?;
+                        self.creature(owner).ok()?.powers.get(at)?.held_template.clone()
+                    });
+                if let Some(template) = template {
+                    for _ in 0..count {
+                        self.push_card_copy((*template).clone(), pile)?;
+                    }
+                    return Ok(());
+                }
                 let held =
                     context
                         .power
@@ -22874,6 +22877,12 @@ impl Simulator {
         card_id: CardInstanceId,
         pile: crate::PileName,
     ) -> Result<(), EngineError> {
+        let source = self.clone_source(card_id)?;
+        self.push_card_copy(source, pile)
+    }
+
+    /// What `CardModel.CreateClone` copies from a combat card.
+    fn clone_source(&self, card_id: CardInstanceId) -> Result<CardInstance, EngineError> {
         let source = self
             .combat()?
             .player
@@ -22900,6 +22909,15 @@ impl Simulator {
                 })?,
             None => source,
         };
+        Ok(source)
+    }
+
+    /// A fresh instance of `source` in a pile, linked back to it.
+    fn push_card_copy(
+        &mut self,
+        source: CardInstance,
+        pile: crate::PileName,
+    ) -> Result<(), EngineError> {
         let id = CardInstanceId::from(self.state.next_card_instance_id);
         self.state.next_card_instance_id += 1;
         // A clone is marked with what it was copied from, and cloning clears
@@ -29939,6 +29957,27 @@ fn generate_reward_potion(
 
 /// A stable shuffle's own sort: a pile is put in canonical order before it is
 /// shuffled, so that the shuffle does not depend on the order it was in.
+/// `CardModel.EndOfTurnCleanup` on one card: turn-only costs, Retain and Sly
+/// come off.
+fn card_end_of_turn_cleanup(content: &ContentRegistry, card: &mut CardInstance) {
+    card.cost_this_turn = 0;
+    if card.temporary_costs.iter().any(|cost| cost.clears_when_turn_ends)
+        && let Some(definition) = content.card(&card.fingerprint.model_id)
+    {
+        card.energy_cost = card_energy_cost(
+            definition,
+            &card.fingerprint,
+            content.card_enchantment(&card.fingerprint),
+        );
+        card.temporary_costs.retain(|cost| !cost.clears_when_turn_ends);
+    }
+    // The star list is walked by the same pass and is its own list, so a card
+    // carrying only a star cost is cleared here too.
+    card.temporary_star_costs.retain(|cost| !cost.clears_when_turn_ends);
+    card.retain_this_turn = false;
+    card.sly_this_turn = false;
+}
+
 fn sort_pile_canonically(cards: &mut [crate::CardInstance]) {
     crate::netsort::sort(cards, &compare_combat_cards);
 }

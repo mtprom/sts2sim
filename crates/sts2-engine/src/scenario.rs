@@ -191,13 +191,26 @@ impl ScenarioBuilder {
 
     #[must_use]
     pub fn card(
-        mut self,
+        self,
         pile: PileName,
         id: u64,
         fingerprint: CardFingerprint,
         energy_cost: i32,
     ) -> Self {
-        let card = CardInstance {
+        self.card_with(pile, id, fingerprint, energy_cost, |_| {})
+    }
+
+    /// The same, with combat-only state a test sets on the instance itself.
+    #[must_use]
+    pub fn card_with(
+        mut self,
+        pile: PileName,
+        id: u64,
+        fingerprint: CardFingerprint,
+        energy_cost: i32,
+        edit: impl FnOnce(&mut CardInstance),
+    ) -> Self {
+        let mut card = CardInstance {
             id: CardInstanceId::from(id),
             fingerprint,
             energy_cost,
@@ -226,6 +239,7 @@ impl ScenarioBuilder {
             dupe: false,
             locals: std::collections::BTreeMap::new(),
         };
+        edit(&mut card);
         match pile {
             PileName::Draw => self.piles.draw.push(card),
             PileName::Hand => self.piles.hand.push(card),
@@ -587,6 +601,7 @@ fn place_powers(
             target: None,
             model_id,
             held_card: None,
+            held_template: None,
             bound_damage_card: None,
             bound_played_card: None,
             amount,
