@@ -149,3 +149,61 @@ fn juggling_clones_the_third_started_attack_after_it_finishes() {
     assert!(original.damage_bonus > 0, "Rampage grew itself");
     assert_eq!(hand[0].damage_bonus, original.damage_bonus);
 }
+
+/// `CardModel.CreateClone` follows a dupe back to its original: a clone made
+/// of a dupe that changed itself is the original as it stands, linked to the
+/// original, and is not itself a dupe.
+#[test]
+fn a_clone_of_a_dupe_copies_the_original() {
+    let mut content = (*sts2_content::standard_registry()).clone();
+    let mut rampage = content.card(&id("CARD.RAMPAGE")).expect("rampage").clone();
+    rampage.effects = vec![
+        Command::Card(sts2_engine::CardCmd::GrowDamage {
+            cards: sts2_engine::CardSelector::Source,
+            amount: Amount::Fixed(5),
+        }),
+        Command::CardPile(sts2_engine::CardPileCmd::AddGeneratedToCombat {
+            enchantment: None,
+            card: sts2_engine::CardOrigin::CloneOfSource,
+            grown_by: Amount::Fixed(0),
+            count: Amount::Fixed(1),
+            pile: PileName::Hand,
+            ethereal: false,
+            retain: false,
+            upgraded: false,
+            temporary_cost: None,
+            position: sts2_engine::DrawPilePosition::Bottom,
+        }),
+    ];
+    content.add_card(rampage);
+    let mut defend = content
+        .card(&id("CARD.DEFEND_IRONCLAD"))
+        .expect("defend")
+        .clone();
+    defend.effects = vec![Command::Card(sts2_engine::CardCmd::AutoPlayDupe {
+        cards: sts2_engine::CardSelector::Pile {
+            pile: PileName::Hand,
+            filter: sts2_engine::CardFilter::OfType(sts2_engine::CardType::Attack),
+        },
+    })];
+    content.add_card(defend);
+    let mut simulator = ScenarioBuilder::new("DUPE113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .player_hp(80, 80)
+        .energy(3, 3)
+        .turn(1, 1)
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
+        .card(PileName::Hand, 0, CardFingerprint::base(id("CARD.DEFEND_IRONCLAD")), 1)
+        .card(PileName::Hand, 1, CardFingerprint::base(id("CARD.RAMPAGE")), 1)
+        .build(Arc::new(content))
+        .expect("scenario");
+    play(&mut simulator, "CARD.DEFEND_IRONCLAD");
+    let hand = hand(&simulator);
+    assert_eq!(hand.len(), 2, "the original and one clone; the dupe is gone");
+    let original = sts2_core::CardInstanceId::from(1);
+    assert_eq!(hand[0].id, original);
+    assert_eq!(hand[0].damage_bonus, 0);
+    let clone = &hand[1];
+    assert_eq!(clone.clone_of, Some(original));
+    assert_eq!(clone.damage_bonus, 0, "not the dupe's growth");
+    assert!(!clone.dupe);
+}

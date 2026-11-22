@@ -333,6 +333,6 @@ parity blockers until the named hooks and distinguishing scenarios are added.
   Sacrifice must identify their card when killing Osty, and Doom must kill
   with an explicit null source. Only the Fool's Impaled reads that source, so
   this lands with the Fool substrate.
-- TODO(package 4): transform results and dupe cloning need the new source/result identity
+- TODO(package 4): transform results need the new source/result identity
   handling. Glam, Sown, and Swift must disable after the play finishes, not
   during it. These are engine-level changes rather than card balance.

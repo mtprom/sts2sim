@@ -22882,6 +22882,24 @@ impl Simulator {
             .find(|card| card.id == card_id)
             .cloned()
             .ok_or_else(|| invariant_error(InvariantViolation::DuplicateCardId(card_id)))?;
+        // `CardModel.CreateClone` copies a dupe's original, as the original
+        // stands now, so neither a clone nor a dupe of a dupe starts a chain.
+        let source = match source.clone_of.filter(|_| source.dupe) {
+            Some(original) => self
+                .combat()?
+                .player
+                .piles
+                .all_cards()
+                .find(|card| card.id == original)
+                .cloned()
+                // shortcut: an original that has left every combat pile is not
+                // kept, so this fails loudly; keep a template if a card needs it.
+                .ok_or_else(|| {
+                    EngineError::new(ErrorCode::UnsupportedContent)
+                        .with_detail("clone", "a dupe's original has left the combat piles")
+                })?,
+            None => source,
+        };
         let id = CardInstanceId::from(self.state.next_card_instance_id);
         self.state.next_card_instance_id += 1;
         // A clone is marked with what it was copied from, and cloning clears
@@ -22889,8 +22907,9 @@ impl Simulator {
         // the deck however its original stood.
         let copy = CardInstance {
             id,
-            clone_of: Some(card_id),
+            clone_of: Some(source.id),
             deck_version: None,
+            dupe: false,
             ..source
         };
         let pile = self.pile_a_card_can_join(pile)?;
