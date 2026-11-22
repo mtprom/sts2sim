@@ -216,6 +216,9 @@ pub fn registry_at(character: &ModelId, ascension: u8) -> Arc<ContentRegistry> {
         content.add_relic(definition);
     }
     content.add_relic(fool_cards::song_bow());
+    for definition in fool_cards::powers() {
+        content.add_power(definition);
+    }
 
     for definition in relics::silent_relics() {
         content.add_relic(definition);

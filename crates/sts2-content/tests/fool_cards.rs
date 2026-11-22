@@ -599,3 +599,195 @@ fn song_bow_stops_combat_entry_rather_than_silently_omitting_aim() {
     }
     panic!("walk never entered combat");
 }
+
+fn with(
+    scenario: ScenarioBuilder,
+    pile: PileName,
+    slot: u64,
+    model: &str,
+    cost: i32,
+) -> ScenarioBuilder {
+    scenario.card(pile, slot, CardFingerprint::base(id(model)), cost)
+}
+
+fn built(scenario: ScenarioBuilder) -> Simulator {
+    scenario
+        .build(sts2_content::registry_for(&id("CHARACTER.FOOL")))
+        .expect("scenario builds")
+}
+
+fn end_turn(sim: &mut Simulator) {
+    let action = sim
+        .legal_actions()
+        .iter()
+        .find(|action| matches!(action, Action::EndTurn { .. }))
+        .cloned()
+        .expect("the turn can be ended");
+    sim.step(action).expect("the turn ends");
+}
+
+fn can_play_anything(sim: &Simulator) -> bool {
+    sim.legal_actions()
+        .iter()
+        .any(|action| matches!(action, Action::PlayCard { .. }))
+}
+
+#[test]
+fn anguish_counts_only_sadness_its_owner_conjured_this_combat() {
+    for (upgrade, per) in [(0, 6), (1, 7)] {
+        // A Sadness that started in hand was never generated.
+        let mut sim = built(with(
+            scenario("CARD.ANGUISH", upgrade, 0, 0, 100),
+            PileName::Hand,
+            50,
+            "CARD.SADNESS",
+            -1,
+        ));
+        play(&mut sim, "CARD.ANGUISH");
+        assert_eq!(creature(&sim, 1).current_hp, 100 - per);
+        let mut sim = built(with(
+            scenario("CARD.ANGUISH", upgrade, 0, 0, 100),
+            PileName::Hand,
+            50,
+            "CARD.SORROWFUL_STRIKE",
+            1,
+        ));
+        play(&mut sim, "CARD.SORROWFUL_STRIKE");
+        play(&mut sim, "CARD.ANGUISH");
+        assert_eq!(creature(&sim, 1).current_hp, 100 - 13 - per * 3);
+    }
+}
+
+#[test]
+fn all_is_well_blocks_unpowered_per_conjured_sadness() {
+    for (upgrade, per) in [(0, 4), (1, 5)] {
+        let mut sim = built(with(
+            scenario("CARD.ALL_IS_WELL", upgrade, 0, 0, 100),
+            PileName::Hand,
+            50,
+            "CARD.SORROWFUL_STRIKE",
+            1,
+        ));
+        play(&mut sim, "CARD.ALL_IS_WELL");
+        play(&mut sim, "CARD.SORROWFUL_STRIKE");
+        assert_eq!(creature(&sim, 0).block, per * 2);
+    }
+}
+
+#[test]
+fn punch_of_joy_turns_one_hand_sadness_into_a_generated_joy() {
+    for (upgrade, damage) in [(0, 13), (1, 17)] {
+        let mut scene = scenario("CARD.PUNCH_OF_JOY", upgrade, 0, 0, 100);
+        for slot in [50, 51] {
+            scene = with(scene, PileName::Hand, slot, "CARD.SADNESS", -1);
+        }
+        let mut sim = built(scene);
+        play(&mut sim, "CARD.PUNCH_OF_JOY");
+        assert_eq!(creature(&sim, 1).current_hp, 100 - damage);
+        let mut hand = pile(&sim, PileName::Hand);
+        hand.sort();
+        assert_eq!(hand, ["CARD.JOY", "CARD.SADNESS"]);
+        let player = &sim.state().combat.as_ref().expect("combat").player;
+        assert_eq!(player.cards_generated_this_combat, 1);
+        assert_eq!(player.generated_this_combat_by_model[&id("CARD.JOY")], 1);
+    }
+    let mut sim = fight("CARD.PUNCH_OF_JOY", 0, 1, 0, 100);
+    play(&mut sim, "CARD.PUNCH_OF_JOY");
+    assert_eq!(pile(&sim, PileName::Hand), ["CARD.DEFEND_FOOL"]);
+}
+
+#[test]
+fn ecstasy_turns_hand_sadness_into_joy_as_the_next_turn_starts() {
+    let mut scene = scenario("CARD.ECSTASY", 1, 0, 5, 100);
+    for slot in [50, 51] {
+        scene = with(scene, PileName::Hand, slot, "CARD.SADNESS", -1);
+    }
+    let mut sim = built(scene);
+    play(&mut sim, "CARD.ECSTASY");
+    assert_eq!(
+        sim.state().combat.as_ref().expect("combat").player.energy,
+        8
+    );
+    end_turn(&mut sim);
+    let hand = pile(&sim, PileName::Hand);
+    assert_eq!(hand.iter().filter(|card| *card == "CARD.JOY").count(), 1);
+    assert_eq!(
+        hand.iter().filter(|card| *card == "CARD.SADNESS").count(),
+        1
+    );
+}
+
+#[test]
+fn ennui_makes_one_sadness_per_application_and_draws_its_stacks_more() {
+    let mut sim = built(with(
+        scenario("CARD.ENNUI", 0, 0, 20, 100),
+        PileName::Hand,
+        50,
+        "CARD.ENNUI",
+        1,
+    ));
+    play(&mut sim, "CARD.ENNUI");
+    play(&mut sim, "CARD.ENNUI");
+    assert_eq!(creature(&sim, 0).power_amount("POWER.ENNUI_POWER"), 4);
+    end_turn(&mut sim);
+    let hand = pile(&sim, PileName::Hand);
+    // The Sadness comes first, then a hand draw of 5 + 4 the hand cap cuts at 8.
+    assert_eq!(&hand[..2], ["CARD.SADNESS"; 2]);
+    assert_eq!(hand.len(), 10);
+    assert_eq!(pile(&sim, PileName::Draw).len(), 12);
+}
+
+#[test]
+fn encore_allows_one_more_card_play_this_turn_only() {
+    for upgrade in [0, 1] {
+        let mut sim = fight("CARD.ENCORE", upgrade, 2, 5, 100);
+        play(&mut sim, "CARD.ENCORE");
+        assert_eq!(pile(&sim, PileName::Hand).len(), 4 + usize::from(upgrade));
+        assert_eq!(
+            sim.state().combat.as_ref().expect("combat").player.energy,
+            10
+        );
+        play(&mut sim, "CARD.DEFEND_FOOL");
+        assert!(!can_play_anything(&sim));
+        end_turn(&mut sim);
+        assert_eq!(creature(&sim, 0).power_amount("POWER.ENCORE_POWER"), 0);
+        assert!(can_play_anything(&sim));
+    }
+}
+
+#[test]
+fn simpleton_autoplays_the_cheapest_card_that_is_not_unplayable() {
+    let mut scene = scenario("CARD.SIMPLETON", 1, 1, 5, 100);
+    scene = with(scene, PileName::Hand, 50, "CARD.SADNESS", -1);
+    scene = with(scene, PileName::Hand, 51, "CARD.THE_EMPEROR", 0);
+    let mut sim = built(scene);
+    play(&mut sim, "CARD.SIMPLETON");
+    end_turn(&mut sim);
+    assert_eq!(pile(&sim, PileName::Exhaust), ["CARD.THE_EMPEROR"]);
+}
+
+#[test]
+fn batch_two_cards_waiting_on_engine_hooks_fail_explicitly() {
+    for model in [
+        "CARD.MOURNING_BLOW",
+        "CARD.CHO_BARBS",
+        "CARD.CODA",
+        "CARD.LULLABY",
+        "CARD.RHYTHM_STRIKE",
+        "CARD.WAH_SWEEP",
+    ] {
+        let mut sim = fight(model, 0, 0, 0, 100);
+        let action = sim
+            .legal_actions()
+            .iter()
+            .find(|action| {
+                matches!(
+                    action, Action::PlayCard { card, .. } if card.fingerprint.model_id == id(model)
+                )
+            })
+            .cloned()
+            .expect("registered playable card");
+        let error = sim.step(action).expect_err("unsupported body must fail");
+        assert_eq!(error.code, sts2_engine::ErrorCode::UnsupportedContent);
+    }
+}

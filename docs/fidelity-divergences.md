@@ -26,7 +26,12 @@ the solo reward pool preserves order while excluding basics, ancients and
 multiplayer-only cards. Song Bow fails explicitly at combat-room entry, and
 Foolish Shot and later-batch card bodies fail explicitly. Arrow slots, Aim,
 melodies and Stretch are not simulated. All 30 first-batch card bodies are
-implemented. Fool relic and potion generation pools are not yet transcribed.
+implemented. Of the second batch, All Is Well, Anguish, Ecstasy, Ennui,
+Punch of Joy, Encore and Simpleton are implemented; Mourning Blow waits on
+transform-after-play (H13) and the 22 melody cards and melody readers (Wah,
+Cho and Ki cards, Coda, Harmonic Shield, Lullaby, Motif, Rhythm Strike, Song
+Path, Steady Cadence, Tune, Violent Chord) wait on melody tags and history
+(F04); their definitions are registered and their bodies fail explicitly. Fool relic and potion generation pools are not yet transcribed.
 The veteran preset already includes all seven Fool epochs.
 
 **Whether it can reach a conformance claim.** A Fool run cannot claim combat

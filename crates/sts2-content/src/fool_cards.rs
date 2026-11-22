@@ -1,19 +1,21 @@
-//! Fool pool order and the first content batch, pinned to v0.113.1.
-//! Bodies needing arrows, melodies or Stretch fail rather than approximate.
+//! Fool pool order and the first two content batches, pinned to v0.113.1.
+//! Bodies needing arrows, melodies, Stretch or transform-after-play fail
+//! rather than approximate.
 
 use sts2_engine::{
     Amount, CardCmd, CardDefinition, CardFilter, CardOrigin, CardPileCmd, CardPoolRef, CardRarity,
     CardSelectCmd, CardSelector, CardType, Command, Condition, Count, CreatureCmd,
-    CreatureSelector, DrawPilePosition, HookCondition, HookEvent, ModifierHook, OrbCmd, OrbSource,
-    PileName, PlayerCmd, RelicDefinition, RelicRarity, SelectorPrefs, TargetType, TemporaryCost,
-    ValueProps,
+    CreatureSelector, DrawPilePosition, HookCondition, HookEvent, ModifierCmd, ModifierHook,
+    OrbCmd, OrbSource, PileName, PlayRestriction, PlayerCmd, PowerCmd, PowerDefinition, PowerRef,
+    PowerType, RelicDefinition, RelicRarity, SelectorPrefs, TargetType, TemporaryCost, ValueProps,
 };
 
 use crate::cards::{
-    attack, block, buff, card, debuff, defending, draw, exhausting, multi_attack, rarity, striking,
-    sweep, upgrading,
+    attack, block, buff, card, debuff, defending, draw, exhausting, innate_when_upgraded,
+    multi_attack, rarity, striking, sweep, upgrading, upgrading_cost,
 };
 use crate::id;
+use crate::powers::counter;
 
 pub(crate) const POOL: [(&str, CardType, CardRarity, i32); 90] = [
     ("CARD.ALL_IS_WELL", CardType::Power, CardRarity::Uncommon, 1),
@@ -282,6 +284,8 @@ pub(crate) fn cards() -> Vec<CardDefinition> {
     let mut implemented = first_ten();
     implemented.extend(second_ten());
     implemented.extend(third_ten());
+    implemented.extend(sadness_cards());
+    implemented.extend(waiting_on_hooks());
     let mut result: Vec<_> = POOL
         .iter()
         .filter(|(model, _, _, _)| !implemented.iter().any(|card| card.model_id == id(model)))
@@ -773,5 +777,276 @@ fn third_ten() -> Vec<CardDefinition> {
             vec![wheel(7)],
             vec![wheel(9)],
         ),
+    ]
+}
+
+fn sadness_in(pile: PileName) -> CardSelector {
+    CardSelector::StablyShuffledOfModelFromPile {
+        pile,
+        model: id("CARD.SADNESS"),
+        take: Amount::Fixed(1),
+    }
+}
+
+fn into_joy(cards: CardSelector) -> Command {
+    Command::Card(CardCmd::Transform {
+        cards,
+        into: id("CARD.JOY"),
+        upgraded: false,
+    })
+}
+
+fn anguish(per: i32) -> Command {
+    multi_attack(
+        Amount::Scaled {
+            base: per,
+            per,
+            count: Count::ModelGeneratedThisCombat(id("CARD.SADNESS")),
+        },
+        Amount::Fixed(1),
+    )
+}
+
+fn ennui(amount: i32) -> Vec<Command> {
+    vec![
+        buff("POWER.ENNUI_POWER", amount),
+        Command::Power(PowerCmd::ModifyCounter {
+            power: PowerRef::owned(id("POWER.ENNUI_POWER")),
+            amount: Amount::Fixed(1),
+        }),
+    ]
+}
+
+fn encore(draws: i32) -> Vec<Command> {
+    vec![energy(1), draw(draws), buff("POWER.ENCORE_POWER", 1)]
+}
+
+fn sadness_cards() -> Vec<CardDefinition> {
+    vec![
+        upgrading(
+            card(
+                "CARD.ALL_IS_WELL",
+                CardType::Power,
+                TargetType::SelfTarget,
+                1,
+                vec![buff("POWER.ALL_IS_WELL_POWER", 4)],
+            ),
+            vec![buff("POWER.ALL_IS_WELL_POWER", 5)],
+        ),
+        upgrading(
+            card(
+                "CARD.ANGUISH",
+                CardType::Attack,
+                TargetType::AnyEnemy,
+                1,
+                vec![anguish(6)],
+            ),
+            vec![anguish(7)],
+        ),
+        upgrading_cost(
+            card(
+                "CARD.ECSTASY",
+                CardType::Power,
+                TargetType::SelfTarget,
+                2,
+                vec![buff("POWER.ECSTASY_POWER", 1)],
+            ),
+            1,
+        ),
+        upgrading(
+            card(
+                "CARD.ENNUI",
+                CardType::Power,
+                TargetType::SelfTarget,
+                1,
+                ennui(2),
+            ),
+            ennui(3),
+        ),
+        upgrading(
+            card(
+                "CARD.PUNCH_OF_JOY",
+                CardType::Attack,
+                TargetType::AnyEnemy,
+                2,
+                vec![attack(13), into_joy(sadness_in(PileName::Hand))],
+            ),
+            vec![attack(17), into_joy(sadness_in(PileName::Hand))],
+        ),
+        upgrading(
+            card(
+                "CARD.ENCORE",
+                CardType::Skill,
+                TargetType::SelfTarget,
+                0,
+                encore(2),
+            ),
+            encore(3),
+        ),
+        upgrading_cost(
+            card(
+                "CARD.SIMPLETON",
+                CardType::Power,
+                TargetType::SelfTarget,
+                2,
+                vec![buff("POWER.SIMPLETON_POWER", 1)],
+            ),
+            1,
+        ),
+    ]
+}
+
+/// A card whose body needs an engine hook that is not built yet: the
+/// definition stands and playing it fails.
+fn waiting(
+    model: &str,
+    kind: CardType,
+    target: TargetType,
+    cost: i32,
+    upgraded_cost: Option<i32>,
+) -> CardDefinition {
+    let base = card(
+        model,
+        kind,
+        target,
+        cost,
+        vec![Command::Unsupported(id(model))],
+    );
+    match upgraded_cost {
+        Some(cost) => upgrading_cost(base, cost),
+        None => upgrading(base, vec![Command::Unsupported(id(model))]),
+    }
+}
+
+fn waiting_on_hooks() -> Vec<CardDefinition> {
+    use CardType::{Attack, Power, Skill};
+    use TargetType::{AllEnemies, AnyEnemy, SelfTarget};
+    let mut cards = vec![
+        // H13 transform-after-play: its Sadness replaces it after the last
+        // play and lands in hand.
+        waiting("CARD.MOURNING_BLOW", Attack, AnyEnemy, 0, None),
+        // F04 melody tags and finished-play history, for the rest.
+        waiting("CARD.CHO_BARBS", Skill, SelfTarget, 1, None),
+        waiting("CARD.CHO_CHORUS", Skill, SelfTarget, 3, None),
+        waiting("CARD.CHO_LIMBS", Skill, SelfTarget, 2, None),
+        waiting("CARD.CODA", Attack, AnyEnemy, 6, None),
+        waiting("CARD.HARMONIC_SHIELD", Skill, SelfTarget, 1, None),
+        waiting("CARD.KI_CHANT", Skill, SelfTarget, 1, None),
+        waiting("CARD.KI_REST", Skill, SelfTarget, 2, None),
+        waiting("CARD.KI_WHIP", Attack, AnyEnemy, 1, None),
+        waiting("CARD.MOTIF", Power, SelfTarget, 2, Some(1)),
+        striking(waiting("CARD.RHYTHM_STRIKE", Attack, AnyEnemy, 0, None)),
+        waiting("CARD.SONG_PATH", Power, SelfTarget, 1, None),
+        waiting("CARD.STEADY_CADENCE", Attack, AnyEnemy, 1, None),
+        waiting("CARD.TUNE", Power, SelfTarget, 2, Some(1)),
+        waiting("CARD.VIOLENT_CHORD", Power, SelfTarget, 1, None),
+        waiting("CARD.WAH_BLAST", Attack, AllEnemies, 2, None),
+        waiting("CARD.WAH_CHO", Attack, AnyEnemy, 0, None),
+        waiting("CARD.WAH_CHO_KI", Attack, AnyEnemy, 1, None),
+        waiting("CARD.WAH_KI", Attack, AnyEnemy, 1, None),
+        waiting("CARD.WAH_SYMPHONY", Attack, AllEnemies, 2, None),
+        waiting("CARD.WAH_SWEEP", Attack, AllEnemies, 1, None),
+        waiting("CARD.WAH_TOUCH", Attack, AnyEnemy, 1, None),
+    ];
+    // Lullaby's only upgrade is Innate.
+    let mut lullaby = card(
+        "CARD.LULLABY",
+        Power,
+        SelfTarget,
+        0,
+        vec![Command::Unsupported(id("CARD.LULLABY"))],
+    );
+    lullaby = innate_when_upgraded(lullaby);
+    cards.push(lullaby);
+    cards
+}
+
+/// The powers the second batch's cards apply.
+pub(crate) fn powers() -> Vec<PowerDefinition> {
+    let stacks = || Amount::counting(Count::ListeningPowerAmount);
+    vec![
+        PowerDefinition {
+            hooks: vec![
+                ModifierHook::every_turn(
+                    HookEvent::AfterCardGeneratedForCombat,
+                    vec![Command::Creature(CreatureCmd::GainBlock {
+                        target: CreatureSelector::Owner,
+                        amount: stacks(),
+                        props: ValueProps::UNPOWERED,
+                    })],
+                )
+                .when(HookCondition::All(vec![
+                    HookCondition::OwnerConjuredTheCard,
+                    HookCondition::EnteredCardIs(id("CARD.SADNESS")),
+                ])),
+            ],
+            ..counter("POWER.ALL_IS_WELL_POWER", PowerType::Buff)
+        },
+        PowerDefinition {
+            hooks: vec![ModifierHook::every_turn(
+                HookEvent::AfterPlayerTurnStart,
+                vec![into_joy(CardSelector::StablyShuffledOfModelFromPile {
+                    pile: PileName::Hand,
+                    model: id("CARD.SADNESS"),
+                    take: stacks(),
+                })],
+            )],
+            ..counter("POWER.ECSTASY_POWER", PowerType::Buff)
+        },
+        // The counter is the Sadness made each turn, one per application.
+        PowerDefinition {
+            hooks: vec![
+                ModifierHook::every_turn(
+                    HookEvent::BeforeHandDraw,
+                    vec![generate(
+                        "CARD.SADNESS",
+                        Amount::counting(Count::ListeningPowerCounter),
+                        PileName::Hand,
+                        false,
+                    )],
+                ),
+                ModifierHook::every_turn(
+                    HookEvent::ModifyHandDraw,
+                    vec![Command::Modify(ModifierCmd::Add(stacks()))],
+                ),
+            ],
+            ..counter("POWER.ENNUI_POWER", PowerType::Buff)
+        },
+        // The counter is the plays started since it landed; Encore's own play
+        // started before it and is not one of them.
+        PowerDefinition {
+            play_restriction: Some(PlayRestriction::CardsStartedBelowAmount),
+            hooks: vec![
+                ModifierHook::every_turn(
+                    HookEvent::BeforeCardPlayed,
+                    vec![Command::Power(PowerCmd::ModifyCounter {
+                        power: PowerRef::listening(),
+                        amount: Amount::Fixed(1),
+                    })],
+                )
+                .when(HookCondition::OwnerPlayedTheCard),
+                ModifierHook::every_turn(
+                    HookEvent::AfterSideTurnEnd,
+                    vec![Command::Power(PowerCmd::Remove {
+                        power: PowerRef::listening(),
+                    })],
+                )
+                .when(HookCondition::OwnerIsParticipant),
+            ],
+            ..counter("POWER.ENCORE_POWER", PowerType::Debuff)
+        },
+        PowerDefinition {
+            hooks: vec![ModifierHook::every_turn(
+                HookEvent::AfterAutoPostPlayPhaseEntered,
+                vec![Command::Repeat {
+                    times: stacks(),
+                    then: vec![Command::Card(CardCmd::AutoPlay {
+                        at_the_bodys_target: false,
+                        cards: CardSelector::CheapestRolledFromHand,
+                    })],
+                }],
+            )],
+            ..counter("POWER.SIMPLETON_POWER", PowerType::Buff)
+        },
     ]
 }
