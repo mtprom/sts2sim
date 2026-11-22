@@ -10667,6 +10667,7 @@ impl Simulator {
             model_id: model_id.clone(),
             held_card: None,
             bound_damage_card: None,
+            bound_played_card: None,
             amount: landing,
             counter: 0,
             amount_on_turn_start: 0,
@@ -15159,6 +15160,13 @@ impl Simulator {
                 let card = self.hook_context.value.card;
                 self.with_listening_power(context, |instance| instance.bound_damage_card = card)?;
             }
+            PowerCmd::BindPlayedCard => {
+                let card = context.played_card;
+                self.with_listening_power(context, |instance| instance.bound_played_card = card)?;
+            }
+            PowerCmd::ClearBoundPlayedCard => {
+                self.with_listening_power(context, |instance| instance.bound_played_card = None)?;
+            }
             PowerCmd::OpenPlayTally { open } => {
                 let entry = open.then_some(0);
                 self.with_listening_power(context, |instance| instance.play_tallies.push(entry))?;
@@ -17639,11 +17647,12 @@ impl Simulator {
         Ok(())
     }
 
-    /// The card the listening power bound its one swing to, read off the same
-    /// instance every other body of it reads.
+    /// A card the listening power bound, read off the same instance every
+    /// other body of it reads.
     fn listening_power_binding(
         &self,
         context: &CommandContext,
+        field: fn(&PowerInstance) -> Option<CardInstanceId>,
     ) -> Result<Option<CardInstanceId>, EngineError> {
         let model_id = context.power.as_ref().ok_or_else(unbound_listening_power)?;
         let Some(owner) = context.owner else {
@@ -17651,7 +17660,7 @@ impl Simulator {
         };
         Ok(self
             .power_index_for(owner, model_id, context.power_instance)
-            .and_then(|at| self.creature(owner).ok()?.powers.get(at)?.bound_damage_card))
+            .and_then(|at| self.creature(owner).ok()?.powers.get(at).and_then(field)))
     }
 
     /// A field of the power whose listener issued the command, totalled over
@@ -17791,7 +17800,7 @@ impl Simulator {
                 })
             }
             Condition::DamageCardMatchesTheListeningPowersBinding => {
-                let bound = self.listening_power_binding(context)?;
+                let bound = self.listening_power_binding(context, |power| power.bound_damage_card)?;
                 let dealt_from = self.hook_context.value.card;
                 bound.is_none() || dealt_from.is_none() || bound == dealt_from
             }
@@ -17876,6 +17885,11 @@ impl Simulator {
             }
             Condition::ListeningPowerCounterIs(value) => {
                 self.listening_power_field(context, |power| power.counter)? == *value
+            }
+            Condition::PlayedCardIsBoundToListeningPower => {
+                context.played_card.is_some()
+                    && self.listening_power_binding(context, |power| power.bound_played_card)?
+                        == context.played_card
             }
             Condition::ListeningPowerPlayTallyIsOpen => {
                 self.listening_power_field(context, |power| {

@@ -7233,6 +7233,7 @@ fn a_paper_krane_deepens_the_weakness_of_what_hits_it() {
             model_id: id("POWER.WEAK_POWER"),
             held_card: None,
             bound_damage_card: None,
+            bound_played_card: None,
             amount: 2,
             counter: 0,
             amount_on_turn_start: 0,

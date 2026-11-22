@@ -923,6 +923,7 @@ fn a_weak_power_scales_the_damage_its_owner_deals() {
         model_id: id("POWER.TEST_WEAK"),
         held_card: None,
         bound_damage_card: None,
+        bound_played_card: None,
         amount: 1,
         counter: 0,
         amount_on_turn_start: 1,

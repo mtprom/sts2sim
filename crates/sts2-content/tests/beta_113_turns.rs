@@ -13,6 +13,23 @@ fn id(value: &str) -> ModelId {
     value.parse().expect("static ID")
 }
 
+fn play(simulator: &mut Simulator, model_id: &str) {
+    let wanted = id(model_id);
+    let action = simulator
+        .legal_actions()
+        .iter()
+        .find(|action| {
+            matches!(action, Action::PlayCard { card, .. } if card.fingerprint.model_id == wanted)
+        })
+        .cloned()
+        .unwrap_or_else(|| panic!("{model_id} is playable"));
+    simulator.step(action).expect("play");
+}
+
+fn hand(simulator: &Simulator) -> Vec<sts2_engine::CardInstance> {
+    simulator.state().combat.as_ref().expect("a fight").player.piles.hand.clone()
+}
+
 fn end_turn(simulator: &mut Simulator) {
     let action = simulator
         .legal_actions()
@@ -85,4 +102,50 @@ fn draw_cards_next_turn_leaves_before_the_hand_is_drawn() {
     let player = &combat.creatures[0];
     assert_eq!(player.power_amount("POWER.DRAW_CARDS_NEXT_TURN_POWER"), 0);
     assert_eq!(player.block, 7);
+}
+
+/// `JugglingPower` remembers the third Attack as it starts and clones it only
+/// after that play finishes: a fourth Attack the third plays mid-body cannot
+/// claim the count, and the copy carries what the third did to itself.
+#[test]
+fn juggling_clones_the_third_started_attack_after_it_finishes() {
+    let mut content = (*sts2_content::standard_registry()).clone();
+    let mut rampage = content.card(&id("CARD.RAMPAGE")).expect("rampage").clone();
+    let mut body = vec![Command::CardPile(sts2_engine::CardPileCmd::AutoPlayFromDrawPile {
+        count: Amount::Fixed(1),
+        position: sts2_engine::DrawPilePosition::Top,
+        force_exhaust: false,
+        upgrade: false,
+    })];
+    body.extend(rampage.effects.clone());
+    rampage.effects = body;
+    content.add_card(rampage);
+    let strike = || CardFingerprint::base(id("CARD.STRIKE_IRONCLAD"));
+    let mut simulator = ScenarioBuilder::new("JUGGLE113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .player_hp(80, 80)
+        .energy(9, 9)
+        .turn(1, 1)
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 200, 200, "SHRINKER_MOVE")
+        .power(0, id("POWER.JUGGLING_POWER"), 1, PowerType::Buff)
+        .card(PileName::Hand, 0, strike(), 1)
+        .card(PileName::Hand, 1, strike(), 1)
+        .card(PileName::Hand, 2, CardFingerprint::base(id("CARD.RAMPAGE")), 1)
+        .card(PileName::Draw, 3, strike(), 1)
+        .build(Arc::new(content))
+        .expect("scenario");
+    play(&mut simulator, "CARD.STRIKE_IRONCLAD");
+    play(&mut simulator, "CARD.STRIKE_IRONCLAD");
+    play(&mut simulator, "CARD.RAMPAGE");
+    let hand = hand(&simulator);
+    assert_eq!(hand.len(), 1, "one copy, and none of the nested Strike");
+    assert_eq!(hand[0].fingerprint.model_id, id("CARD.RAMPAGE"));
+    let combat = simulator.state().combat.as_ref().expect("a fight");
+    let original = combat
+        .player
+        .piles
+        .all_cards()
+        .find(|card| card.id == sts2_core::CardInstanceId::from(2))
+        .expect("the third attack");
+    assert!(original.damage_bonus > 0, "Rampage grew itself");
+    assert_eq!(hand[0].damage_bonus, original.damage_bonus);
 }

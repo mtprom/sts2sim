@@ -1442,6 +1442,10 @@ pub enum PowerCmd {
     /// power so that the power can answer about it later, the way a Vigor
     /// does. A swing from no card at all binds nothing.
     BindDamageCard,
+    /// The card whose play is now starting, remembered on the listening power.
+    BindPlayedCard,
+    /// Forgets the remembered card.
+    ClearBoundPlayedCard,
     /// An entry for the play now opening, written on the listening power's
     /// own tally, the way a Rupture keeps one. `open` is whether the body's
     /// guard passed — no entry is written at all where it did not, and a play
@@ -2775,6 +2779,8 @@ pub enum Condition {
     DamageCardMatchesTheListeningPowersBinding,
     /// The listening power's stored variable is exactly this.
     ListeningPowerCounterIs(i32),
+    /// The card being played is the one the listening power remembered.
+    PlayedCardIsBoundToListeningPower,
     /// Nothing the listening model's owner can hit has HP that runs out. A
     /// field with nothing standing in it answers yes.
     EveryOpponentsHpDisplayIsInfinite,

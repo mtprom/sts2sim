@@ -588,6 +588,7 @@ fn place_powers(
             model_id,
             held_card: None,
             bound_damage_card: None,
+            bound_played_card: None,
             amount,
             counter: 0,
             amount_on_turn_start: amount,

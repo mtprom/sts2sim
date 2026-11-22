@@ -2894,6 +2894,10 @@ pub struct PowerInstance {
     /// listener's own test that its owner is dealing the damage.
     #[serde(default)]
     pub bound_damage_card: Option<CardInstanceId>,
+    /// The card whose started play this power remembered, held as a live
+    /// identity rather than a snapshot, the way Juggling's third Attack is.
+    #[serde(default)]
+    pub bound_played_card: Option<CardInstanceId>,
     pub amount: i32,
     /// Per-instance state a few powers count separately from their stacks.
     pub counter: i32,

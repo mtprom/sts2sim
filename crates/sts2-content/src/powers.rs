@@ -2468,9 +2468,11 @@ fn unmovable_power() -> PowerDefinition {
     }
 }
 
-/// Juggling counts the attacks its owner has played this turn — starting from
-/// what the history already holds when it lands — and hands back copies of the
-/// third one.
+/// Juggling counts the attacks its owner has started this turn — starting from
+/// what the history already holds when it lands — remembers the third as it
+/// starts, and hands back copies of it once that play has finished, cloned as
+/// the play left it. The memory is cleared before the copies are made, and a
+/// nested play finishing first cannot claim it.
 fn juggling_power() -> PowerDefinition {
     PowerDefinition {
         hooks: vec![
@@ -2478,11 +2480,11 @@ fn juggling_power() -> PowerDefinition {
                 HookEvent::AfterApplied,
                 vec![Command::Power(PowerCmd::SetCounter {
                     power: PowerRef::listening(),
-                    amount: Amount::counting(Count::OwnerAttacksPlayedThisTurn),
+                    amount: Amount::counting(Count::OwnerAttackPlaysStartedThisTurn),
                 })],
             ),
             ModifierHook::every_turn(
-                HookEvent::AfterCardPlayed,
+                HookEvent::BeforeCardPlayed,
                 vec![
                     Command::Power(PowerCmd::ModifyCounter {
                         power: PowerRef::listening(),
@@ -2491,7 +2493,22 @@ fn juggling_power() -> PowerDefinition {
                     Command::When {
                         otherwise: Vec::new(),
                         condition: Condition::ListeningPowerCounterIs(3),
-                        then: vec![Command::CardPile(CardPileCmd::AddGeneratedToCombat {
+                        then: vec![Command::Power(PowerCmd::BindPlayedCard)],
+                    },
+                ],
+            )
+            .when(HookCondition::All(vec![
+                HookCondition::OwnerPlayedTheCard,
+                HookCondition::PlayedCardIsAttack,
+            ])),
+            ModifierHook::every_turn(
+                HookEvent::AfterCardPlayed,
+                vec![Command::When {
+                    otherwise: Vec::new(),
+                    condition: Condition::PlayedCardIsBoundToListeningPower,
+                    then: vec![
+                        Command::Power(PowerCmd::ClearBoundPlayedCard),
+                        Command::CardPile(CardPileCmd::AddGeneratedToCombat {
                             enchantment: None,
                             card: CardOrigin::CloneOfPlayedCard,
                             grown_by: Amount::Fixed(0),
@@ -2502,11 +2519,10 @@ fn juggling_power() -> PowerDefinition {
                             upgraded: false,
                             temporary_cost: None,
                             position: sts2_engine::DrawPilePosition::Bottom,
-                        })],
-                    },
-                ],
-            )
-            .when(HookCondition::PlayedCardIsAttack),
+                        }),
+                    ],
+                }],
+            ),
             ModifierHook::every_turn(
                 HookEvent::AfterSideTurnEnd,
                 vec![Command::Power(PowerCmd::SetCounter {
