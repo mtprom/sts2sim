@@ -20059,13 +20059,15 @@ impl Simulator {
                     // whether they take one, and the switch reads the answer:
                     // with anybody in the set the side stays the player's, the
                     // round does not wind on, and the enemy never acts.
-                    let extra = self.owes_an_extra_player_turn()?;
+                    let source = self.extra_player_turn_source()?;
+                    let extra = source.is_some();
                     self.combat_mut()?.taking_extra_turn = extra;
                     self.switch_sides()?;
-                    if extra {
-                        self.dispatch_hooks(
-                            &[crate::HookEvent::AfterTakingExtraTurn],
+                    if let Some(source) = source {
+                        self.run_answered_listeners(
+                            crate::HookEvent::AfterTakingExtraTurn,
                             &HookContext::side(CombatSide::Player),
+                            vec![source],
                         )?;
                     }
                     // Phase two ends with the switch. The mark comes down as
@@ -20350,13 +20352,16 @@ impl Simulator {
         Ok(())
     }
 
-    /// Whether an extra player turn is owed, which the build asks of every
-    /// player just as the player side is about to hand over. A relic answers
-    /// off what it declares rather than a body of its own, and so does a power
-    /// the player carries at more than nothing.
-    fn owes_an_extra_player_turn(&self) -> Result<bool, EngineError> {
+    /// Who grants the extra player turn, if anyone, which the build asks of
+    /// every player just as the player side is about to hand over
+    /// (`Hook.ShouldTakeExtraTurn`). The early pass is walked first and its
+    /// first yes wins; only a relic answers it, off what it declares. Then the
+    /// ordinary pass, where a power the player carries at more than nothing
+    /// answers. Only the winner is told it was taken.
+    fn extra_player_turn_source(&self) -> Result<Option<Listener>, EngineError> {
         let turn = self.combat()?.player.turn;
-        let owed_by_a_relic = self.state.run_player.relics.iter().any(|relic| {
+        let player_id = self.combat()?.player.creature_id;
+        let relic = self.state.run_player.relics.iter().find(|relic| {
             !relic.melted
                 && !relic.latched
                 && self
@@ -20365,15 +20370,31 @@ impl Simulator {
                     .and_then(|definition| definition.grants_an_extra_turn.as_ref())
                     .is_some_and(|rule| !self.owner_has_played_a_card_this_turn(turn, rule))
         });
-        let player_id = self.combat()?.player.creature_id;
-        let owed_by_a_power = self.creature(player_id)?.powers.iter().any(|instance| {
-            instance.amount > 0
-                && self
-                    .content
-                    .power(&instance.model_id)
-                    .is_some_and(|definition| definition.grants_an_extra_turn)
-        });
-        Ok(owed_by_a_relic || owed_by_a_power)
+        if let Some(relic) = relic {
+            return Ok(Some(Listener {
+                owner: player_id,
+                source: ListenerSource::Relic,
+                model_id: relic.model_id.clone(),
+                power_instance: None,
+            }));
+        }
+        Ok(self
+            .creature(player_id)?
+            .powers
+            .iter()
+            .find(|instance| {
+                instance.amount > 0
+                    && self
+                        .content
+                        .power(&instance.model_id)
+                        .is_some_and(|definition| definition.grants_an_extra_turn)
+            })
+            .map(|instance| Listener {
+                owner: player_id,
+                source: ListenerSource::Power,
+                model_id: instance.model_id.clone(),
+                power_instance: Some(instance.instance),
+            }))
     }
 
     /// Whether the player has played a card this turn, as the extra-turn relic

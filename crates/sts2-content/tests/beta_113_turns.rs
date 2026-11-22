@@ -336,3 +336,36 @@ fn nightmare_copies_a_cleaned_clone_before_the_draw() {
         assert_eq!(copy.affliction, None);
     }
 }
+
+/// `Hook.ShouldTakeExtraTurn` asks the early pass first and tells only the
+/// winner: an unused Pael's Eye takes the first extra turn and Ambergris'
+/// Extra Turn power is spent only on the next one.
+#[test]
+fn pael_s_eye_wins_the_extra_turn_before_the_power() {
+    let mut simulator = ScenarioBuilder::new("EYE113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .player_hp(80, 80)
+        .energy(3, 3)
+        .turn(1, 1)
+        .relics(&[id("RELIC.PAELS_EYE")])
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
+        .power(0, id("POWER.EXTRA_TURN_POWER"), 1, PowerType::Buff)
+        .build(sts2_content::standard_registry())
+        .expect("scenario");
+    let extra_turns = |simulator: &Simulator| {
+        let combat = simulator.state().combat.as_ref().expect("a fight");
+        (
+            combat.creatures[0].power_amount("POWER.EXTRA_TURN_POWER"),
+            simulator.state().run_player.relics[0].latched,
+        )
+    };
+    end_turn(&mut simulator);
+    assert_eq!(extra_turns(&simulator), (1, true), "the eye's turn");
+    end_turn(&mut simulator);
+    assert_eq!(extra_turns(&simulator), (0, true), "the power's turn");
+    let enemy_moves = |simulator: &Simulator| {
+        simulator.state().combat.as_ref().expect("a fight").creatures[1]
+            .performed_log
+            .len()
+    };
+    assert_eq!(enemy_moves(&simulator), 0, "no enemy turn yet");
+}
