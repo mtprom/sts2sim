@@ -1192,6 +1192,9 @@ pub enum HookEvent {
     /// order. The whole listener list is walked once for each.
     ModifyHandDraw,
     ModifyHandDrawLate,
+    /// Reaches only the listeners that changed the hand-draw count, after
+    /// both passes and before a card is drawn.
+    AfterModifyingHandDraw,
     /// Once the hand-draw count is settled and before a card moves, which is
     /// where a power that stocks the hand first stocks it.
     BeforeHandDraw,

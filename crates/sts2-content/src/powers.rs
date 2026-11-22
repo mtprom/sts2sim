@@ -2758,13 +2758,14 @@ pub fn shared_powers() -> Vec<PowerDefinition> {
             ..counter("POWER.ENERGY_NEXT_TURN_POWER", PowerType::Buff)
         },
         // Cards owed for the next turn: the hand draw is that much bigger, and
-        // the power comes off once the turn it paid for has opened.
+        // the power comes off as soon as the draw count is settled, before a
+        // card is drawn.
         //
-        // Both bodies are guarded on what the power stood at when the turn
+        // The raise is guarded on what the power stood at when the turn
         // opened, taken before anything of the turn runs. A stack applied after
-        // that point pays nothing and is not taken off, so it stands to the
-        // next turn; what the draw is raised by is the *live* amount, which is
-        // asked separately from the gate.
+        // that point pays nothing, so it is not told it changed the draw and
+        // stands to the next turn; what the draw is raised by is the *live*
+        // amount, which is asked separately from the gate.
         PowerDefinition {
             hooks: vec![
                 modifies(
@@ -2772,12 +2773,7 @@ pub fn shared_powers() -> Vec<PowerDefinition> {
                     HookCondition::ListeningPowerStoodAtTurnStart,
                     vec![Command::Modify(ModifierCmd::Add(stacks()))],
                 ),
-                ModifierHook::every_turn(HookEvent::AfterSideTurnStart, vec![remove_self()]).when(
-                    HookCondition::All(vec![
-                        HookCondition::OwnerIsParticipant,
-                        HookCondition::ListeningPowerStoodAtTurnStart,
-                    ]),
-                ),
+                ModifierHook::every_turn(HookEvent::AfterModifyingHandDraw, vec![remove_self()]),
             ],
             ..counter("POWER.DRAW_CARDS_NEXT_TURN_POWER", PowerType::Buff)
         },

@@ -20934,14 +20934,30 @@ impl Simulator {
                 Step::Draw => {
                     // The hand-draw pass opens at five cards, and the hand is
                     // whatever the listeners make of that.
-                    let count = self.run_modifier_passes(
-                        &[
-                            crate::HookEvent::ModifyHandDraw,
-                            crate::HookEvent::ModifyHandDrawLate,
-                        ],
-                        &ValueContext::default(),
-                        5,
-                    )?;
+                    // Whoever changed it is told before anything is drawn.
+                    let context = HookContext::over(ValueContext::default());
+                    let mut count = 5;
+                    let mut answered: Vec<Listener> = Vec::new();
+                    for event in [
+                        crate::HookEvent::ModifyHandDraw,
+                        crate::HookEvent::ModifyHandDrawLate,
+                    ] {
+                        let (settled, spoke) =
+                            self.modifier_pass_by_value(event, context.clone(), count)?;
+                        count = settled;
+                        for listener in spoke {
+                            if !answered.contains(&listener) {
+                                answered.push(listener);
+                            }
+                        }
+                    }
+                    if !answered.is_empty() {
+                        self.run_answered_listeners(
+                            crate::HookEvent::AfterModifyingHandDraw,
+                            &context,
+                            answered,
+                        )?;
+                    }
                     let count = self.raise_opening_draw_for_innate_cards(count)?;
                     self.draw_cards(usize::try_from(count.max(0)).unwrap_or(0), true)?;
                 }
