@@ -394,22 +394,31 @@ fn souls_power() -> EnchantmentDefinition {
 /// The status is the enchantment's own and nothing puts it back, so this is a
 /// once-per-run payout rather than a once-per-combat one — but that status is
 /// not saved, so the combat copy starts each fight from the deck card's, which
-/// nothing ever disables.
+/// nothing ever disables. It is disabled only once its own card's play has
+/// finished, not while its energy and anything nested resolve.
 fn sown() -> EnchantmentDefinition {
     EnchantmentDefinition {
         on_play: vec![Command::When {
             otherwise: Vec::new(),
             condition: Condition::ListeningEnchantmentIsNormal,
-            then: vec![
-                Command::Player(PlayerCmd::GainEnergy(amount())),
-                Command::Card(CardCmd::SetEnchantmentStatus {
-                    cards: own_card(),
-                    status: EnchantmentStatus::Disabled,
-                }),
-            ],
+            then: vec![Command::Player(PlayerCmd::GainEnergy(amount()))],
         }],
+        hooks: vec![disabled_after_its_play()],
         ..enchantment("ENCHANTMENT.SOWN", EnchantRestriction::Any)
     }
+}
+
+/// The `AfterCardPlayed` that disables a once-only enchantment once its own
+/// card's play has finished.
+fn disabled_after_its_play() -> ModifierHook {
+    ModifierHook::every_turn(
+        HookEvent::AfterCardPlayed,
+        vec![Command::Card(CardCmd::SetEnchantmentStatus {
+            cards: own_card(),
+            status: EnchantmentStatus::Disabled,
+        })],
+    )
+    .when(HookCondition::PlayedCardCarriesTheListeningEnchantment)
 }
 
 /// Spiral: the basic Strike or Defend it is on runs its body once more, every
@@ -435,20 +444,16 @@ fn steady() -> EnchantmentDefinition {
     }
 }
 
-/// Swift: the first play of the card draws its amount, once ever.
+/// Swift: the first play of the card draws its amount, once ever, and is
+/// disabled once that play has finished.
 fn swift() -> EnchantmentDefinition {
     EnchantmentDefinition {
         on_play: vec![Command::When {
             otherwise: Vec::new(),
             condition: Condition::ListeningEnchantmentIsNormal,
-            then: vec![
-                Command::CardPile(CardPileCmd::Draw { count: amount() }),
-                Command::Card(CardCmd::SetEnchantmentStatus {
-                    cards: own_card(),
-                    status: EnchantmentStatus::Disabled,
-                }),
-            ],
+            then: vec![Command::CardPile(CardPileCmd::Draw { count: amount() })],
         }],
+        hooks: vec![disabled_after_its_play()],
         ..enchantment("ENCHANTMENT.SWIFT", EnchantRestriction::Any)
     }
 }

@@ -207,3 +207,69 @@ fn a_clone_of_a_dupe_copies_the_original() {
     assert_eq!(clone.damage_bonus, 0, "not the dupe's growth");
     assert!(!clone.dupe);
 }
+
+/// Swift draws while Normal and is disabled only by its own card's
+/// `AfterCardPlayed`, so a draw another listener makes as that play finishes
+/// still sees it Normal, and the card ends the play Disabled.
+#[test]
+fn swift_is_disabled_after_its_play_finishes() {
+    let mut content = (*sts2_content::standard_registry()).clone();
+    let mut swift = content
+        .enchantment(&id("ENCHANTMENT.SWIFT"))
+        .expect("swift")
+        .clone();
+    swift.hooks.push(ModifierHook {
+        event: HookEvent::AfterCardDrawn,
+        timing: HookTiming::EveryTurn,
+        condition: HookCondition::Always,
+        commands: vec![Command::When {
+            condition: Condition::ListeningEnchantmentIsNormal,
+            then: vec![gain_block(1)],
+            otherwise: Vec::new(),
+        }],
+    });
+    content.add_enchantment(swift);
+    let drawer = observer(
+        &mut content,
+        vec![ModifierHook {
+            event: HookEvent::AfterCardPlayed,
+            timing: HookTiming::EveryTurn,
+            condition: HookCondition::Always,
+            commands: vec![Command::CardPile(sts2_engine::CardPileCmd::Draw {
+                count: Amount::Fixed(1),
+            })],
+        }],
+    );
+    let mut card = CardFingerprint::base(id("CARD.DEFEND_IRONCLAD"));
+    card.enchantment = Some(sts2_engine::EnchantmentFingerprint::new(
+        id("ENCHANTMENT.SWIFT"),
+        1,
+    ));
+    let mut scenario = ScenarioBuilder::new("SWIFT113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .player_hp(80, 80)
+        .energy(3, 3)
+        .turn(1, 1)
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
+        .power(0, drawer, 1, PowerType::Buff)
+        .card(PileName::Hand, 0, card, 1);
+    for draw in 1..4 {
+        scenario = scenario.card(
+            PileName::Draw,
+            draw,
+            CardFingerprint::base(id("CARD.STRIKE_IRONCLAD")),
+            1,
+        );
+    }
+    let mut simulator = scenario.build(Arc::new(content)).expect("scenario");
+    play(&mut simulator, "CARD.DEFEND_IRONCLAD");
+    let combat = simulator.state().combat.as_ref().expect("a fight");
+    assert_eq!(combat.player.piles.hand.len(), 2);
+    assert_eq!(
+        combat.creatures[0].block, 7,
+        "Defend's 5, and both draws saw Swift Normal"
+    );
+    assert_eq!(
+        combat.player.piles.discard[0].enchantment_status,
+        sts2_engine::EnchantmentStatus::Disabled
+    );
+}
