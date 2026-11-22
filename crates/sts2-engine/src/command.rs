@@ -1575,6 +1575,12 @@ pub enum RelicCmd {
     /// Sets the listening relic's saved counter outright, which is how a
     /// per-turn count is cleared.
     SetListeningCounter(Amount),
+    /// Binds the listening relic to the card play whose value is being
+    /// modified, where it is bound to no play yet. A value from no play binds
+    /// nothing.
+    BindValueCardPlay,
+    /// Forgets the play the listening relic was bound to.
+    ClearCardPlayBinding,
     /// Adjusts the listening relic's saved counter. The build has no command
     /// for this either: a relic keeps its counter itself, the way a nunchaku
     /// counts the attacks played.
@@ -2997,6 +3003,12 @@ pub enum Condition {
     ListeningRelicCounterAtLeast(i32),
     /// The yes-or-no the listening relic keeps is set.
     ListeningRelicIsLatched,
+    /// The listening relic is bound to no card play, or to the one the value
+    /// under modification or the finishing play comes from.
+    ListeningRelicAdmitsThisCardPlay,
+    /// The listening relic is bound to exactly the play the value or the
+    /// finishing play comes from.
+    ListeningRelicIsBoundToThisCardPlay,
     /// The second count the listening relic keeps is not nothing, which is how
     /// a relic that marks something within one play reads its own mark back.
     ListeningRelicSecondCounterIsSet,

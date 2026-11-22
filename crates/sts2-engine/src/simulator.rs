@@ -5586,6 +5586,7 @@ impl Simulator {
                 cards_drawn_this_turn_outside_hand_draw: 0,
                 pet_attacks_this_turn: 0,
                 play_types_started_this_turn: Vec::new(),
+                open_card_plays: Vec::new(),
                 powers_applied_this_turn: Vec::new(),
                 card_plays_finished: 0,
                 plays_finished: Vec::new(),
@@ -10272,12 +10273,21 @@ impl Simulator {
                 } else {
                     std::slice::from_ref(&event)
                 };
+                let card_play = if event == crate::HookEvent::AfterCardPlayed {
+                    self.combat()?.player.open_card_plays.last().copied()
+                } else {
+                    None
+                };
                 self.dispatch_hooks(
                     passes,
                     &HookContext {
                         played_attack,
                         played_card_type,
                         played_card,
+                        value: ValueContext {
+                            card_play,
+                            ..ValueContext::default()
+                        },
                         ..HookContext::none()
                     },
                 )?;
@@ -10291,6 +10301,7 @@ impl Simulator {
                             power.amounts_at_play_start.pop();
                         }
                     }
+                    combat.player.open_card_plays.pop();
                 }
             }
             // The rest of a model body a screen interrupted, run where it
@@ -11985,7 +11996,13 @@ impl Simulator {
                 let targets = self.resolve_creatures(target.clone(), context)?;
                 let mut gained = 0;
                 for creature in targets {
-                    gained += self.gain_block(creature, amount, *props, context.card, events)?;
+                    gained += self.gain_block(
+                        creature,
+                        amount,
+                        *props,
+                        (context.card, context.card_play),
+                        events,
+                    )?;
                 }
                 let bound = CommandContext {
                     gained_block: gained,
@@ -12005,7 +12022,12 @@ impl Simulator {
                 let targets = self.resolve_creatures(target.clone(), context)?;
                 let mut settled = 0;
                 for creature in targets {
-                    settled += self.modify_block(creature, amount, *props, context.card)?;
+                    settled += self.modify_block(
+                        creature,
+                        amount,
+                        *props,
+                        (context.card, context.card_play),
+                    )?;
                 }
                 let mut inner = context.clone();
                 inner.bound_amount = Some(settled);
@@ -12308,7 +12330,13 @@ impl Simulator {
                 }
                 let amount = self.resolve_amount(amount, context)?;
                 for creature in self.resolve_creatures(target.clone(), context)? {
-                    self.gain_block(creature, amount, *props, context.card, events)?;
+                    self.gain_block(
+                        creature,
+                        amount,
+                        *props,
+                        (context.card, context.card_play),
+                        events,
+                    )?;
                 }
             }
             CreatureCmd::Heal { target, amount } => {
@@ -16255,6 +16283,16 @@ impl Simulator {
                 let value = self.resolve_amount(amount, context)?;
                 self.listening_relic_mut(context)?.counter = value;
             }
+            RelicCmd::BindValueCardPlay => {
+                let play = self.hook_context.value.card_play;
+                let relic = self.listening_relic_mut(context)?;
+                if play.is_some() && relic.bound_card_play.is_none() {
+                    relic.bound_card_play = play;
+                }
+            }
+            RelicCmd::ClearCardPlayBinding => {
+                self.listening_relic_mut(context)?.bound_card_play = None;
+            }
             RelicCmd::ModifyListeningCounter(amount) => {
                 let offset = self.resolve_amount(amount, context)?;
                 self.listening_relic_mut(context)?.counter += offset;
@@ -18411,6 +18449,18 @@ impl Simulator {
             Condition::ListeningRelicIsLatched => self
                 .listening_relic(context)
                 .is_some_and(|relic| relic.latched),
+            Condition::ListeningRelicAdmitsThisCardPlay => {
+                self.listening_relic(context).is_some_and(|relic| {
+                    relic.bound_card_play.is_none()
+                        || relic.bound_card_play == self.hook_context.value.card_play
+                })
+            }
+            Condition::ListeningRelicIsBoundToThisCardPlay => {
+                self.listening_relic(context).is_some_and(|relic| {
+                    relic.bound_card_play.is_some()
+                        && relic.bound_card_play == self.hook_context.value.card_play
+                })
+            }
             Condition::ListeningRelicSecondCounterIsSet => self
                 .listening_relic(context)
                 .is_some_and(|relic| relic.second_counter != 0),
@@ -20787,6 +20837,7 @@ impl Simulator {
                 combat.player.cards_drawn_this_turn_outside_hand_draw = 0;
                 combat.player.pet_attacks_this_turn = 0;
                 combat.player.play_types_started_this_turn.clear();
+                combat.player.open_card_plays.clear();
                 combat.player.powers_applied_this_turn.clear();
                 combat.player.block_gains_this_turn.clear();
                 combat.powered_blows_this_turn.clear();
@@ -21652,7 +21703,8 @@ impl Simulator {
         }
         if let Some((amount, props)) = self.card_block_var_base(fingerprint) {
             let base = self.resolve_amount(&amount, &unaimed)?;
-            let (_, block, _) = self.block_value_passes(player_id, base, props, Some(card_id))?;
+            let (_, block, _) =
+                self.block_value_passes(player_id, base, props, (Some(card_id), None))?;
             preview.block = Some(block);
         }
         let Some(DamageVarBase {
@@ -23344,14 +23396,15 @@ impl Simulator {
 
     /// Modifying block: an additive pass and a multiplicative one, and no cap
     /// pass.
+    /// `source` is the card and the particular play the block came from.
     fn modify_block(
         &mut self,
         target: CreatureCombatId,
         amount: i32,
         props: ValueProps,
-        card: Option<CardInstanceId>,
+        source: (Option<CardInstanceId>, Option<(u32, u64)>),
     ) -> Result<i32, EngineError> {
-        let (value, block, answered) = self.block_value_passes(target, amount, props, card)?;
+        let (value, block, answered) = self.block_value_passes(target, amount, props, source)?;
         // The after-modifying pass runs over exactly the listeners that changed
         // the value, with the value they settled on.
         if !answered.is_empty() {
@@ -23374,13 +23427,13 @@ impl Simulator {
         target: CreatureCombatId,
         amount: i32,
         props: ValueProps,
-        card: Option<CardInstanceId>,
+        (card, card_play): (Option<CardInstanceId>, Option<(u32, u64)>),
     ) -> Result<(ValueContext, i32, Vec<Listener>), EngineError> {
         let value = ValueContext {
             // Block off a card belongs to whoever played it, which is what
             // Dexterity tests against.
             dealer: card.and_then(|_| self.combat().ok().map(|combat| combat.player.creature_id)),
-            card_play: None,
+            card_play,
             target: Some(target),
             props,
             card,
@@ -23858,6 +23911,11 @@ impl Simulator {
         // The after-card-played pass walks the listener list twice, the late
         // pass second: a Make It So asks there whether the turn's skill plays
         // have come round to it.
+        let card_play = if event == crate::HookEvent::AfterCardPlayed {
+            self.combat()?.player.open_card_plays.last().copied()
+        } else {
+            None
+        };
         let passes: &[crate::HookEvent] = if event == crate::HookEvent::AfterCardPlayed {
             &[
                 crate::HookEvent::AfterCardPlayed,
@@ -23875,6 +23933,7 @@ impl Simulator {
                 value: ValueContext {
                     dealer: Some(owner),
                     target,
+                    card_play,
                     ..ValueContext::default()
                 },
                 ..HookContext::none()
@@ -23887,6 +23946,12 @@ impl Simulator {
             && let Ok(combat) = self.combat_mut()
         {
             combat.player.play_types_started_this_turn.push(played_type);
+            let started = (
+                combat.player.turn,
+                u64::try_from(combat.player.play_types_started_this_turn.len())
+                    .expect("play count fits u64"),
+            );
+            combat.player.open_card_plays.push(started);
         }
         // The entry is taken back out once the play's listeners have read it.
         if event == crate::HookEvent::AfterCardPlayed
@@ -23897,6 +23962,7 @@ impl Simulator {
                     power.amounts_at_play_start.pop();
                 }
             }
+            combat.player.open_card_plays.pop();
         }
         dispatched
     }
@@ -23925,10 +23991,10 @@ impl Simulator {
         target: CreatureCombatId,
         amount: i32,
         props: ValueProps,
-        card: Option<CardInstanceId>,
+        (card, card_play): (Option<CardInstanceId>, Option<(u32, u64)>),
         events: &mut Vec<SemanticEvent>,
     ) -> Result<i32, EngineError> {
-        let amount = self.modify_block(target, amount, props, card)?;
+        let amount = self.modify_block(target, amount, props, (card, card_play))?;
         self.creature_mut(target)?.block += amount.max(0);
         // The block-gain history takes a gain that came to something. Only a
         // gain off a card or a monster move is written down with the play

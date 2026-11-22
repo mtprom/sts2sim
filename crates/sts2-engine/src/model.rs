@@ -864,6 +864,11 @@ pub struct PlayerCombatState {
     /// the attacks in it and a Smoggy asks whether it holds a skill.
     #[serde(default)]
     pub play_types_started_this_turn: Vec<CardType>,
+    /// The identity of every play started and not yet finished, innermost
+    /// last, which is how a play's `AfterCardPlayed` names the very play that
+    /// finished when others nested inside it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub open_card_plays: Vec<(u32, u64)>,
     /// The models of the powers this player's own creature has worked onto
     /// anybody this turn, in the order they landed. It stands in for the
     /// power-received record a death's door looks a Doom up in — that record
@@ -2812,6 +2817,11 @@ pub struct RelicInstance {
     /// time and come out four times over.
     #[serde(default)]
     pub bound_power: Option<ModelId>,
+    /// The one card play a relic bound itself to for the fight, by its
+    /// identity, which is how Pael's Legion tells its play from one nested in
+    /// it or a replay of the same card.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bound_card_play: Option<(u32, u64)>,
     /// The relic is still in the inventory and does nothing at all. It stops
     /// listening and stops being tradable.
     #[serde(default)]
@@ -2851,6 +2861,7 @@ impl RelicInstance {
             marked_coords: Vec::new(),
             bound_card: None,
             bound_power: None,
+            bound_card_play: None,
             melted: false,
             floor_added: None,
             saved_cards: Vec::new(),

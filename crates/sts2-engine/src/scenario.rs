@@ -470,6 +470,7 @@ impl ScenarioBuilder {
                     cards_drawn_this_turn_outside_hand_draw: 0,
                     pet_attacks_this_turn: 0,
                     play_types_started_this_turn: Vec::new(),
+                    open_card_plays: Vec::new(),
                     powers_applied_this_turn: Vec::new(),
                     card_plays_finished: 0,
                     plays_finished: Vec::new(),

@@ -369,3 +369,44 @@ fn pael_s_eye_wins_the_extra_turn_before_the_power() {
     };
     assert_eq!(enemy_moves(&simulator), 0, "no enemy turn yet");
 }
+
+/// `PaelsLegion` binds the first `CardPlay` whose block it doubles: that play
+/// keeps doubling after a nested play, the nested play's block is not doubled,
+/// and only the bound play's finishing starts the cooldown.
+#[test]
+fn paels_legion_doubles_only_the_play_it_bound() {
+    let mut content = (*sts2_content::standard_registry()).clone();
+    let mut defend = content
+        .card(&id("CARD.DEFEND_IRONCLAD"))
+        .expect("defend")
+        .clone();
+    let gain = defend.effects.clone();
+    defend.effects = gain.clone();
+    defend
+        .effects
+        .push(Command::CardPile(sts2_engine::CardPileCmd::AutoPlayFromDrawPile {
+            count: Amount::Fixed(1),
+            position: sts2_engine::DrawPilePosition::Top,
+            force_exhaust: false,
+            upgrade: false,
+        }));
+    defend.effects.extend(gain);
+    content.add_card(defend);
+    let mut simulator = ScenarioBuilder::new("LEGION113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
+        .player_hp(80, 80)
+        .energy(3, 3)
+        .turn(1, 1)
+        .relics(&[id("RELIC.PAELS_LEGION")])
+        .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
+        .card(PileName::Hand, 0, CardFingerprint::base(id("CARD.DEFEND_IRONCLAD")), 1)
+        .card(PileName::Draw, 1, CardFingerprint::base(id("CARD.SHRUG_IT_OFF")), 1)
+        .card(PileName::Draw, 2, CardFingerprint::base(id("CARD.STRIKE_IRONCLAD")), 1)
+        .build(Arc::new(content))
+        .expect("scenario");
+    play(&mut simulator, "CARD.DEFEND_IRONCLAD");
+    let combat = simulator.state().combat.as_ref().expect("a fight");
+    assert_eq!(combat.creatures[0].block, 10 + 8 + 10);
+    let legion = &simulator.state().run_player.relics[0];
+    assert_eq!(legion.counter, 2, "the outer play's finishing starts it");
+    assert_eq!(legion.bound_card_play, None);
+}

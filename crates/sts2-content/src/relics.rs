@@ -4685,10 +4685,11 @@ fn ancient_relics() -> Vec<RelicDefinition> {
             ..obtained_only("RELIC.PAELS_TOOTH", RelicRarity::Ancient)
         }),
         // Pael's legion brings a pet, and doubles the block of one card play
-        // every three turns. The build notes which play the doubling answered
-        // as it changes the block, and spends that note when that same play
-        // finishes; here the latch is that note, and the count it then sets
-        // runs down as its owner's turn opens.
+        // every three turns. The first play whose block it doubles binds it,
+        // by that play's identity: other plays, including ones nested in it,
+        // are not doubled meanwhile and their finishing does not spend it. The
+        // bound play's finishing sets the count, which runs down as its owner's
+        // turn opens.
         RelicDefinition {
             spawns_pets: true,
             adds_pet: true,
@@ -4711,7 +4712,10 @@ fn ancient_relics() -> Vec<RelicDefinition> {
                 ModifierHook::every_turn(
                     HookEvent::ModifyBlockMultiplicative,
                     vec![Command::Modify(ModifierCmd::Scale(Amount::IfElse {
-                        condition: Condition::ListeningRelicCounterIs(0),
+                        condition: Condition::All(vec![
+                            Condition::ListeningRelicCounterIs(0),
+                            Condition::ListeningRelicAdmitsThisCardPlay,
+                        ]),
                         then: Box::new(Amount::Fixed(200)),
                         otherwise: Box::new(Amount::Fixed(100)),
                     }))],
@@ -4719,8 +4723,8 @@ fn ancient_relics() -> Vec<RelicDefinition> {
                 .when(HookCondition::OwnerGainsPoweredBlockFromACard),
                 // This pass runs over exactly the listeners that changed the
                 // value, so reaching it at all is the relic having doubled this
-                // play's block — but as with a vambrace, a play that worked no
-                // block up leaves the relic nothing to have answered for.
+                // play's block — but a play that worked no block up leaves the
+                // relic nothing to have answered for.
                 ModifierHook::every_turn(
                     HookEvent::AfterModifyingBlockAmount,
                     vec![Command::When {
@@ -4729,17 +4733,17 @@ fn ancient_relics() -> Vec<RelicDefinition> {
                             count: sts2_engine::Count::AnnouncedAmount,
                             at_least: 1,
                         },
-                        then: vec![latch(true)],
+                        then: vec![Command::Relic(RelicCmd::BindValueCardPlay)],
                     }],
                 ),
                 ModifierHook::every_turn(
                     HookEvent::AfterCardPlayed,
                     vec![Command::When {
                         otherwise: Vec::new(),
-                        condition: Condition::ListeningRelicIsLatched,
+                        condition: Condition::ListeningRelicIsBoundToThisCardPlay,
                         then: vec![
                             Command::Relic(RelicCmd::SetListeningCounter(Amount::Fixed(2))),
-                            latch(false),
+                            Command::Relic(RelicCmd::ClearCardPlayBinding),
                         ],
                     }],
                 ),
@@ -4760,7 +4764,7 @@ fn ancient_relics() -> Vec<RelicDefinition> {
                     HookEvent::AfterCombatEnd,
                     vec![
                         Command::Relic(RelicCmd::SetListeningCounter(Amount::Fixed(0))),
-                        latch(false),
+                        Command::Relic(RelicCmd::ClearCardPlayBinding),
                     ],
                 ),
             ],
