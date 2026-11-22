@@ -15193,12 +15193,14 @@ impl Simulator {
                 template.dupe = false;
                 template.affliction = None;
                 card_end_of_turn_cleanup(&self.content, &mut template);
-                if let Some(instance) = self
-                    .creature_mut(owner)?
-                    .powers
-                    .iter_mut()
-                    .rev()
-                    .find(|instance| instance.model_id == *power && instance.held_template.is_none())
+                if let Some(instance) =
+                    self.creature_mut(owner)?
+                        .powers
+                        .iter_mut()
+                        .rev()
+                        .find(|instance| {
+                            instance.model_id == *power && instance.held_template.is_none()
+                        })
                 {
                     instance.held_template = Some(Box::new(template));
                 }
@@ -17862,7 +17864,8 @@ impl Simulator {
                 })
             }
             Condition::DamageCardMatchesTheListeningPowersBinding => {
-                let bound = self.listening_power_binding(context, |power| power.bound_damage_card)?;
+                let bound =
+                    self.listening_power_binding(context, |power| power.bound_damage_card)?;
                 let dealt_from = self.hook_context.value.card;
                 bound.is_none() || dealt_from.is_none() || bound == dealt_from
             }
@@ -22806,14 +22809,21 @@ impl Simulator {
             // A clone of the card the power wrote down as it was
             // applied.
             CardOrigin::CloneOfHeldByListeningPower => {
-                let template = context
-                    .power
-                    .as_ref()
-                    .zip(context.owner)
-                    .and_then(|(model_id, owner)| {
-                        let at = self.power_index_for(owner, model_id, context.power_instance)?;
-                        self.creature(owner).ok()?.powers.get(at)?.held_template.clone()
-                    });
+                let template =
+                    context
+                        .power
+                        .as_ref()
+                        .zip(context.owner)
+                        .and_then(|(model_id, owner)| {
+                            let at =
+                                self.power_index_for(owner, model_id, context.power_instance)?;
+                            self.creature(owner)
+                                .ok()?
+                                .powers
+                                .get(at)?
+                                .held_template
+                                .clone()
+                        });
                 if let Some(template) = template {
                     for _ in 0..count {
                         self.push_card_copy((*template).clone(), pile)?;
@@ -30048,7 +30058,10 @@ fn generate_reward_potion(
 /// come off.
 fn card_end_of_turn_cleanup(content: &ContentRegistry, card: &mut CardInstance) {
     card.cost_this_turn = 0;
-    if card.temporary_costs.iter().any(|cost| cost.clears_when_turn_ends)
+    if card
+        .temporary_costs
+        .iter()
+        .any(|cost| cost.clears_when_turn_ends)
         && let Some(definition) = content.card(&card.fingerprint.model_id)
     {
         card.energy_cost = card_energy_cost(
@@ -30056,11 +30069,13 @@ fn card_end_of_turn_cleanup(content: &ContentRegistry, card: &mut CardInstance) 
             &card.fingerprint,
             content.card_enchantment(&card.fingerprint),
         );
-        card.temporary_costs.retain(|cost| !cost.clears_when_turn_ends);
+        card.temporary_costs
+            .retain(|cost| !cost.clears_when_turn_ends);
     }
     // The star list is walked by the same pass and is its own list, so a card
     // carrying only a star cost is cleared here too.
-    card.temporary_star_costs.retain(|cost| !cost.clears_when_turn_ends);
+    card.temporary_star_costs
+        .retain(|cost| !cost.clears_when_turn_ends);
     card.retain_this_turn = false;
     card.sly_this_turn = false;
 }

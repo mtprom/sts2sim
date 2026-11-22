@@ -27,7 +27,15 @@ fn play(simulator: &mut Simulator, model_id: &str) {
 }
 
 fn hand(simulator: &Simulator) -> Vec<sts2_engine::CardInstance> {
-    simulator.state().combat.as_ref().expect("a fight").player.piles.hand.clone()
+    simulator
+        .state()
+        .combat
+        .as_ref()
+        .expect("a fight")
+        .player
+        .piles
+        .hand
+        .clone()
 }
 
 fn end_turn(simulator: &mut Simulator) {
@@ -86,7 +94,12 @@ fn draw_cards_next_turn_leaves_before_the_hand_is_drawn() {
         .turn(1, 1)
         .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
         .power(0, watcher, 1, PowerType::Buff)
-        .power(0, id("POWER.DRAW_CARDS_NEXT_TURN_POWER"), 2, PowerType::Buff);
+        .power(
+            0,
+            id("POWER.DRAW_CARDS_NEXT_TURN_POWER"),
+            2,
+            PowerType::Buff,
+        );
     for card in 0..10 {
         scenario = scenario.card(
             PileName::Draw,
@@ -111,12 +124,14 @@ fn draw_cards_next_turn_leaves_before_the_hand_is_drawn() {
 fn juggling_clones_the_third_started_attack_after_it_finishes() {
     let mut content = (*sts2_content::standard_registry()).clone();
     let mut rampage = content.card(&id("CARD.RAMPAGE")).expect("rampage").clone();
-    let mut body = vec![Command::CardPile(sts2_engine::CardPileCmd::AutoPlayFromDrawPile {
-        count: Amount::Fixed(1),
-        position: sts2_engine::DrawPilePosition::Top,
-        force_exhaust: false,
-        upgrade: false,
-    })];
+    let mut body = vec![Command::CardPile(
+        sts2_engine::CardPileCmd::AutoPlayFromDrawPile {
+            count: Amount::Fixed(1),
+            position: sts2_engine::DrawPilePosition::Top,
+            force_exhaust: false,
+            upgrade: false,
+        },
+    )];
     body.extend(rampage.effects.clone());
     rampage.effects = body;
     content.add_card(rampage);
@@ -129,7 +144,12 @@ fn juggling_clones_the_third_started_attack_after_it_finishes() {
         .power(0, id("POWER.JUGGLING_POWER"), 1, PowerType::Buff)
         .card(PileName::Hand, 0, strike(), 1)
         .card(PileName::Hand, 1, strike(), 1)
-        .card(PileName::Hand, 2, CardFingerprint::base(id("CARD.RAMPAGE")), 1)
+        .card(
+            PileName::Hand,
+            2,
+            CardFingerprint::base(id("CARD.RAMPAGE")),
+            1,
+        )
         .card(PileName::Draw, 3, strike(), 1)
         .build(Arc::new(content))
         .expect("scenario");
@@ -192,13 +212,27 @@ fn a_clone_of_a_dupe_copies_the_original() {
         .energy(3, 3)
         .turn(1, 1)
         .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
-        .card(PileName::Hand, 0, CardFingerprint::base(id("CARD.DEFEND_IRONCLAD")), 1)
-        .card(PileName::Hand, 1, CardFingerprint::base(id("CARD.RAMPAGE")), 1)
+        .card(
+            PileName::Hand,
+            0,
+            CardFingerprint::base(id("CARD.DEFEND_IRONCLAD")),
+            1,
+        )
+        .card(
+            PileName::Hand,
+            1,
+            CardFingerprint::base(id("CARD.RAMPAGE")),
+            1,
+        )
         .build(Arc::new(content))
         .expect("scenario");
     play(&mut simulator, "CARD.DEFEND_IRONCLAD");
     let hand = hand(&simulator);
-    assert_eq!(hand.len(), 2, "the original and one clone; the dupe is gone");
+    assert_eq!(
+        hand.len(),
+        2,
+        "the original and one clone; the dupe is gone"
+    );
     let original = sts2_core::CardInstanceId::from(1);
     assert_eq!(hand[0].id, original);
     assert_eq!(hand[0].damage_bonus, 0);
@@ -285,7 +319,12 @@ fn nightmare_copies_a_cleaned_clone_before_the_draw() {
         .energy(9, 9)
         .turn(1, 1)
         .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
-        .card(PileName::Hand, 0, CardFingerprint::base(id("CARD.NIGHTMARE")), 0)
+        .card(
+            PileName::Hand,
+            0,
+            CardFingerprint::base(id("CARD.NIGHTMARE")),
+            0,
+        )
         .card_with(
             PileName::Hand,
             1,
@@ -363,7 +402,12 @@ fn pael_s_eye_wins_the_extra_turn_before_the_power() {
     end_turn(&mut simulator);
     assert_eq!(extra_turns(&simulator), (0, true), "the power's turn");
     let enemy_moves = |simulator: &Simulator| {
-        simulator.state().combat.as_ref().expect("a fight").creatures[1]
+        simulator
+            .state()
+            .combat
+            .as_ref()
+            .expect("a fight")
+            .creatures[1]
             .performed_log
             .len()
     };
@@ -382,14 +426,14 @@ fn paels_legion_doubles_only_the_play_it_bound() {
         .clone();
     let gain = defend.effects.clone();
     defend.effects = gain.clone();
-    defend
-        .effects
-        .push(Command::CardPile(sts2_engine::CardPileCmd::AutoPlayFromDrawPile {
+    defend.effects.push(Command::CardPile(
+        sts2_engine::CardPileCmd::AutoPlayFromDrawPile {
             count: Amount::Fixed(1),
             position: sts2_engine::DrawPilePosition::Top,
             force_exhaust: false,
             upgrade: false,
-        }));
+        },
+    ));
     defend.effects.extend(gain);
     content.add_card(defend);
     let mut simulator = ScenarioBuilder::new("LEGION113", id("ENCOUNTER.SHRINKER_BEETLE_WEAK"))
@@ -398,9 +442,24 @@ fn paels_legion_doubles_only_the_play_it_bound() {
         .turn(1, 1)
         .relics(&[id("RELIC.PAELS_LEGION")])
         .enemy(1, id("MONSTER.SHRINKER_BEETLE"), 100, 100, "SHRINKER_MOVE")
-        .card(PileName::Hand, 0, CardFingerprint::base(id("CARD.DEFEND_IRONCLAD")), 1)
-        .card(PileName::Draw, 1, CardFingerprint::base(id("CARD.SHRUG_IT_OFF")), 1)
-        .card(PileName::Draw, 2, CardFingerprint::base(id("CARD.STRIKE_IRONCLAD")), 1)
+        .card(
+            PileName::Hand,
+            0,
+            CardFingerprint::base(id("CARD.DEFEND_IRONCLAD")),
+            1,
+        )
+        .card(
+            PileName::Draw,
+            1,
+            CardFingerprint::base(id("CARD.SHRUG_IT_OFF")),
+            1,
+        )
+        .card(
+            PileName::Draw,
+            2,
+            CardFingerprint::base(id("CARD.STRIKE_IRONCLAD")),
+            1,
+        )
         .build(Arc::new(content))
         .expect("scenario");
     play(&mut simulator, "CARD.DEFEND_IRONCLAD");

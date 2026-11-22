@@ -1513,10 +1513,7 @@ pub enum PowerCmd {
     /// `NightmarePower.SetSelectedCard`: a clone of the selected combat card,
     /// its affliction cleared and its end-of-turn cleanup run, kept on the
     /// newest instance of the power that holds no card yet.
-    HoldCleanedClone {
-        power: ModelId,
-        cards: CardSelector,
-    },
+    HoldCleanedClone { power: ModelId, cards: CardSelector },
     /// What a Dampen does as it goes on: every upgraded card of its owner's is
     /// downgraded, and the level each was on is written down on the power so
     /// that it can be put back. That record is the instance's own
