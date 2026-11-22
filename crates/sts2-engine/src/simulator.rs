@@ -5568,6 +5568,7 @@ impl Simulator {
                 stars: 0,
                 stars_gained_this_turn: 0,
                 cards_generated_this_combat: 0,
+                generated_this_combat_by_model: std::collections::BTreeMap::new(),
                 turn: 1,
                 piles: Piles {
                     draw,
@@ -17393,6 +17394,15 @@ impl Simulator {
                 )
                 .unwrap_or(i32::MAX)
             }
+            Count::ModelGeneratedThisCombat(model) => i32::try_from(
+                self.combat()?
+                    .player
+                    .generated_this_combat_by_model
+                    .get(model)
+                    .copied()
+                    .unwrap_or(0),
+            )
+            .expect("card count fits game integer"),
             Count::CardsGeneratedThisCombat => {
                 i32::try_from(self.combat()?.player.cards_generated_this_combat)
                     .expect("card count fits game integer")
@@ -19088,6 +19098,64 @@ impl Simulator {
                     chosen.push(ChosenCard::Deck { index, fingerprint });
                 }
                 Ok(chosen)
+            }
+            CardSelector::StablyShuffledOfModelFromPile { pile, model, take } => {
+                let take = usize::try_from(self.resolve_amount(take, context)?.max(0)).unwrap_or(0);
+                let mut candidates: Vec<CardInstance> =
+                    pile_of(&self.combat()?.player.piles, *pile)
+                        .iter()
+                        .filter(|card| card.fingerprint.model_id == *model)
+                        .cloned()
+                        .collect();
+                if !candidates.is_empty() {
+                    sort_pile_canonically(&mut candidates);
+                    self.shuffle_stream_mut(crate::ShuffleStream::CombatCardSelection)
+                        .shuffle(&mut candidates);
+                }
+                candidates.truncate(take);
+                Ok(candidates.into_iter().map(ChosenCard::Combat).collect())
+            }
+            CardSelector::CheapestRolledFromHand => {
+                let price = |card: &CardInstance| {
+                    if card.costs_x {
+                        i32::MAX
+                    } else {
+                        card.energy_cost.max(0)
+                    }
+                };
+                let playable: Vec<CardInstance> = self
+                    .combat()?
+                    .player
+                    .piles
+                    .hand
+                    .iter()
+                    .filter(|card| {
+                        self.content
+                            .card(&card.fingerprint.model_id)
+                            .is_some_and(|definition| !definition.unplayable)
+                    })
+                    .cloned()
+                    .collect();
+                let Some(cheapest) = playable.iter().map(price).min() else {
+                    return Ok(Vec::new());
+                };
+                let candidates: Vec<CardInstance> = playable
+                    .into_iter()
+                    .filter(|card| price(card) == cheapest)
+                    .collect();
+                let index = self
+                    .state
+                    .rng
+                    .stream_mut(RunStream::CombatCardSelection)
+                    .next_index(candidates.len())
+                    .map_err(|error| {
+                        EngineError::new(ErrorCode::InternalInvariant)
+                            .with_detail("card_selection", error.to_string())
+                    })?;
+                Ok(index
+                    .map(|index| ChosenCard::Combat(candidates[index].clone()))
+                    .into_iter()
+                    .collect())
             }
             CardSelector::SelectionRolledFromPile { pile, filter } => {
                 let candidates: Vec<CardInstance> = pile_of(&self.combat()?.player.piles, *pile)
@@ -23037,7 +23105,19 @@ impl Simulator {
         // The count is of the cards the player conjured, so what a monster put
         // in the piles is announced and left out of it.
         if !self.generating_without_a_creator {
-            self.combat_mut()?.player.cards_generated_this_combat += 1;
+            let player = &mut self.combat_mut()?.player;
+            player.cards_generated_this_combat += 1;
+            if let Some(model) = player
+                .piles
+                .all_cards()
+                .find(|card| card.id == card_id)
+                .map(|card| card.fingerprint.model_id.clone())
+            {
+                *player
+                    .generated_this_combat_by_model
+                    .entry(model)
+                    .or_default() += 1;
+            }
         }
         self.dispatch_hooks(
             &[crate::HookEvent::AfterCardGeneratedForCombat],
@@ -29124,6 +29204,11 @@ impl Simulator {
                 }
                 Some(crate::PlayRestriction::CardsEachTurn) => {
                     if i64::from(combat.player.cards_played_this_turn) >= i64::from(power.amount) {
+                        return false;
+                    }
+                }
+                Some(crate::PlayRestriction::CardsStartedBelowAmount) => {
+                    if power.counter >= power.amount {
                         return false;
                     }
                 }

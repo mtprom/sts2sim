@@ -2139,6 +2139,18 @@ pub enum CardSelector {
         stream: ShuffleStream,
         take: Amount,
     },
+    /// The pile's cards of one model, stably shuffled on the combat
+    /// card-selection stream, and the first few. An empty list is not
+    /// shuffled, which is how a Punch of Joy and an Ecstasy both guard it.
+    StablyShuffledOfModelFromPile {
+        pile: PileName,
+        model: ModelId,
+        take: Amount,
+    },
+    /// The hand's cheapest cards without Unplayable, X costs last, and one of
+    /// them rolled with `NextItem` on the combat card-selection stream
+    /// (Simpleton).
+    CheapestRolledFromHand,
     /// One card of a combat pile that passes the filter, rolled with one
     /// `NextItem` on the combat card-selection stream (Stampede).
     SelectionRolledFromPile {
@@ -2733,6 +2745,8 @@ pub enum Count {
     /// How many cards the owner has had conjured into this fight, over the
     /// whole of it. A Supermassive grows on it.
     CardsGeneratedThisCombat,
+    /// How many cards of this model the player conjured into this fight.
+    ModelGeneratedThisCombat(ModelId),
     /// How many powered blows the owner has landed on whoever the play is
     /// aimed at this turn. It is a Beat Into Shape's whole arithmetic.
     PoweredBlowsOnTargetThisTurn,

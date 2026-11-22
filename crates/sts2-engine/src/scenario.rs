@@ -460,6 +460,7 @@ impl ScenarioBuilder {
                     stars: self.stars,
                     stars_gained_this_turn: 0,
                     cards_generated_this_combat: 0,
+                    generated_this_combat_by_model: std::collections::BTreeMap::new(),
                     turn: self.turn,
                     piles,
                     phase: crate::PlayerTurnPhase::Play,

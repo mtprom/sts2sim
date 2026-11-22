@@ -825,6 +825,10 @@ pub struct PlayerCombatState {
     /// is the combat's, so it is not cleared between turns.
     #[serde(default)]
     pub cards_generated_this_combat: u32,
+    /// The same history split by model, which an Anguish counts its Sadness
+    /// off. A combat transform's replacement is recorded too.
+    #[serde(default)]
+    pub generated_this_combat_by_model: BTreeMap<ModelId, u32>,
     /// How many stars this player has gained since the turn opened — the
     /// gains alone, not the net of gains and spends. A Radiate counts its hits
     /// off exactly that.
@@ -2188,6 +2192,10 @@ pub enum PlayRestriction {
     /// Sloth: its owner may play as many cards in a turn as the power's own
     /// amount, and no more.
     CardsEachTurn,
+    /// Encore: its owner may start as many card plays as the power's amount
+    /// after it lands, the plays still running included. The power's counter
+    /// holds the plays started since it landed.
+    CardsStartedBelowAmount,
     /// Smoggy: a card of this type cannot be played once one of that type
     /// already has been this turn.
     ///
